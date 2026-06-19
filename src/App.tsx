@@ -6,19 +6,26 @@ import { AnalysisView } from './components/AnalysisView';
 import { KnowhowListView } from './components/KnowhowListView';
 import { KnowhowDetailView } from './components/KnowhowDetailView';
 import { KnowhowWriteView } from './components/KnowhowWriteView';
+import { QnaListView } from './components/QnaListView';
+import { QnaDetailView } from './components/QnaDetailView';
+import { QnaWriteView } from './components/QnaWriteView';
 import { Construction } from 'lucide-react';
 
-type KnowhowMode = 'list' | 'detail' | 'write';
+type BoardMode = 'list' | 'detail' | 'write';
 
 function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
-  const [knowhowMode, setKnowhowMode] = useState<KnowhowMode>('list');
+  const [knowhowMode, setKnowhowMode] = useState<BoardMode>('list');
   const [knowhowPostId, setKnowhowPostId] = useState<number | null>(null);
+  const [qnaMode, setQnaMode] = useState<BoardMode>('list');
+  const [qnaPostId, setQnaPostId] = useState<number | null>(null);
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
     setKnowhowMode('list');
     setKnowhowPostId(null);
+    setQnaMode('list');
+    setQnaPostId(null);
   };
 
   const renderKnowhow = () => {
@@ -52,6 +59,37 @@ function App() {
     );
   };
 
+  const renderQna = () => {
+    if (qnaMode === 'write') {
+      return (
+        <QnaWriteView
+          onCancel={() => setQnaMode('list')}
+          onSubmit={() => setQnaMode('list')}
+        />
+      );
+    }
+    if (qnaMode === 'detail' && qnaPostId !== null) {
+      return (
+        <QnaDetailView
+          postId={qnaPostId}
+          onBack={() => {
+            setQnaMode('list');
+            setQnaPostId(null);
+          }}
+        />
+      );
+    }
+    return (
+      <QnaListView
+        onSelectPost={(id) => {
+          setQnaPostId(id);
+          setQnaMode('detail');
+        }}
+        onWrite={() => setQnaMode('write')}
+      />
+    );
+  };
+
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
@@ -60,6 +98,8 @@ function App() {
         return <AnalysisView />;
       case 'knowhow':
         return renderKnowhow();
+      case 'qa':
+        return renderQna();
       default:
         // Render a premium looking placeholder card for unfinished pages
         return (
