@@ -3,10 +3,54 @@ import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { DashboardView } from './components/DashboardView';
 import { AnalysisView } from './components/AnalysisView';
+import { KnowhowListView } from './components/KnowhowListView';
+import { KnowhowDetailView } from './components/KnowhowDetailView';
+import { KnowhowWriteView } from './components/KnowhowWriteView';
 import { Construction } from 'lucide-react';
+
+type KnowhowMode = 'list' | 'detail' | 'write';
 
 function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [knowhowMode, setKnowhowMode] = useState<KnowhowMode>('list');
+  const [knowhowPostId, setKnowhowPostId] = useState<number | null>(null);
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    setKnowhowMode('list');
+    setKnowhowPostId(null);
+  };
+
+  const renderKnowhow = () => {
+    if (knowhowMode === 'write') {
+      return (
+        <KnowhowWriteView
+          onCancel={() => setKnowhowMode('list')}
+          onSubmit={() => setKnowhowMode('list')}
+        />
+      );
+    }
+    if (knowhowMode === 'detail' && knowhowPostId !== null) {
+      return (
+        <KnowhowDetailView
+          postId={knowhowPostId}
+          onBack={() => {
+            setKnowhowMode('list');
+            setKnowhowPostId(null);
+          }}
+        />
+      );
+    }
+    return (
+      <KnowhowListView
+        onSelectPost={(id) => {
+          setKnowhowPostId(id);
+          setKnowhowMode('detail');
+        }}
+        onWrite={() => setKnowhowMode('write')}
+      />
+    );
+  };
 
   const renderContent = () => {
     switch (activeTab) {
@@ -14,6 +58,8 @@ function App() {
         return <DashboardView />;
       case 'analysis':
         return <AnalysisView />;
+      case 'knowhow':
+        return renderKnowhow();
       default:
         // Render a premium looking placeholder card for unfinished pages
         return (
@@ -68,7 +114,7 @@ function App() {
   return (
     <div className="app-layout">
       {/* Sidebar Navigation */}
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar activeTab={activeTab} setActiveTab={handleTabChange} />
 
       {/* Main Container */}
       <div className="main-container">
