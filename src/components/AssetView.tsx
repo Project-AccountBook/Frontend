@@ -525,10 +525,37 @@ export const AssetView: React.FC = () => {
     <div className="asset-management-wrapper fade-in">
 
       {/* Title & Navigation */}
-      <div className="asset-header">
-        <div>
-          <h1 className="asset-page-title">내역 및 자산 관리</h1>
-          <p className="asset-page-subtitle">거래내역 등록, 정기 예약 수입/지출 관리, 계좌 및 카테고리를 한번에 관리하세요</p>
+      <div className="dashboard-view-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '10px',
+              background: 'var(--primary-light)',
+              color: 'var(--primary)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <Wallet size={20} />
+          </div>
+          <div>
+            <h1
+              style={{
+                fontSize: '22px',
+                fontWeight: '800',
+                color: 'var(--text-primary)',
+                letterSpacing: '-0.5px'
+              }}
+            >
+              내역 및 자산 관리
+            </h1>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+              거래내역 등록, 정기 예약 수입/지출 관리, 계좌 및 카테고리를 한번에 관리하세요
+            </p>
+          </div>
         </div>
       </div>
 

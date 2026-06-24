@@ -10,6 +10,7 @@ import { QnaListView } from './components/QnaListView';
 import { QnaDetailView } from './components/QnaDetailView';
 import { QnaWriteView } from './components/QnaWriteView';
 import { AssetView } from './components/AssetView';
+import { BudgetView } from './components/BudgetView';
 import { Construction } from 'lucide-react';
 
 type BoardMode = 'list' | 'detail' | 'write';
@@ -97,6 +98,8 @@ function App() {
         return <DashboardView />;
       case 'history':
         return <AssetView />;
+      case 'budget':
+        return <BudgetView />;
       case 'analysis':
         return <AnalysisView />;
       case 'knowhow':
