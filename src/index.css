@@ -1261,25 +1261,46 @@ a {
 .asset-table {
   width: 100%;
   border-collapse: collapse;
-  text-align: left;
+  table-layout: auto;
+}
+
+.asset-table th,
+.asset-table td {
+  padding: 14px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+  vertical-align: middle;
 }
 
 .asset-table th {
-  padding: 14px 16px;
-  border-bottom: 1.5px solid var(--border);
+  border-bottom-width: 1.5px;
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  white-space: nowrap;
 }
 
 .asset-table td {
-  padding: 16px;
-  border-bottom: 1px solid var(--border);
   font-size: 13px;
   color: var(--text-primary);
-  vertical-align: middle;
+}
+
+.asset-table .font-semibold {
+  font-weight: 600;
+}
+
+.asset-table .font-bold {
+  font-weight: 700;
+}
+
+.asset-table .text-muted {
+  color: var(--text-muted);
+}
+
+.asset-table .text-primary-dark {
+  color: var(--navy-light);
 }
 
 .hover-row:hover {
@@ -1349,7 +1370,14 @@ a {
 .tx-description-cell {
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 2px;
+  text-align: center;
+}
+
+.asset-table .tx-description-cell {
+  margin: 0 auto;
 }
 
 .transfer-target-desc {
@@ -1362,9 +1390,11 @@ a {
 }
 
 .table-actions {
-  display: flex;
+  display: inline-flex;
   gap: 6px;
+  align-items: center;
   justify-content: center;
+  vertical-align: middle;
 }
 
 .btn-action-icon {
@@ -1812,6 +1842,12 @@ a {
   align-items: center;
   justify-content: center;
   gap: 20px;
+  position: relative;
+  z-index: 20;
+}
+
+.cal-month-dropdown {
+  position: relative;
 }
 
 .cal-nav-btn {
@@ -1856,12 +1892,30 @@ a {
 
 /* ── Month/Year Picker ── */
 .cal-month-picker {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
   background: var(--bg-card);
   border: 1.5px solid var(--border);
   border-radius: 14px;
   padding: 14px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.10);
-  max-width: 300px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  width: 300px;
+  animation: calPickerDropIn 0.18s ease-out;
+}
+
+@keyframes calPickerDropIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }
 
 .cal-picker-year-row {
@@ -2009,14 +2063,15 @@ a {
   width: 22px;
   height: 22px;
   padding: 0;
-  border: none;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--primary);
-  color: #fff;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
   opacity: 0;
   transform: scale(0.85);
-  transition: opacity 0.15s, transform 0.15s, background 0.15s;
+  transition: opacity 0.15s, transform 0.15s, background 0.15s, color 0.15s, border-color 0.15s;
   z-index: 1;
 }
 
@@ -2027,11 +2082,13 @@ a {
 }
 
 .cal-day-add-btn:hover {
-  background: var(--primary-dark);
+  background: var(--bg-app);
+  color: var(--primary);
+  border-color: var(--primary);
 }
 
 .cal-day-cell.today {
-  background: rgba(79, 70, 229, 0.06);
+  background: var(--bg-card);
 }
 
 .cal-day-cell.today .cal-day-num {
@@ -2047,8 +2104,6 @@ a {
 
 .cal-day-cell.selected {
   background: rgba(79, 70, 229, 0.1);
-  outline: 2px solid var(--primary);
-  outline-offset: -2px;
 }
 
 .cal-day-num {

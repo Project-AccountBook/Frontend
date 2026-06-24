@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   ReceiptText,
   Calendar as CalendarIcon,
@@ -84,6 +84,20 @@ export const AssetView: React.FC = () => {
   const [selectedCalendarDay, setSelectedCalendarDay] = useState<string | null>(null);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(today.getFullYear());
+  const monthPickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showMonthPicker) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (monthPickerRef.current && !monthPickerRef.current.contains(e.target as Node)) {
+        setShowMonthPicker(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showMonthPicker]);
 
   // --- Mock Data ---
   const [accounts, setAccounts] = useState<Account[]>([
@@ -713,42 +727,42 @@ export const AssetView: React.FC = () => {
                   <button className="cal-nav-btn" onClick={prevCalendarMonth}>
                     <ChevronLeft size={18} />
                   </button>
-                  <button className="cal-month-label" onClick={openMonthPicker} title="년월 선택">
-                    {calendarYear}년 {calendarMonth + 1}월
-                  </button>
+                  <div className="cal-month-dropdown" ref={monthPickerRef}>
+                    <button className="cal-month-label" onClick={openMonthPicker} title="년월 선택">
+                      {calendarYear}년 {calendarMonth + 1}월
+                    </button>
+                    {showMonthPicker && (
+                      <div className="cal-month-picker">
+                        <div className="cal-picker-year-row">
+                          <button className="cal-picker-year-btn" onClick={() => setPickerYear(y => y - 1)}>
+                            <ChevronLeft size={15} />
+                          </button>
+                          <span className="cal-picker-year-label">{pickerYear}년</span>
+                          <button className="cal-picker-year-btn" onClick={() => setPickerYear(y => y + 1)}>
+                            <ChevronRight size={15} />
+                          </button>
+                          <button className="cal-picker-close" onClick={() => setShowMonthPicker(false)}>
+                            <X size={14} />
+                          </button>
+                        </div>
+                        <div className="cal-picker-months">
+                          {MONTHS.map((label, i) => (
+                            <button
+                              key={i}
+                              className={`cal-picker-month-btn${pickerYear === calendarYear && i === calendarMonth ? ' active' : ''}`}
+                              onClick={() => selectPickerMonth(i)}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   <button className="cal-nav-btn" onClick={nextCalendarMonth}>
                     <ChevronRight size={18} />
                   </button>
                 </div>
-
-                {/* 년월 선택 피커 */}
-                {showMonthPicker && (
-                  <div className="cal-month-picker fade-in">
-                    <div className="cal-picker-year-row">
-                      <button className="cal-picker-year-btn" onClick={() => setPickerYear(y => y - 1)}>
-                        <ChevronLeft size={15} />
-                      </button>
-                      <span className="cal-picker-year-label">{pickerYear}년</span>
-                      <button className="cal-picker-year-btn" onClick={() => setPickerYear(y => y + 1)}>
-                        <ChevronRight size={15} />
-                      </button>
-                      <button className="cal-picker-close" onClick={() => setShowMonthPicker(false)}>
-                        <X size={14} />
-                      </button>
-                    </div>
-                    <div className="cal-picker-months">
-                      {MONTHS.map((label, i) => (
-                        <button
-                          key={i}
-                          className={`cal-picker-month-btn${pickerYear === calendarYear && i === calendarMonth ? ' active' : ''}`}
-                          onClick={() => selectPickerMonth(i)}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
 
                 {/* 요일 헤더 */}
                 <div className="calendar-grid">
@@ -892,8 +906,8 @@ export const AssetView: React.FC = () => {
                       <th>분류</th>
                       <th>유형</th>
                       <th>내용</th>
-                      <th className="text-right">금액</th>
-                      <th className="text-center">관리</th>
+                      <th>금액</th>
+                      <th>관리</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -927,7 +941,7 @@ export const AssetView: React.FC = () => {
                               )}
                             </div>
                           </td>
-                          <td className={`text-right font-bold ${tx.type === 'INCOME' ? 'color-income' : tx.type === 'EXPENSE' ? 'color-expense' : 'color-transfer'}`}>
+                          <td className={`font-bold ${tx.type === 'INCOME' ? 'color-income' : tx.type === 'EXPENSE' ? 'color-expense' : 'color-transfer'}`}>
                             {tx.type === 'INCOME' ? '+' : tx.type === 'EXPENSE' ? '-' : ''}
                             {formatCurrency(tx.amount)}
                           </td>
@@ -977,8 +991,8 @@ export const AssetView: React.FC = () => {
                     <th>반복일</th>
                     <th>시작/종료일</th>
                     <th>내용</th>
-                    <th className="text-right">금액</th>
-                    <th className="text-center">관리</th>
+                    <th>금액</th>
+                    <th>관리</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1012,13 +1026,13 @@ export const AssetView: React.FC = () => {
                           </span>
                         </td>
                         <td className="font-semibold">{getFreqLabel(fx.frequency)}</td>
-                        <td className="font-semibold text-center">{fx.repeatDay}일</td>
+                        <td className="font-semibold">{fx.repeatDay}일</td>
                         <td className="text-muted" style={{ fontSize: '12px' }}>
                           <div>시작: {fx.startDate}</div>
                           {fx.endDate && <div>종료: {fx.endDate}</div>}
                         </td>
                         <td>{fx.description || '—'}</td>
-                        <td className={`text-right font-bold ${fx.type === 'INCOME' ? 'color-income' : 'color-expense'}`}>
+                        <td className={`font-bold ${fx.type === 'INCOME' ? 'color-income' : 'color-expense'}`}>
                           {formatCurrency(fx.amount)}
                         </td>
                         <td>
