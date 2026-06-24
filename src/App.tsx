@@ -9,6 +9,7 @@ import { KnowhowWriteView } from './components/KnowhowWriteView';
 import { QnaListView } from './components/QnaListView';
 import { QnaDetailView } from './components/QnaDetailView';
 import { QnaWriteView } from './components/QnaWriteView';
+import { AssetView } from './components/AssetView';
 import { Construction } from 'lucide-react';
 
 type BoardMode = 'list' | 'detail' | 'write';
@@ -94,6 +95,8 @@ function App() {
     switch (activeTab) {
       case 'dashboard':
         return <DashboardView />;
+      case 'history':
+        return <AssetView />;
       case 'analysis':
         return <AnalysisView />;
       case 'knowhow':
