@@ -1698,6 +1698,89 @@ a {
   margin-bottom: 4px;
 }
 
+.tx-toolbar-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* 섹션별 공통 액션 바 */
+.section-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+
+.section-action-bar .fixed-intro-card {
+  flex: 1;
+  min-width: 0;
+}
+
+.section-action-bar-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* 섹션 내부 추가 버튼 (primary) */
+.btn-section-add {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.btn-section-add:hover {
+  background: var(--primary-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+}
+
+/* 카테고리 컬럼 헤더 (추가버튼 포함) */
+.category-column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.column-title {
+  margin: 0;
+}
+
+.btn-cat-add {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1.5px solid var(--border);
+  background: var(--bg-app);
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.13s;
+}
+
+.btn-cat-add:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: rgba(79, 70, 229, 0.06);
+}
+
 .view-mode-toggle {
   display: flex;
   gap: 4px;
@@ -1795,8 +1878,9 @@ a {
   background: var(--bg-card);
   border: 1.5px solid var(--border);
   border-radius: 14px;
-  padding: 16px;
+  padding: 14px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.10);
+  max-width: 300px;
 }
 
 .cal-picker-year-row {
@@ -1934,6 +2018,37 @@ a {
   background: rgba(79, 70, 229, 0.04);
 }
 
+.cal-day-add-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: var(--primary);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity 0.15s, transform 0.15s, background 0.15s;
+  z-index: 1;
+}
+
+.cal-day-cell:not(.empty):hover .cal-day-add-btn,
+.cal-day-cell.selected .cal-day-add-btn {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.cal-day-add-btn:hover {
+  background: var(--primary-dark);
+}
+
 .cal-day-cell.today {
   background: rgba(79, 70, 229, 0.06);
 }
@@ -2022,6 +2137,27 @@ a {
   justify-content: space-between;
   padding: 14px 18px;
   border-bottom: 1px solid var(--border);
+  gap: 12px;
+}
+
+.cal-detail-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btn-cal-add {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.cal-select-hint {
+  margin: 0;
+  padding: 12px 4px 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
 }
 
 .cal-detail-title {
@@ -2036,11 +2172,15 @@ a {
 
 .cal-detail-empty {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 24px 18px;
-  color: var(--text-secondary);
-  font-size: 13px;
+  justify-content: center;
+  padding: 32px 18px;
+}
+
+.btn-cal-add-empty {
+  padding: 8px 16px;
+  font-size: 12px;
 }
 
 .cal-detail-list {

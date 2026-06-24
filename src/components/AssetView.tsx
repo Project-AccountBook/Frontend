@@ -178,10 +178,18 @@ export const AssetView: React.FC = () => {
     setFormCategoryType('EXPENSE');
   };
 
-  const handleOpenAddModal = () => {
+  const handleOpenAddModal = (options?: { categoryType?: TransactionType; transactionDate?: string }) => {
     setModalMode('create');
     resetFormFields();
+    if (options?.categoryType) setFormCategoryType(options.categoryType);
+    if (options?.transactionDate) setFormDate(options.transactionDate);
     setShowModal(true);
+  };
+
+  const handleCalendarDayAdd = (dateStr: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedCalendarDay(dateStr);
+    handleOpenAddModal({ transactionDate: dateStr });
   };
 
   const handleOpenEditModal = (id: number) => {
@@ -522,15 +530,6 @@ export const AssetView: React.FC = () => {
           <h1 className="asset-page-title">내역 및 자산 관리</h1>
           <p className="asset-page-subtitle">거래내역 등록, 정기 예약 수입/지출 관리, 계좌 및 카테고리를 한번에 관리하세요</p>
         </div>
-        <button className="btn-add-primary" onClick={handleOpenAddModal}>
-          <Plus size={16} />
-          <span>
-            {activeSection === 'transactions' && '거래내역 등록'}
-            {activeSection === 'fixed' && '정기내역 등록'}
-            {activeSection === 'accounts' && '자산계좌 추가'}
-            {activeSection === 'categories' && '카테고리 추가'}
-          </span>
-        </button>
       </div>
 
       {/* Tabs */}
@@ -574,23 +573,31 @@ export const AssetView: React.FC = () => {
 
             {/* View Mode Toggle + List Filters */}
             <div className="tx-toolbar">
-              <div className="view-mode-toggle">
-                <button
-                  className={`view-toggle-btn ${viewMode === 'calendar' ? 'active' : ''}`}
-                  onClick={() => setViewMode('calendar')}
-                  title="달력 뷰"
-                >
-                  <CalendarIcon size={15} />
-                  <span>달력</span>
-                </button>
-                <button
-                  className={`view-toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
-                  onClick={() => setViewMode('list')}
-                  title="목록 뷰"
-                >
-                  <List size={15} />
-                  <span>목록</span>
-                </button>
+              <div className="tx-toolbar-top">
+                <div className="view-mode-toggle">
+                  <button
+                    className={`view-toggle-btn ${viewMode === 'calendar' ? 'active' : ''}`}
+                    onClick={() => setViewMode('calendar')}
+                    title="달력 뷰"
+                  >
+                    <CalendarIcon size={15} />
+                    <span>달력</span>
+                  </button>
+                  <button
+                    className={`view-toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
+                    onClick={() => setViewMode('list')}
+                    title="목록 뷰"
+                  >
+                    <List size={15} />
+                    <span>목록</span>
+                  </button>
+                </div>
+                {viewMode === 'list' && (
+                  <button className="btn-section-add" onClick={() => handleOpenAddModal()}>
+                    <Plus size={14} />
+                    거래내역 등록
+                  </button>
+                )}
               </div>
 
               {viewMode === 'list' && (
@@ -742,6 +749,14 @@ export const AssetView: React.FC = () => {
                         className={`cal-day-cell${isToday ? ' today' : ''}${isSelected ? ' selected' : ''}${txs.length > 0 ? ' has-tx' : ''}`}
                         onClick={() => setSelectedCalendarDay(isSelected ? null : dateStr)}
                       >
+                        <button
+                          type="button"
+                          className="cal-day-add-btn"
+                          title={`${dateStr} 거래 등록`}
+                          onClick={(e) => handleCalendarDayAdd(dateStr, e)}
+                        >
+                          <Plus size={12} />
+                        </button>
                         <span className={`cal-day-num${isSunday ? ' sunday' : isSaturday ? ' saturday' : ''}`}>
                           {day}
                         </span>
@@ -769,14 +784,30 @@ export const AssetView: React.FC = () => {
                         <CalendarIcon size={15} />
                         {selectedCalendarDay} 거래 내역
                       </h4>
-                      <button className="btn-clear-search" onClick={() => setSelectedCalendarDay(null)}>
-                        <X size={14} />
-                      </button>
+                      <div className="cal-detail-header-actions">
+                        {selectedDayTxs.length > 0 && (
+                          <button
+                            className="btn-section-add btn-cal-add"
+                            onClick={() => handleOpenAddModal({ transactionDate: selectedCalendarDay })}
+                          >
+                            <Plus size={13} />
+                            거래 등록
+                          </button>
+                        )}
+                        <button className="btn-clear-search" onClick={() => setSelectedCalendarDay(null)}>
+                          <X size={14} />
+                        </button>
+                      </div>
                     </div>
                     {selectedDayTxs.length === 0 ? (
                       <div className="cal-detail-empty">
-                        <Info size={16} />
-                        <span>이 날짜에 등록된 거래 내역이 없습니다.</span>
+                        <button
+                          className="btn-section-add btn-cal-add-empty"
+                          onClick={() => handleOpenAddModal({ transactionDate: selectedCalendarDay })}
+                        >
+                          <Plus size={13} />
+                          {selectedCalendarDay} 거래 등록
+                        </button>
                       </div>
                     ) : (
                       <div className="cal-detail-list">
@@ -815,6 +846,10 @@ export const AssetView: React.FC = () => {
                       </div>
                     )}
                   </div>
+                )}
+
+                {!selectedCalendarDay && (
+                  <p className="cal-select-hint">날짜를 클릭하면 해당 날짜의 거래를 확인하고 등록할 수 있습니다.</p>
                 )}
               </div>
             )}
@@ -892,9 +927,15 @@ export const AssetView: React.FC = () => {
         {/* ─── SECTION 2: FIXED TRANSACTIONS ─── */}
         {activeSection === 'fixed' && (
           <div className="section-content fade-in">
-            <div className="fixed-intro-card">
-              <Sparkles size={18} className="intro-icon" />
-              <span>고정 수입/지출은 매주, 매월 지정된 날짜에 정기적으로 발생하는 가계부 내역을 예약하고 자동 정합할 수 있는 기능입니다.</span>
+            <div className="section-action-bar">
+              <div className="fixed-intro-card">
+                <Sparkles size={18} className="intro-icon" />
+                <span>매주·매월 반복되는 수입/지출을 예약하고 자동 정합하세요.</span>
+              </div>
+              <button className="btn-section-add" onClick={handleOpenAddModal}>
+                <Plus size={14} />
+                정기내역 등록
+              </button>
             </div>
 
             <div className="table-responsive" style={{ marginTop: '20px' }}>
@@ -975,6 +1016,13 @@ export const AssetView: React.FC = () => {
         {/* ─── SECTION 3: ACCOUNTS ─── */}
         {activeSection === 'accounts' && (
           <div className="section-content fade-in">
+            <div className="section-action-bar">
+              <span className="section-action-bar-title">등록된 계좌 {accounts.length}개</span>
+              <button className="btn-section-add" onClick={handleOpenAddModal}>
+                <Plus size={14} />
+                자산계좌 추가
+              </button>
+            </div>
             <div className="accounts-grid">
               {accounts.map(acc => (
                 <div key={acc.id} className="account-card">
@@ -1005,10 +1053,6 @@ export const AssetView: React.FC = () => {
                 </div>
               ))}
 
-              <div className="account-card add-new-card" onClick={handleOpenAddModal}>
-                <Plus size={28} />
-                <span>새 자산 계좌 추가</span>
-              </div>
             </div>
           </div>
         )}
@@ -1020,7 +1064,12 @@ export const AssetView: React.FC = () => {
 
               {/* Income Categories */}
               <div className="category-column">
-                <h3 className="column-title income">수입 카테고리</h3>
+                <div className="category-column-header">
+                  <h3 className="column-title income">수입 카테고리</h3>
+                  <button className="btn-cat-add" onClick={() => handleOpenAddModal({ categoryType: 'INCOME' })}>
+                    <Plus size={11} /> 추가
+                  </button>
+                </div>
                 <div className="category-list">
                   {categories.filter(c => c.type === 'INCOME').map(cat => (
                     <div key={cat.id} className="category-item-row">
@@ -1047,7 +1096,12 @@ export const AssetView: React.FC = () => {
 
               {/* Expense Categories */}
               <div className="category-column">
-                <h3 className="column-title expense">지출 카테고리</h3>
+                <div className="category-column-header">
+                  <h3 className="column-title expense">지출 카테고리</h3>
+                  <button className="btn-cat-add" onClick={() => handleOpenAddModal({ categoryType: 'EXPENSE' })}>
+                    <Plus size={11} /> 추가
+                  </button>
+                </div>
                 <div className="category-list">
                   {categories.filter(c => c.type === 'EXPENSE').map(cat => (
                     <div key={cat.id} className="category-item-row">
@@ -1074,7 +1128,12 @@ export const AssetView: React.FC = () => {
 
               {/* Transfer Categories */}
               <div className="category-column">
-                <h3 className="column-title transfer">이체 카테고리</h3>
+                <div className="category-column-header">
+                  <h3 className="column-title transfer">이체 카테고리</h3>
+                  <button className="btn-cat-add" onClick={() => handleOpenAddModal({ categoryType: 'TRANSFER' })}>
+                    <Plus size={11} /> 추가
+                  </button>
+                </div>
                 <div className="category-list">
                   {categories.filter(c => c.type === 'TRANSFER').map(cat => (
                     <div key={cat.id} className="category-item-row">
