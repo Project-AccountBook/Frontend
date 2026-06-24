@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { DashboardView } from './components/DashboardView';
@@ -9,6 +9,7 @@ import { KnowhowWriteView } from './components/KnowhowWriteView';
 import { QnaListView } from './components/QnaListView';
 import { QnaDetailView } from './components/QnaDetailView';
 import { QnaWriteView } from './components/QnaWriteView';
+import { NotificationView, MOCK_NOTIFICATIONS } from './components/NotificationView';
 import { Construction } from 'lucide-react';
 
 type BoardMode = 'list' | 'detail' | 'write';
@@ -19,6 +20,12 @@ function App() {
   const [knowhowPostId, setKnowhowPostId] = useState<number | null>(null);
   const [qnaMode, setQnaMode] = useState<BoardMode>('list');
   const [qnaPostId, setQnaPostId] = useState<number | null>(null);
+  const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
+
+  const unreadNotificationCount = useMemo(
+    () => notifications.filter((n) => !n.isRead).length,
+    [notifications]
+  );
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
@@ -100,6 +107,13 @@ function App() {
         return renderKnowhow();
       case 'qa':
         return renderQna();
+      case 'notifications':
+        return (
+          <NotificationView
+            notifications={notifications}
+            setNotifications={setNotifications}
+          />
+        );
       default:
         // Render a premium looking placeholder card for unfinished pages
         return (
@@ -159,7 +173,10 @@ function App() {
       {/* Main Container */}
       <div className="main-container">
         {/* Top Header */}
-        <Header />
+        <Header
+          unreadCount={unreadNotificationCount}
+          onOpenNotifications={() => handleTabChange('notifications')}
+        />
 
         {/* Dashboard Content */}
         <main className="dashboard-content">
