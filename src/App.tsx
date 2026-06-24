@@ -3,6 +3,7 @@ import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { DashboardView } from './components/DashboardView';
 import { AnalysisView } from './components/AnalysisView';
+import { ComparisonView } from './components/ComparisonView';
 import { KnowhowListView } from './components/KnowhowListView';
 import { KnowhowDetailView } from './components/KnowhowDetailView';
 import { KnowhowWriteView } from './components/KnowhowWriteView';
@@ -96,6 +97,8 @@ function App() {
         return <DashboardView />;
       case 'analysis':
         return <AnalysisView />;
+      case 'comparison':
+        return <ComparisonView />;
       case 'knowhow':
         return renderKnowhow();
       case 'qa':
