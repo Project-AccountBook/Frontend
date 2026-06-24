@@ -71,12 +71,7 @@ interface Transaction {
 }
 
 export const AssetView: React.FC = () => {
-  // ──────────────────────────────────────────────
-  // States
-  // ──────────────────────────────────────────────
   const [activeSection, setActiveSection] = useState<ActiveSection>('transactions');
-
-  // Calendar view states
   const [viewMode, setViewMode] = useState<ViewMode>('calendar');
   const today = new Date();
   const [calendarYear, setCalendarYear] = useState(today.getFullYear());
@@ -99,7 +94,6 @@ export const AssetView: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showMonthPicker]);
 
-  // --- Mock Data ---
   const [accounts, setAccounts] = useState<Account[]>([
     { id: 1, accountName: '신한 주거래 우대통장', currentBalance: 3450000, initialBalance: 2000000 },
     { id: 2, accountName: '국민 생활비 통장', currentBalance: 1250000, initialBalance: 1000000 },
@@ -135,19 +129,16 @@ export const AssetView: React.FC = () => {
     { id: 3, accountId: 2, accountName: '국민 생활비 통장', categoryId: 10, categoryName: '반려동물 용품', type: 'EXPENSE', amount: 49000, frequency: 'MONTHLY', repeatDay: 5, startDate: '2026-03-05', description: '사료 정기배송 구독', isActive: false }
   ]);
 
-  // --- Filter states ---
   const [filterAccount, setFilterAccount] = useState<number | 'all'>('all');
   const [filterType, setFilterType] = useState<TransactionType | 'all'>('all');
   const [startDate, setStartDate] = useState('2026-06-01');
   const [endDate, setEndDate] = useState('2026-06-30');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // --- Modals state ---
   const [showModal, setShowModal] = useState<boolean>(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
-  // Form Fields State
   const [formAccount, setFormAccount] = useState<string>('1');
   const [formTargetAccount, setFormTargetAccount] = useState<string>('2');
   const [formCategory, setFormCategory] = useState<string>('3');
@@ -156,23 +147,16 @@ export const AssetView: React.FC = () => {
   const [formDate, setFormDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [formDescription, setFormDescription] = useState<string>('');
 
-  // Fixed Transaction specific fields
   const [formFrequency, setFormFrequency] = useState<FrequencyType>('MONTHLY');
   const [formRepeatDay, setFormRepeatDay] = useState<string>('20');
   const [formStartDate, setFormStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [formEndDate, setFormEndDate] = useState<string>('');
 
-  // Account specific fields
   const [formAccountName, setFormAccountName] = useState<string>('');
   const [formInitialBalance, setFormInitialBalance] = useState<string>('');
 
-  // Category specific fields
   const [formCategoryName, setFormCategoryName] = useState<string>('');
   const [formCategoryType, setFormCategoryType] = useState<TransactionType>('EXPENSE');
-
-  // ──────────────────────────────────────────────
-  // CRUD Handlers (Local state modification)
-  // ──────────────────────────────────────────────
 
   const resetFormFields = () => {
     setFormAccount('1');
@@ -406,14 +390,10 @@ export const AssetView: React.FC = () => {
     resetFormFields();
   };
 
-  // --- CSV Export Simulator ---
   const handleExportCsv = () => {
     alert(`[CSV Export] ${startDate} 부터 ${endDate} 까지의 거래 내역 파일 다운로드를 준비합니다.`);
   };
 
-  // ──────────────────────────────────────────────
-  // Filter Logic
-  // ──────────────────────────────────────────────
   const filteredTransactions = transactions.filter(tx => {
     if (filterAccount !== 'all' && tx.accountId !== filterAccount) return false;
     if (filterType !== 'all' && tx.type !== filterType) return false;
@@ -459,12 +439,8 @@ export const AssetView: React.FC = () => {
     return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(val);
   };
 
-  // 캘린더 셀용 숫자 표시 (쉼표 구분, 원 단위 생략)
   const formatCalAmt = (val: number) => val.toLocaleString('ko-KR');
 
-  // ──────────────────────────────────────────────
-  // Calendar Logic
-  // ──────────────────────────────────────────────
   const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
   const MONTHS = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
 
@@ -532,9 +508,6 @@ export const AssetView: React.FC = () => {
   const selectedDayTxs = selectedCalendarDay ? (txByDate[selectedCalendarDay] || []) : [];
   const todayStr = today.toISOString().split('T')[0];
 
-  // ──────────────────────────────────────────────
-  // Render
-  // ──────────────────────────────────────────────
   return (
     <div className="asset-management-wrapper fade-in">
 
