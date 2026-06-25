@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import { useState, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
@@ -10,6 +11,7 @@ import { KnowhowWriteView } from './components/KnowhowWriteView';
 import { QnaListView } from './components/QnaListView';
 import { QnaDetailView } from './components/QnaDetailView';
 import { QnaWriteView } from './components/QnaWriteView';
+import { NotificationView, MOCK_NOTIFICATIONS } from './components/NotificationView';
 import { BudgetView } from './components/BudgetView';
 import { AssetView } from './components/AssetView';
 import { BudgetView } from './components/BudgetView';
@@ -26,6 +28,12 @@ function App() {
   const [knowhowPostId, setKnowhowPostId] = useState<number | null>(null);
   const [qnaMode, setQnaMode] = useState<BoardMode>('list');
   const [qnaPostId, setQnaPostId] = useState<number | null>(null);
+  const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
+
+  const unreadNotificationCount = useMemo(
+    () => notifications.filter((n) => !n.isRead).length,
+    [notifications]
+  );
 
   useEffect(() => {
     if (window.location.pathname === '/oauth2/redirect') {
@@ -152,6 +160,13 @@ function App() {
         return renderKnowhow();
       case 'qa':
         return renderQna();
+      case 'notifications':
+        return (
+          <NotificationView
+            notifications={notifications}
+            setNotifications={setNotifications}
+          />
+        );
       case 'settings':
         return <MyPageView />;
       default:
@@ -236,6 +251,16 @@ function App() {
 
       {/* Main Container */}
       <div className="main-container">
+        {/* Top Header */}
+        <Header
+          unreadCount={unreadNotificationCount}
+          onOpenNotifications={() => handleTabChange('notifications')}
+        />
+
+        {/* Dashboard Content */}
+        <main className="dashboard-content">
+          {renderContent()}
+        </main>
         <Header />
         <main className="dashboard-content">{renderContent()}</main>
       </div>
