@@ -18,7 +18,6 @@ import {
   ArrowUpRight
 } from 'lucide-react';
 
-// Interfaces
 interface GroupBuyPost {
   id: number;
   category: string;
@@ -36,6 +35,7 @@ interface Category {
   name: string;
   description: string;
   createdAt: string;
+
 }
 
 interface Report {
@@ -57,6 +57,7 @@ interface Product {
   stock: number;
   description: string;
   createdAt: string;
+
 }
 
 export const GroupBuyAdminView: React.FC = () => {
