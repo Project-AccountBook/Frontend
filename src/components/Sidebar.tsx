@@ -8,7 +8,8 @@ import {
   Lightbulb, 
   ShoppingBag, 
   Settings,
-  Wallet
+  Wallet,
+  Shield
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -25,6 +26,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
     { id: 'qa', label: 'Q&A 게시판', icon: MessageSquare },
     { id: 'knowhow', label: '노하우 공유', icon: Lightbulb },
     { id: 'groupbuy', label: '동네 공동구매', icon: ShoppingBag, isHot: true },
+    { id: 'groupbuyAdmin', label: '공동구매 어드민', icon: Shield },
   ];
 
   return (

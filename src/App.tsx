@@ -9,6 +9,7 @@ import { KnowhowWriteView } from './components/KnowhowWriteView';
 import { QnaListView } from './components/QnaListView';
 import { QnaDetailView } from './components/QnaDetailView';
 import { QnaWriteView } from './components/QnaWriteView';
+import { GroupBuyAdminView } from './components/GroupBuyAdminView';
 import { Construction } from 'lucide-react';
 
 type BoardMode = 'list' | 'detail' | 'write';
@@ -100,6 +101,8 @@ function App() {
         return renderKnowhow();
       case 'qa':
         return renderQna();
+      case 'groupbuyAdmin':
+        return <GroupBuyAdminView />;
       default:
         // Render a premium looking placeholder card for unfinished pages
         return (
