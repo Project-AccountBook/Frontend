@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { DashboardView } from './components/DashboardView';
 import { AnalysisView } from './components/AnalysisView';
+import { GroupBuyView } from './components/GroupBuyView';
 import { KnowhowListView } from './components/KnowhowListView';
 import { KnowhowDetailView } from './components/KnowhowDetailView';
 import { KnowhowWriteView } from './components/KnowhowWriteView';
@@ -11,16 +12,56 @@ import { QnaDetailView } from './components/QnaDetailView';
 import { QnaWriteView } from './components/QnaWriteView';
 import { AssetView } from './components/AssetView';
 import { BudgetView } from './components/BudgetView';
+import { LoginView } from './components/LoginView';
+import { MyPageView } from './components/MyPageView';
 import { Construction } from 'lucide-react';
 
 type BoardMode = 'list' | 'detail' | 'write';
 
 function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => !!localStorage.getItem('accessToken'));
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [knowhowMode, setKnowhowMode] = useState<BoardMode>('list');
   const [knowhowPostId, setKnowhowPostId] = useState<number | null>(null);
   const [qnaMode, setQnaMode] = useState<BoardMode>('list');
   const [qnaPostId, setQnaPostId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (window.location.pathname === '/oauth2/redirect') {
+      const params = new URLSearchParams(window.location.search);
+      const accessToken = params.get('accessToken');
+      const refreshToken = params.get('refreshToken');
+      if (accessToken && refreshToken) {
+        localStorage.setItem('accessToken', accessToken);
+        localStorage.setItem('refreshToken', refreshToken);
+        localStorage.setItem('userEmail', 'social-login');
+        setIsLoggedIn(true);
+      }
+      window.history.replaceState({}, document.title, '/');
+    }
+  }, []);
+
+  const handleLogout = async () => {
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      try {
+        await fetch('/api/v1/auth/logout', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+      } catch (err) {
+        console.error('Logout API error:', err);
+      }
+    }
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('userEmail');
+    setIsLoggedIn(false);
+    setActiveTab('dashboard');
+  };
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
@@ -102,10 +143,14 @@ function App() {
         return <BudgetView />;
       case 'analysis':
         return <AnalysisView />;
+      case 'groupbuy':
+        return <GroupBuyView />;
       case 'knowhow':
         return renderKnowhow();
       case 'qa':
         return renderQna();
+      case 'settings':
+        return <MyPageView />;
       default:
         // Render a premium looking placeholder card for unfinished pages
         return (
@@ -157,10 +202,14 @@ function App() {
     }
   };
 
+  if (!isLoggedIn) {
+    return <LoginView onLoginSuccess={() => setIsLoggedIn(true)} />;
+  }
+
   return (
     <div className="app-layout">
       {/* Sidebar Navigation */}
-      <Sidebar activeTab={activeTab} setActiveTab={handleTabChange} />
+      <Sidebar activeTab={activeTab} setActiveTab={handleTabChange} onLogout={handleLogout} />
 
       {/* Main Container */}
       <div className="main-container">
