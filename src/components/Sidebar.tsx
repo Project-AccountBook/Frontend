@@ -9,6 +9,7 @@ import {
   ShoppingBag, 
   Settings,
   Wallet,
+  PiggyBank
   LogOut
 } from 'lucide-react';
 
@@ -21,7 +22,8 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout }) => {
   const menuItems = [
     { id: 'dashboard', label: '대시보드', icon: LayoutDashboard },
-    { id: 'history', label: '내역 관리', icon: ReceiptText },
+    { id: 'history', label: '내역 및 자산 관리', icon: ReceiptText },
+    { id: 'budget', label: '예산 관리', icon: PiggyBank },
     { id: 'analysis', label: '소비/예산 분석', icon: LineChart },
     { id: 'comparison', label: '이웃 자산 비교', icon: TrendingUp },
     { id: 'qa', label: 'Q&A 게시판', icon: MessageSquare },
