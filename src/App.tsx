@@ -10,6 +10,8 @@ import { KnowhowWriteView } from './components/KnowhowWriteView';
 import { QnaListView } from './components/QnaListView';
 import { QnaDetailView } from './components/QnaDetailView';
 import { QnaWriteView } from './components/QnaWriteView';
+import { AssetView } from './components/AssetView';
+import { BudgetView } from './components/BudgetView';
 import { LoginView } from './components/LoginView';
 import { MyPageView } from './components/MyPageView';
 import { Construction } from 'lucide-react';
@@ -135,6 +137,10 @@ function App() {
     switch (activeTab) {
       case 'dashboard':
         return <DashboardView />;
+      case 'history':
+        return <AssetView />;
+      case 'budget':
+        return <BudgetView />;
       case 'analysis':
         return <AnalysisView />;
       case 'groupbuy':
