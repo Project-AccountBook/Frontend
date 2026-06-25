@@ -1057,6 +1057,121 @@ a {
   font-weight: 700;
 }
 
+/* Public user budget cards (예산 비교 페이지) */
+.public-user-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 8px;
+}
+
+@media (max-width: 1100px) {
+  .public-user-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .public-user-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.public-user-card {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+  transition: all var(--transition-normal);
+}
+
+.public-user-card:hover {
+  border-color: var(--border-hover);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.public-user-card.clickable {
+  cursor: pointer;
+}
+
+.public-user-card.clickable:hover {
+  border-color: var(--blue-border);
+}
+
+.public-user-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.public-user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--purple-bg);
+  color: var(--purple);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.public-user-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.public-user-meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+.public-user-diff-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.public-user-diff-badge.less {
+  color: var(--green);
+  background: var(--green-bg);
+  border: 1px solid var(--green-border);
+}
+
+.public-user-diff-badge.more {
+  color: var(--red);
+  background: var(--red-bg);
+  border: 1px solid var(--red-border);
+}
+
+.public-user-budget-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.public-user-budget-lbl {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.public-user-budget-val {
+  font-size: 18px;
 /* ─────────────────────────────────────────
    HISTORY MANAGEMENT (내역 및 자산 관리)
 ───────────────────────────────────────── */
@@ -3729,6 +3844,12 @@ a {
   font-size: 24px;
   font-weight: 800;
   color: var(--text-primary);
+}
+
+.public-user-budget-val span {
+  font-size: 12px;
+  font-weight: 500;
+  margin-left: 2px;
 }
 
 .detail-price-main span {

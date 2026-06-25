@@ -4,6 +4,7 @@ import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { DashboardView } from './components/DashboardView';
 import { AnalysisView } from './components/AnalysisView';
+import { ComparisonView } from './components/ComparisonView';
 import { GroupBuyView } from './components/GroupBuyView';
 import { KnowhowListView } from './components/KnowhowListView';
 import { KnowhowDetailView } from './components/KnowhowDetailView';
@@ -152,6 +153,8 @@ function App() {
         return <BudgetView />;
       case 'analysis':
         return <AnalysisView />;
+      case 'comparison':
+        return <ComparisonView />;
       case 'budget':
         return <BudgetView />;
       case 'groupbuy':
