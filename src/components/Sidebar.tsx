@@ -8,18 +8,22 @@ import {
   Lightbulb, 
   ShoppingBag, 
   Settings,
-  Wallet
+  Wallet,
+  PiggyBank
+  LogOut
 } from 'lucide-react';
 
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  onLogout: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout }) => {
   const menuItems = [
     { id: 'dashboard', label: '대시보드', icon: LayoutDashboard },
-    { id: 'history', label: '내역 관리', icon: ReceiptText },
+    { id: 'history', label: '내역 및 자산 관리', icon: ReceiptText },
+    { id: 'budget', label: '예산 관리', icon: PiggyBank },
     { id: 'analysis', label: '소비/예산 분석', icon: LineChart },
     { id: 'comparison', label: '이웃 자산 비교', icon: TrendingUp },
     { id: 'qa', label: 'Q&A 게시판', icon: MessageSquare },
@@ -55,7 +59,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
         })}
       </nav>
 
-      <div className="sidebar-footer">
+      <div className="sidebar-footer" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
         <button 
           onClick={() => setActiveTab('settings')}
           className={`sidebar-item ${activeTab === 'settings' ? 'active' : ''}`}
@@ -63,6 +67,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
         >
           <Settings size={18} />
           <span>설정 및 프로필</span>
+        </button>
+        <button 
+          onClick={onLogout}
+          className="sidebar-item logout-btn"
+          style={{ width: '100%' }}
+        >
+          <LogOut size={18} />
+          <span>로그아웃</span>
         </button>
       </div>
     </aside>
