@@ -9,7 +9,8 @@ import {
   ShoppingBag, 
   Settings,
   Wallet,
-  PiggyBank
+  Shield,
+  PiggyBank,
   LogOut
 } from 'lucide-react';
 
@@ -29,6 +30,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLog
     { id: 'qa', label: 'Q&A 게시판', icon: MessageSquare },
     { id: 'knowhow', label: '노하우 공유', icon: Lightbulb },
     { id: 'groupbuy', label: '동네 공동구매', icon: ShoppingBag, isHot: true },
+    { id: 'groupbuyAdmin', label: '공동구매 어드민', icon: Shield },
   ];
 
   return (

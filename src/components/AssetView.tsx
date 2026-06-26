@@ -946,7 +946,7 @@ export const AssetView: React.FC = () => {
                 <Sparkles size={18} className="intro-icon" />
                 <span>매주·매월 반복되는 수입/지출을 예약하고 자동 정합하세요.</span>
               </div>
-              <button className="btn-section-add" onClick={handleOpenAddModal}>
+              <button className="btn-section-add" onClick={() => handleOpenAddModal()}>
                 <Plus size={14} />
                 정기내역 등록
               </button>
@@ -1032,7 +1032,7 @@ export const AssetView: React.FC = () => {
           <div className="section-content fade-in">
             <div className="section-action-bar">
               <span className="section-action-bar-title">등록된 계좌 {accounts.length}개</span>
-              <button className="btn-section-add" onClick={handleOpenAddModal}>
+              <button className="btn-section-add" onClick={() => handleOpenAddModal()}>
                 <Plus size={14} />
                 자산계좌 추가
               </button>

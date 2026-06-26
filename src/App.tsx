@@ -1,5 +1,4 @@
-import { useMemo, useState } from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { DashboardView } from './components/DashboardView';
@@ -12,10 +11,10 @@ import { KnowhowWriteView } from './components/KnowhowWriteView';
 import { QnaListView } from './components/QnaListView';
 import { QnaDetailView } from './components/QnaDetailView';
 import { QnaWriteView } from './components/QnaWriteView';
+import { GroupBuyAdminView } from './components/GroupBuyAdminView';
 import { NotificationView, MOCK_NOTIFICATIONS } from './components/NotificationView';
 import { BudgetView } from './components/BudgetView';
 import { AssetView } from './components/AssetView';
-import { BudgetView } from './components/BudgetView';
 import { LoginView } from './components/LoginView';
 import { MyPageView } from './components/MyPageView';
 import { Construction } from 'lucide-react';
@@ -163,6 +162,8 @@ function App() {
         return renderKnowhow();
       case 'qa':
         return renderQna();
+      case 'groupbuyAdmin':
+        return <GroupBuyAdminView />;
       case 'notifications':
         return (
           <NotificationView
@@ -248,7 +249,6 @@ function App() {
 
   return (
     <div className="app-layout">
-      <Sidebar activeTab={activeTab} setActiveTab={handleTabChange} />
       {/* Sidebar Navigation */}
       <Sidebar activeTab={activeTab} setActiveTab={handleTabChange} onLogout={handleLogout} />
 
@@ -264,8 +264,6 @@ function App() {
         <main className="dashboard-content">
           {renderContent()}
         </main>
-        <Header />
-        <main className="dashboard-content">{renderContent()}</main>
       </div>
     </div>
   );

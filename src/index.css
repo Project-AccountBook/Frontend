@@ -1172,6 +1172,9 @@ a {
 
 .public-user-budget-val {
   font-size: 18px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
 /* ─────────────────────────────────────────
    HISTORY MANAGEMENT (내역 및 자산 관리)
 ───────────────────────────────────────── */
@@ -1756,6 +1759,10 @@ a {
 }
 
 .category-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 /* Login View Styles */
 .login-wrapper {
   min-height: 100vh;
@@ -2467,8 +2474,22 @@ a {
   color: var(--text-secondary);
 }
 
-/* 섹션 내부 추가 버튼 (primary) */
 .btn-section-add {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
 .mypage-field.span-full {
   grid-column: 1 / -1;
 }
@@ -3290,6 +3311,8 @@ a {
 .btn-primary:hover {
   background: var(--primary-dark);
 }
+
+.mypage-btn-edit {
   background: var(--bg-app);
   border: 1px solid var(--border);
   border-radius: 10px;

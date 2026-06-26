@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Wallet, Mail, Lock, AlertCircle, Loader2, Play, User, Calendar, MapPin, CheckCircle, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, AlertCircle, Loader2, Play, User, Calendar, MapPin, CheckCircle, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 
 interface LoginViewProps {
   onLoginSuccess: () => void;
@@ -280,12 +280,15 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     onLoginSuccess();
   };
 
+  // Demo signup handler (unused, commented out for strict TS)
+  /*
   const handleDemoSignup = () => {
     localStorage.setItem('accessToken', 'mock-access-token');
     localStorage.setItem('refreshToken', 'mock-refresh-token');
     localStorage.setItem('userEmail', email || 'demo-user@jointliving.com');
     onLoginSuccess();
   };
+  */
 
   return (
     <div className="login-wrapper">
