@@ -810,6 +810,34 @@ a {
   transform: translateY(-1px);
 }
 
+.header-btn-secondary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: white;
+  color: var(--text-secondary);
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid var(--border);
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.header-btn-secondary:hover {
+  color: var(--text-primary);
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+}
+
+.header-btn-secondary:disabled,
+.header-btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
 /* Dashboard Specific elements */
 .dashboard-view-header {
   display: flex;
@@ -861,6 +889,39 @@ a {
 
 .dashboard-date-arrow:hover {
   color: var(--text-primary);
+}
+
+.month-year-navigator {
+  position: relative;
+}
+
+.month-year-navigator--compact .month-year-navigator-label--compact {
+  font-size: 13px;
+  font-weight: 700;
+  min-width: 92px;
+  padding: 2px 10px;
+}
+
+.month-year-navigator .cal-month-dropdown {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.month-year-navigator .month-year-navigator-label {
+  min-width: 120px;
+}
+
+.month-year-navigator .dashboard-date-arrow:disabled,
+.month-year-navigator .month-year-navigator-label:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.month-year-navigator .month-year-navigator-label:disabled:hover {
+  border-color: transparent;
+  color: var(--text-primary);
+  background: none;
 }
 
 /* Custom Chart Animations */
