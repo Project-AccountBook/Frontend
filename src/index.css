@@ -707,7 +707,7 @@ a {
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   padding: 0 32px;
   z-index: 99;
 }
@@ -735,6 +735,8 @@ a {
   display: flex;
   align-items: center;
   gap: 16px;
+  margin-left: auto;
+  margin-right: 60px;
 }
 
 .header-icon-btn {
