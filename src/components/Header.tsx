@@ -1,7 +1,12 @@
 import React from 'react';
 import { Bell, User, Sliders } from 'lucide-react';
 
-export const Header: React.FC = () => {
+interface HeaderProps {
+  unreadCount?: number;
+  onOpenNotifications?: () => void;
+}
+
+export const Header: React.FC<HeaderProps> = ({ unreadCount = 0, onOpenNotifications }) => {
   return (
     <header className="header">
       <div className="header-left">
@@ -12,9 +17,17 @@ export const Header: React.FC = () => {
       </div>
 
       <div className="header-right">
-        <button className="header-icon-btn" aria-label="Notifications">
+        <button
+          className="header-icon-btn"
+          aria-label={`알림 ${unreadCount}개`}
+          onClick={onOpenNotifications}
+        >
           <Bell size={18} />
-          <span className="badge"></span>
+          {unreadCount > 0 && (
+            <span className="badge">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
         </button>
 
         <button className="header-profile-btn" aria-label="User profile">
