@@ -21,7 +21,8 @@ import {
 // ──────────────────────────────────────────────
 // Enums & Types
 // ──────────────────────────────────────────────
-type ActiveSection = 'transactions' | 'fixed' | 'accounts' | 'categories';
+export type AssetActiveSection = 'transactions' | 'fixed' | 'accounts' | 'categories';
+type ActiveSection = AssetActiveSection;
 type TransactionType = 'INCOME' | 'EXPENSE' | 'TRANSFER';
 type FrequencyType = 'WEEKLY' | 'MONTHLY' | 'YEARLY';
 type ViewMode = 'calendar' | 'list';
@@ -70,8 +71,12 @@ interface Transaction {
   description: string;
 }
 
-export const AssetView: React.FC = () => {
-  const [activeSection, setActiveSection] = useState<ActiveSection>('transactions');
+interface AssetViewProps {
+  initialSection?: AssetActiveSection;
+}
+
+export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
+  const [activeSection, setActiveSection] = useState<ActiveSection>(initialSection ?? 'transactions');
   const [viewMode, setViewMode] = useState<ViewMode>('calendar');
   const today = new Date();
   const [calendarYear, setCalendarYear] = useState(today.getFullYear());
@@ -80,6 +85,12 @@ export const AssetView: React.FC = () => {
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(today.getFullYear());
   const monthPickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (initialSection) {
+      setActiveSection(initialSection);
+    }
+  }, [initialSection]);
 
   useEffect(() => {
     if (!showMonthPicker) return;

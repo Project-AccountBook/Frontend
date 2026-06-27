@@ -4,8 +4,6 @@ import {
   Plus,
   Pencil,
   Trash2,
-  ChevronLeft,
-  ChevronRight,
   Search,
   Wallet,
   AlertTriangle,
@@ -13,8 +11,10 @@ import {
   Coins,
   Tag,
   X,
-  Calendar
+  Calendar,
+  ArrowRight
 } from 'lucide-react';
+import { MonthYearNavigator } from './MonthYearNavigator';
 
 interface BudgetItem {
   id: number;
@@ -488,6 +488,7 @@ interface BudgetModalProps {
   editItem?: BudgetItem | null;
   onClose: () => void;
   onSubmit: (yearMonth: string, payload: BudgetFormPayload, editId?: number) => void;
+  onGoToCategorySettings?: () => void;
 }
 
 const BudgetModal: React.FC<BudgetModalProps> = ({
@@ -498,7 +499,8 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
   budgets,
   editItem,
   onClose,
-  onSubmit
+  onSubmit,
+  onGoToCategorySettings
 }) => {
   const isEdit = mode === 'edit';
   const yearMonth = formatYearMonth(modalDate);
@@ -556,11 +558,6 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
     fontFamily: 'inherit',
     color: 'var(--text-primary)',
     outline: 'none'
-  };
-
-  const shiftMonth = (delta: number) => {
-    if (isEdit) return;
-    onModalDateChange(new Date(modalDate.getFullYear(), modalDate.getMonth() + delta, 1));
   };
 
   const handleSubmit = () => {
@@ -653,35 +650,18 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
             <Calendar size={14} color="var(--blue)" />
             기준 월 {!isEdit && <span style={{ color: 'var(--red)' }}>*</span>}
           </label>
-          <div
-            className="dashboard-date-selector"
+          <MonthYearNavigator
+            date={modalDate}
+            onDateChange={onModalDateChange}
+            disabled={isEdit}
+            compact
             style={{
               width: '100%',
               justifyContent: 'center',
               padding: '10px 14px',
               opacity: isEdit ? 0.7 : 1
             }}
-          >
-            <button
-              type="button"
-              className="dashboard-date-arrow"
-              aria-label="이전 달"
-              onClick={() => shiftMonth(-1)}
-              disabled={isEdit}
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <span style={{ flex: 1, textAlign: 'center' }}>{yearMonthLabel}</span>
-            <button
-              type="button"
-              className="dashboard-date-arrow"
-              aria-label="다음 달"
-              onClick={() => shiftMonth(1)}
-              disabled={isEdit}
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
+          />
           {!isEdit && (
             <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px' }}>
               선택한 월에 예산이 등록됩니다
@@ -690,34 +670,82 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
         </div>
 
         <div style={{ marginBottom: '18px' }}>
-          <label
+          <div
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              fontSize: '13px',
-              fontWeight: '700',
-              color: 'var(--text-primary)',
+              justifyContent: 'space-between',
+              gap: '8px',
               marginBottom: '10px'
             }}
           >
-            <Tag size={14} color="var(--blue)" />
-            카테고리 <span style={{ color: 'var(--red)' }}>*</span>
-          </label>
-
-          {!isEdit && availableCategories.length === 0 ? (
-            <p
+            <label
               style={{
-                fontSize: '12px',
-                color: 'var(--red)',
-                padding: '12px',
-                background: '#fff',
-                borderRadius: '8px',
-                border: '1px solid var(--red-border)'
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '13px',
+                fontWeight: '700',
+                color: 'var(--text-primary)'
               }}
             >
-              {yearMonthLabel}에 등록 가능한 카테고리가 없습니다.
-            </p>
+              <Tag size={14} color="var(--blue)" />
+              카테고리 <span style={{ color: 'var(--red)' }}>*</span>
+            </label>
+            {onGoToCategorySettings && (
+              <button
+                type="button"
+                onClick={onGoToCategorySettings}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '4px 8px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: 'transparent',
+                  fontSize: '11px',
+                  fontWeight: '700',
+                  color: 'var(--blue)',
+                  cursor: 'pointer'
+                }}
+              >
+                카테고리 관리
+                <ArrowRight size={12} />
+              </button>
+            )}
+          </div>
+
+          {!isEdit && availableCategories.length === 0 ? (
+            <div
+              style={{
+                padding: '14px',
+                background: '#fff',
+                borderRadius: '8px',
+                border: '1px solid var(--red-border)',
+                textAlign: 'center'
+              }}
+            >
+              <p style={{ fontSize: '12px', color: 'var(--red)', marginBottom: '10px' }}>
+                {yearMonthLabel}에 등록 가능한 카테고리가 없습니다.
+              </p>
+              {onGoToCategorySettings && (
+                <button
+                  type="button"
+                  onClick={onGoToCategorySettings}
+                  className="header-btn-primary"
+                  style={{
+                    background: 'var(--blue)',
+                    margin: '0 auto',
+                    fontSize: '12px',
+                    padding: '8px 14px'
+                  }}
+                >
+                  <Tag size={13} />
+                  카테고리 추가하러 가기
+                </button>
+              )}
+            </div>
           ) : (
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
               {availableCategories.map((cat) => {
@@ -832,7 +860,9 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
   );
 };
 
-export const BudgetView: React.FC = () => {
+export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
+  onGoToCategorySettings
+}) => {
   const [budgetsByMonth, setBudgetsByMonth] = useState(INITIAL_BUDGETS_BY_MONTH);
   const [currentDate, setCurrentDate] = useState(() => new Date(2026, 5, 1));
   const [activeCategory, setActiveCategory] = useState('전체');
@@ -960,8 +990,11 @@ export const BudgetView: React.FC = () => {
     setDeleteTarget(null);
   };
 
-  const shiftMonth = (delta: number) => {
-    setCurrentDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
+  const handleGoToCategorySettings = () => {
+    setModalOpen(false);
+    setEditItem(null);
+    setModalMode('create');
+    onGoToCategorySettings?.();
   };
 
   return (
@@ -999,17 +1032,24 @@ export const BudgetView: React.FC = () => {
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div className="dashboard-date-selector">
-            <button className="dashboard-date-arrow" aria-label="이전 달" onClick={() => shiftMonth(-1)}>
-              <ChevronLeft size={16} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <MonthYearNavigator
+            date={currentDate}
+            onDateChange={setCurrentDate}
+            compact
+          />
+          {onGoToCategorySettings && (
+            <button
+              type="button"
+              onClick={handleGoToCategorySettings}
+              className="header-btn-secondary"
+            >
+              <Tag size={16} />
+              <span>카테고리 관리</span>
             </button>
-            <span>{yearMonthLabel}</span>
-            <button className="dashboard-date-arrow" aria-label="다음 달" onClick={() => shiftMonth(1)}>
-              <ChevronRight size={16} />
-            </button>
-          </div>
+          )}
           <button
+            type="button"
             onClick={openCreateModal}
             className="header-btn-primary"
             style={{ background: 'var(--blue)' }}
@@ -1356,6 +1396,7 @@ export const BudgetView: React.FC = () => {
           setModalMode('create');
         }}
         onSubmit={handleModalSubmit}
+        onGoToCategorySettings={handleGoToCategorySettings}
       />
 
       {deleteTarget && (

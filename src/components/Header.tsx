@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bell, User, Sliders } from 'lucide-react';
+import { Bell } from 'lucide-react';
 
 interface HeaderProps {
   unreadCount?: number;
@@ -28,15 +28,6 @@ export const Header: React.FC<HeaderProps> = ({ unreadCount = 0, onOpenNotificat
               {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}
-        </button>
-
-        <button className="header-profile-btn" aria-label="User profile">
-          <User size={18} />
-        </button>
-
-        <button className="header-btn-primary">
-          <Sliders size={16} />
-          <span>예산 설정</span>
         </button>
       </div>
     </header>

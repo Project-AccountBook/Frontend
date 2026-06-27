@@ -14,7 +14,7 @@ import { QnaWriteView } from './components/QnaWriteView';
 import { GroupBuyAdminView } from './components/GroupBuyAdminView';
 import { NotificationView, MOCK_NOTIFICATIONS } from './components/NotificationView';
 import { BudgetView } from './components/BudgetView';
-import { AssetView } from './components/AssetView';
+import { AssetView, type AssetActiveSection } from './components/AssetView';
 import { LoginView } from './components/LoginView';
 import { MyPageView } from './components/MyPageView';
 import { Construction } from 'lucide-react';
@@ -29,6 +29,7 @@ function App() {
   const [qnaMode, setQnaMode] = useState<BoardMode>('list');
   const [qnaPostId, setQnaPostId] = useState<number | null>(null);
   const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
+  const [assetInitialSection, setAssetInitialSection] = useState<AssetActiveSection | undefined>();
 
   const unreadNotificationCount = useMemo(
     () => notifications.filter((n) => !n.isRead).length,
@@ -74,10 +75,16 @@ function App() {
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
+    setAssetInitialSection(undefined);
     setKnowhowMode('list');
     setKnowhowPostId(null);
     setQnaMode('list');
     setQnaPostId(null);
+  };
+
+  const goToCategorySettings = () => {
+    setAssetInitialSection('categories');
+    setActiveTab('history');
   };
 
   const renderKnowhow = () => {
@@ -147,15 +154,13 @@ function App() {
       case 'dashboard':
         return <DashboardView />;
       case 'history':
-        return <AssetView />;
+        return <AssetView initialSection={assetInitialSection} />;
       case 'budget':
-        return <BudgetView />;
+        return <BudgetView onGoToCategorySettings={goToCategorySettings} />;
       case 'analysis':
         return <AnalysisView />;
       case 'comparison':
         return <ComparisonView />;
-      case 'budget':
-        return <BudgetView />;
       case 'groupbuy':
         return <GroupBuyView />;
       case 'knowhow':
