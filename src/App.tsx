@@ -4,6 +4,7 @@ import { Header } from './components/Header';
 import { DashboardView } from './components/DashboardView';
 import { AnalysisView } from './components/AnalysisView';
 import { ComparisonView } from './components/ComparisonView';
+import { LocationComparisonView } from './components/LocationComparisonView';
 import { GroupBuyView } from './components/GroupBuyView';
 import { KnowhowListView } from './components/KnowhowListView';
 import { KnowhowDetailView } from './components/KnowhowDetailView';
@@ -154,6 +155,8 @@ function App() {
         return <AnalysisView />;
       case 'comparison':
         return <ComparisonView />;
+      case 'locationComparison':
+        return <LocationComparisonView />;
       case 'budget':
         return <BudgetView />;
       case 'groupbuy':
