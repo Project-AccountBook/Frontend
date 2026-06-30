@@ -18,12 +18,13 @@ import { BudgetView } from './components/BudgetView';
 import { AssetView } from './components/AssetView';
 import { LoginView } from './components/LoginView';
 import { MyPageView } from './components/MyPageView';
+import { authApi, tokenStorage } from './api';
 import { Construction } from 'lucide-react';
 
 type BoardMode = 'list' | 'detail' | 'write';
 
 function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => !!localStorage.getItem('accessToken'));
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => tokenStorage.hasToken());
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [knowhowMode, setKnowhowMode] = useState<BoardMode>('list');
   const [knowhowPostId, setKnowhowPostId] = useState<number | null>(null);
@@ -42,9 +43,7 @@ function App() {
       const accessToken = params.get('accessToken');
       const refreshToken = params.get('refreshToken');
       if (accessToken && refreshToken) {
-        localStorage.setItem('accessToken', accessToken);
-        localStorage.setItem('refreshToken', refreshToken);
-        localStorage.setItem('userEmail', 'social-login');
+        tokenStorage.setTokens(accessToken, refreshToken, 'social-login');
         setIsLoggedIn(true);
       }
       window.history.replaceState({}, document.title, '/');
@@ -52,23 +51,14 @@ function App() {
   }, []);
 
   const handleLogout = async () => {
-    const token = localStorage.getItem('accessToken');
-    if (token) {
+    if (tokenStorage.hasToken()) {
       try {
-        await fetch('/api/v1/auth/logout', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
+        await authApi.logout();
       } catch (err) {
         console.error('Logout API error:', err);
       }
     }
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('userEmail');
+    tokenStorage.clear();
     setIsLoggedIn(false);
     setActiveTab('dashboard');
   };

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Mail, Lock, AlertCircle, Loader2, Play, User, Calendar, MapPin, CheckCircle, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { authApi, tokenStorage, userApi } from '../api';
 
 interface LoginViewProps {
   onLoginSuccess: () => void;
@@ -41,8 +42,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     setCode('');
     setPassword('');
     setUsername('');
-    birthDate && setBirthDate('');
-    address && setAddress('');
+    setBirthDate('');
+    setAddress('');
     setNewPassword('');
     setConfirmPassword('');
     setIsEmailSent(false);
@@ -73,26 +74,21 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     }
 
     setLoading(true);
-    const endpoint = type === 'SIGNUP' ? '/api/v1/auth/email/send/signup' : '/api/v1/auth/email/send/password';
     try {
-      // SIGNUP 시 이미 가입된 이메일인지 사전 확인 (회원가입 API 명세 기반 에러 응답 처리)
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-      const resData = await response.json();
-      if (response.ok && resData.success) {
+      const result = type === 'SIGNUP'
+        ? await authApi.sendSignupCode({ email })
+        : await authApi.sendPasswordCode({ email });
+
+      if (result.ok) {
         setSuccessMsg('인증 코드가 이메일로 전송되었습니다. 메일함을 확인해 주세요.');
         if (type === 'SIGNUP') setIsEmailSent(true);
         else setIsResetEmailSent(true);
-      } else if (response.status === 409 || (resData.error && resData.error.includes('이미'))) {
-        // 중복 이메일: 백엔드가 409 Conflict 또는 관련 메시지를 보낸 경우
+      } else if (result.status === 409 || (result.error && result.error.includes('이미'))) {
         setErrorMsg('이미 가입된 이메일 주소입니다. 로그인 화면으로 돌아가 로그인해 주세요.');
-      } else if (response.status === 429 || (resData.error && resData.error.includes('요청'))) {
+      } else if (result.status === 429 || (result.error && result.error.includes('요청'))) {
         setErrorMsg('잠시 후 다시 시도해 주세요. (1분에 1회만 발송 가능)');
       } else {
-        setErrorMsg(resData.error || '인증 코드 전송에 실패했습니다. 다시 시도해 주세요.');
+        setErrorMsg(result.error || '인증 코드 전송에 실패했습니다. 다시 시도해 주세요.');
       }
     } catch (err) {
       console.error(err);
@@ -113,18 +109,13 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
     setLoading(true);
     try {
-      const response = await fetch('/api/v1/auth/email/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, code, type }),
-      });
-      const resData = await response.json();
-      if (response.ok && resData.success && resData.data === true) {
+      const result = await authApi.verifyCode({ email, code, type });
+      if (result.ok && result.data === true) {
         setSuccessMsg('이메일 인증이 완료되었습니다.');
         if (type === 'SIGNUP') setIsEmailVerified(true);
         else setIsResetEmailVerified(true);
       } else {
-        setErrorMsg(resData.error || '인증 번호가 일치하지 않거나 만료되었습니다.');
+        setErrorMsg(result.error || '인증 번호가 일치하지 않거나 만료되었습니다.');
       }
     } catch (err) {
       console.error(err);
@@ -149,20 +140,12 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
     setLoading(true);
     try {
-      const response = await fetch('/api/v1/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const resData = await response.json();
-      if (response.ok && resData.success) {
-        localStorage.setItem('accessToken', resData.data.accessToken);
-        localStorage.setItem('refreshToken', resData.data.refreshToken);
-        localStorage.setItem('userEmail', email);
+      const result = await authApi.login({ email, password });
+      if (result.ok && result.data) {
+        tokenStorage.setTokens(result.data.accessToken, result.data.refreshToken, email);
         onLoginSuccess();
       } else {
-        setErrorMsg(resData.error || '로그인에 실패했습니다. 이메일과 비밀번호를 확인해 주세요.');
+        setErrorMsg(result.error || '로그인에 실패했습니다. 이메일과 비밀번호를 확인해 주세요.');
       }
     } catch (err) {
       console.error(err);
@@ -196,26 +179,21 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
     setLoading(true);
     try {
-      const response = await fetch('/api/v1/users/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          password,
-          username,
-          birthDate: birthDate ? birthDate : null,
-          address: address ? address : null
-        }),
+      const result = await userApi.signup({
+        email,
+        password,
+        username,
+        birthDate: birthDate || null,
+        address: address || null,
       });
 
-      const resData = await response.json();
-      if (response.ok && resData.success) {
+      if (result.ok) {
         setSuccessMsg('회원가입이 완료되었습니다! 로그인 화면으로 돌아가 로그인해 주세요.');
         setTimeout(() => {
           handleModeChange('login');
         }, 2000);
       } else {
-        setErrorMsg(resData.error || '회원가입에 실패했습니다.');
+        setErrorMsg(result.error || '회원가입에 실패했습니다.');
       }
     } catch (err) {
       console.error(err);
@@ -251,19 +229,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
     setLoading(true);
     try {
-      const response = await fetch('/api/v1/auth/password/reset', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, code, newPassword }),
-      });
-      const resData = await response.json();
-      if (response.ok && resData.success) {
+      const result = await authApi.resetPassword({ email, code, newPassword });
+      if (result.ok) {
         setSuccessMsg('비밀번호가 성공적으로 재설정되었습니다! 새로운 비밀번호로 로그인해 주세요.');
         setTimeout(() => {
           handleModeChange('login');
         }, 2500);
       } else {
-        setErrorMsg(resData.error || '비밀번호 재설정에 실패했습니다.');
+        setErrorMsg(result.error || '비밀번호 재설정에 실패했습니다.');
       }
     } catch (err) {
       console.error(err);
@@ -274,9 +247,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   };
 
   const handleDemoLogin = () => {
-    localStorage.setItem('accessToken', 'mock-access-token');
-    localStorage.setItem('refreshToken', 'mock-refresh-token');
-    localStorage.setItem('userEmail', 'demo@jointliving.com');
+    tokenStorage.setTokens('mock-access-token', 'mock-refresh-token', 'demo@jointliving.com');
     onLoginSuccess();
   };
 
