@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Mail, Lock, AlertCircle, Loader2, User, Calendar, MapPin, CheckCircle, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { authApi, tokenStorage, userApi } from '../api';
+import { openAddressSearch } from '../utils/daumPostcode';
 
 interface LoginViewProps {
   onLoginSuccess: () => void;
@@ -15,6 +16,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingLabel, setLoadingLabel] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -27,15 +29,46 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   // Signup inputs
   const [username, setUsername] = useState('');
   const [birthDate, setBirthDate] = useState('');
-  const [address, setAddress] = useState('');
+  const [baseAddress, setBaseAddress] = useState('');
+  const [detailAddress, setDetailAddress] = useState('');
+  const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
+  const [showSignupConfirmPassword, setShowSignupConfirmPassword] = useState(false);
   const [isEmailSent, setIsEmailSent] = useState(false);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
+
+  const maxBirthDate = useMemo(() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
 
   // Reset password inputs
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isResetEmailSent, setIsResetEmailSent] = useState(false);
   const [isResetEmailVerified, setIsResetEmailVerified] = useState(false);
+
+  const resetVerificationState = () => {
+    setCode('');
+    setIsEmailSent(false);
+    setIsEmailVerified(false);
+    setIsResetEmailSent(false);
+    setIsResetEmailVerified(false);
+  };
+
+  const handleEmailChange = (value: string) => {
+    setEmail(value);
+    if (mode !== 'login') {
+      resetVerificationState();
+    }
+    if (fieldErrors.email) {
+      setFieldErrors({ ...fieldErrors, email: '' });
+    }
+  };
 
   const resetState = () => {
     setEmail('');
@@ -43,9 +76,15 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     setPassword('');
     setUsername('');
     setBirthDate('');
-    setAddress('');
+    setBaseAddress('');
+    setDetailAddress('');
+    setSignupConfirmPassword('');
+    setShowSignupConfirmPassword(false);
     setNewPassword('');
     setConfirmPassword('');
+    setShowPassword(false);
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
     setIsEmailSent(false);
     setIsEmailVerified(false);
     setIsResetEmailSent(false);
@@ -64,28 +103,38 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   const sendVerificationCode = async (type: 'SIGNUP' | 'RESET') => {
     setErrorMsg(null);
     setSuccessMsg(null);
-    if (!email) {
+    setFieldErrors({});
+
+    const trimmedEmail = email.trim();
+    if (trimmedEmail !== email) {
+      setEmail(trimmedEmail);
+    }
+
+    if (!trimmedEmail) {
       setFieldErrors({ email: '이메일을 입력해 주세요.' });
       return;
     }
-    if (!/\S+@\S+\.\S+/.test(email)) {
+    if (!/\S+@\S+\.\S+/.test(trimmedEmail)) {
       setFieldErrors({ email: '올바른 이메일 형식이 아닙니다.' });
       return;
     }
 
     setLoading(true);
+    setLoadingLabel('메일 전송 중...');
     try {
       const result = type === 'SIGNUP'
-        ? await authApi.sendSignupCode({ email })
-        : await authApi.sendPasswordCode({ email });
+        ? await authApi.sendSignupCode({ email: trimmedEmail })
+        : await authApi.sendPasswordCode({ email: trimmedEmail });
 
       if (result.ok) {
         setSuccessMsg('인증 코드가 이메일로 전송되었습니다. 메일함을 확인해 주세요.');
         if (type === 'SIGNUP') setIsEmailSent(true);
         else setIsResetEmailSent(true);
-      } else if (result.status === 409 || (result.error && result.error.includes('이미'))) {
+      } else if (type === 'SIGNUP' && (result.status === 409 || result.error?.includes('이미'))) {
         setErrorMsg('이미 가입된 이메일 주소입니다. 로그인 화면으로 돌아가 로그인해 주세요.');
-      } else if (result.status === 429 || (result.error && result.error.includes('요청'))) {
+      } else if (type === 'RESET' && result.status === 404) {
+        setErrorMsg('등록되지 않은 이메일입니다. 이메일 주소를 확인해 주세요.');
+      } else if (result.status === 429 || result.error?.includes('요청')) {
         setErrorMsg('잠시 후 다시 시도해 주세요. (1분에 1회만 발송 가능)');
       } else {
         setErrorMsg(result.error || '인증 코드 전송에 실패했습니다. 다시 시도해 주세요.');
@@ -95,6 +144,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       setErrorMsg('서버와 통신하는 중 오류가 발생했습니다. 백엔드가 실행 중인지 확인해 주세요.');
     } finally {
       setLoading(false);
+      setLoadingLabel('');
     }
   };
 
@@ -108,8 +158,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     }
 
     setLoading(true);
+    setLoadingLabel('인증 확인 중...');
     try {
-      const result = await authApi.verifyCode({ email, code, type });
+      const trimmedEmail = email.trim();
+      const result = await authApi.verifyCode({ email: trimmedEmail, code: code.trim(), type });
       if (result.ok && result.data === true) {
         setSuccessMsg('이메일 인증이 완료되었습니다.');
         if (type === 'SIGNUP') setIsEmailVerified(true);
@@ -122,6 +174,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       setErrorMsg('서버와 통신하는 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
+      setLoadingLabel('');
     }
   };
 
@@ -139,8 +192,9 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     }
 
     setLoading(true);
+    setLoadingLabel('로그인 중...');
     try {
-      const result = await authApi.login({ email, password });
+      const result = await authApi.login({ email: email.trim(), password });
       if (result.ok && result.data) {
         tokenStorage.setTokens(result.data.accessToken, result.data.refreshToken, email);
         onLoginSuccess();
@@ -152,6 +206,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       setErrorMsg('서버 연결에 실패했습니다. 백엔드가 실행 중인지 확인해 주세요.');
     } finally {
       setLoading(false);
+      setLoadingLabel('');
     }
   };
 
@@ -171,6 +226,12 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     } else if (!/(?=.*[0-9])(?=.*[a-zA-Z])(?=.*\W)(?=\S+$).{8,16}/.test(password)) {
       errors.password = '비밀번호는 8~16자 영문 대소문자, 숫자, 특수문자 조합이어야 합니다.';
     }
+    if (password !== signupConfirmPassword) {
+      errors.signupConfirmPassword = '비밀번호가 일치하지 않습니다.';
+    }
+    if (birthDate && birthDate > maxBirthDate) {
+      errors.birthDate = '생년월일은 오늘 이후 날짜로 설정할 수 없습니다.';
+    }
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
@@ -178,13 +239,16 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     }
 
     setLoading(true);
+    setLoadingLabel('가입 진행 중...');
     try {
+      const fullAddress = [baseAddress, detailAddress.trim()].filter(Boolean).join(' ') || null;
+
       const result = await userApi.signup({
-        email,
+        email: email.trim(),
         password,
         username,
         birthDate: birthDate || null,
-        address: address || null,
+        address: fullAddress,
       });
 
       if (result.ok) {
@@ -200,6 +264,19 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       setErrorMsg('서버와 통신하는 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
+      setLoadingLabel('');
+    }
+  };
+
+  const handleAddressSearch = async () => {
+    try {
+      await openAddressSearch((selectedAddress) => {
+        setBaseAddress(selectedAddress);
+        setDetailAddress('');
+      });
+    } catch (err) {
+      console.error(err);
+      setErrorMsg('주소 검색 창을 열 수 없습니다. 잠시 후 다시 시도해 주세요.');
     }
   };
 
@@ -228,8 +305,13 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     }
 
     setLoading(true);
+    setLoadingLabel('재설정 중...');
     try {
-      const result = await authApi.resetPassword({ email, code, newPassword });
+      const result = await authApi.resetPassword({
+        email: email.trim(),
+        code: code.trim(),
+        newPassword,
+      });
       if (result.ok) {
         setSuccessMsg('비밀번호가 성공적으로 재설정되었습니다! 새로운 비밀번호로 로그인해 주세요.');
         setTimeout(() => {
@@ -243,6 +325,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       setErrorMsg('서버와 통신하는 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
+      setLoadingLabel('');
     }
   };
 
@@ -286,10 +369,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                     className="form-input"
                     placeholder="이메일"
                     value={email}
-                    onChange={(e) => {
-                      setEmail(e.target.value);
-                      if (fieldErrors.email) setFieldErrors({ ...fieldErrors, email: '' });
-                    }}
+                    onChange={(e) => handleEmailChange(e.target.value)}
                   />
                 </div>
                 {fieldErrors.email && <span className="field-error-text">{fieldErrors.email}</span>}
@@ -342,7 +422,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               </div>
 
               <button type="submit" className="login-btn-submit" disabled={loading}>
-                {loading ? (
+                {loading && loadingLabel === '로그인 중...' ? (
                   <>
                     <Loader2 size={18} className="spin-animation" />
                     <span>로그인 중...</span>
@@ -402,10 +482,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                       placeholder="example@email.com"
                       value={email}
                       disabled={isEmailVerified}
-                      onChange={(e) => {
-                        setEmail(e.target.value);
-                        if (fieldErrors.email) setFieldErrors({ ...fieldErrors, email: '' });
-                      }}
+                      onChange={(e) => handleEmailChange(e.target.value)}
                     />
                   </div>
                   <button
@@ -414,7 +491,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                     onClick={() => sendVerificationCode('SIGNUP')}
                     className="form-action-btn"
                   >
-                    {isEmailSent ? '재발송' : '인증 요청'}
+                    {loading && loadingLabel === '메일 전송 중...' ? (
+                      <>
+                        <Loader2 size={16} className="spin-animation" />
+                        <span>메일 전송 중...</span>
+                      </>
+                    ) : (
+                      isEmailSent ? '재발송' : '인증 요청'
+                    )}
                   </button>
                 </div>
                 {fieldErrors.email && <span className="field-error-text">{fieldErrors.email}</span>}
@@ -443,7 +527,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                       onClick={() => verifyCode('SIGNUP')}
                       className="form-action-btn verify"
                     >
-                      인증하기
+                      {loading && loadingLabel === '인증 확인 중...' ? (
+                        <>
+                          <Loader2 size={16} className="spin-animation" />
+                          <span>인증 확인 중...</span>
+                        </>
+                      ) : (
+                        '인증하기'
+                      )}
                     </button>
                   </div>
                   {fieldErrors.code && <span className="field-error-text">{fieldErrors.code}</span>}
@@ -476,7 +567,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                   <div className={`input-icon-wrapper ${fieldErrors.password ? 'has-error' : ''}`}>
                     <Lock size={18} className="input-icon" />
                     <input
-                      type="password"
+                      type={showPassword ? 'text' : 'password'}
                       className="form-input"
                       placeholder="8~16자 영문 대소문자, 숫자, 특수문자 조합"
                       value={password}
@@ -486,38 +577,113 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                         if (fieldErrors.password) setFieldErrors({ ...fieldErrors, password: '' });
                       }}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="input-action-btn"
+                      tabIndex={-1}
+                      disabled={!isEmailVerified}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', color: 'var(--text-muted)' }}
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
                   </div>
                   {fieldErrors.password && <span className="field-error-text">{fieldErrors.password}</span>}
                 </div>
 
                 <div className="form-group">
+                  <label className="form-label">비밀번호 확인 <span className="required-star">*</span></label>
+                  <div className={`input-icon-wrapper ${fieldErrors.signupConfirmPassword ? 'has-error' : ''}`}>
+                    <Lock size={18} className="input-icon" />
+                    <input
+                      type={showSignupConfirmPassword ? 'text' : 'password'}
+                      className="form-input"
+                      placeholder="동일한 비밀번호를 한번 더 입력하세요"
+                      value={signupConfirmPassword}
+                      disabled={!isEmailVerified}
+                      onChange={(e) => {
+                        setSignupConfirmPassword(e.target.value);
+                        if (fieldErrors.signupConfirmPassword) {
+                          setFieldErrors({ ...fieldErrors, signupConfirmPassword: '' });
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSignupConfirmPassword(!showSignupConfirmPassword)}
+                      className="input-action-btn"
+                      tabIndex={-1}
+                      disabled={!isEmailVerified}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', color: 'var(--text-muted)' }}
+                    >
+                      {showSignupConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                  {fieldErrors.signupConfirmPassword && (
+                    <span className="field-error-text">{fieldErrors.signupConfirmPassword}</span>
+                  )}
+                </div>
+
+                <div className="form-group">
                   <label className="form-label">생년월일 (선택)</label>
-                  <div className="input-icon-wrapper">
+                  <div className={`input-icon-wrapper ${fieldErrors.birthDate ? 'has-error' : ''}`}>
                     <Calendar size={18} className="input-icon" />
                     <input
                       type="date"
                       className="form-input"
                       value={birthDate}
+                      max={maxBirthDate}
                       disabled={!isEmailVerified}
-                      onChange={(e) => setBirthDate(e.target.value)}
+                      onChange={(e) => {
+                        setBirthDate(e.target.value);
+                        if (fieldErrors.birthDate) setFieldErrors({ ...fieldErrors, birthDate: '' });
+                      }}
                     />
                   </div>
+                  {fieldErrors.birthDate && <span className="field-error-text">{fieldErrors.birthDate}</span>}
                 </div>
 
                 <div className="form-group">
                   <label className="form-label">주소 (선택)</label>
-                  <div className="input-icon-wrapper">
-                    <MapPin size={18} className="input-icon" />
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="시/군/구 동 주소를 입력하세요"
-                      value={address}
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <div className="input-icon-wrapper" style={{ flex: 1 }}>
+                      <MapPin size={18} className="input-icon" />
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="주소 검색을 눌러 주소를 선택하세요"
+                        value={baseAddress}
+                        readOnly
+                        disabled={!isEmailVerified}
+                      />
+                    </div>
+                    <button
+                      type="button"
                       disabled={!isEmailVerified}
-                      onChange={(e) => setAddress(e.target.value)}
-                    />
+                      onClick={handleAddressSearch}
+                      className="form-action-btn"
+                    >
+                      주소 검색
+                    </button>
                   </div>
                 </div>
+
+                {baseAddress && (
+                  <div className="form-group fade-in">
+                    <label className="form-label">상세 주소</label>
+                    <div className="input-icon-wrapper">
+                      <MapPin size={18} className="input-icon" />
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="동/호수 등 상세 주소를 입력하세요"
+                        value={detailAddress}
+                        disabled={!isEmailVerified}
+                        onChange={(e) => setDetailAddress(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <button
@@ -526,7 +692,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 className="login-btn-submit"
                 style={{ marginTop: '12px' }}
               >
-                {loading ? (
+                {loading && loadingLabel === '가입 진행 중...' ? (
                   <>
                     <Loader2 size={18} className="spin-animation" />
                     <span>가입 진행 중...</span>
@@ -563,10 +729,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                       placeholder="등록된 이메일을 입력하세요"
                       value={email}
                       disabled={isResetEmailVerified}
-                      onChange={(e) => {
-                        setEmail(e.target.value);
-                        if (fieldErrors.email) setFieldErrors({ ...fieldErrors, email: '' });
-                      }}
+                      onChange={(e) => handleEmailChange(e.target.value)}
                     />
                   </div>
                   <button
@@ -575,7 +738,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                     onClick={() => sendVerificationCode('RESET')}
                     className="form-action-btn"
                   >
-                    {isResetEmailSent ? '재발송' : '코드 발송'}
+                    {loading && loadingLabel === '메일 전송 중...' ? (
+                      <>
+                        <Loader2 size={16} className="spin-animation" />
+                        <span>메일 전송 중...</span>
+                      </>
+                    ) : (
+                      isResetEmailSent ? '재발송' : '코드 발송'
+                    )}
                   </button>
                 </div>
                 {fieldErrors.email && <span className="field-error-text">{fieldErrors.email}</span>}
@@ -605,7 +775,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                       onClick={() => verifyCode('RESET')}
                       className="form-action-btn verify"
                     >
-                      인증하기
+                      {loading && loadingLabel === '인증 확인 중...' ? (
+                        <>
+                          <Loader2 size={16} className="spin-animation" />
+                          <span>인증 확인 중...</span>
+                        </>
+                      ) : (
+                        '인증하기'
+                      )}
                     </button>
                   </div>
                   {fieldErrors.code && <span className="field-error-text">{fieldErrors.code}</span>}
@@ -619,7 +796,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                   <div className={`input-icon-wrapper ${fieldErrors.newPassword ? 'has-error' : ''}`}>
                     <Lock size={18} className="input-icon" />
                     <input
-                      type="password"
+                      type={showNewPassword ? 'text' : 'password'}
                       className="form-input"
                       placeholder="8~16자 영문 대소문자, 숫자, 특수문자 조합"
                       value={newPassword}
@@ -629,6 +806,16 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                         if (fieldErrors.newPassword) setFieldErrors({ ...fieldErrors, newPassword: '' });
                       }}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="input-action-btn"
+                      tabIndex={-1}
+                      disabled={!isResetEmailVerified}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', color: 'var(--text-muted)' }}
+                    >
+                      {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
                   </div>
                   {fieldErrors.newPassword && <span className="field-error-text">{fieldErrors.newPassword}</span>}
                 </div>
@@ -638,7 +825,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                   <div className={`input-icon-wrapper ${fieldErrors.confirmPassword ? 'has-error' : ''}`}>
                     <Lock size={18} className="input-icon" />
                     <input
-                      type="password"
+                      type={showConfirmPassword ? 'text' : 'password'}
                       className="form-input"
                       placeholder="동일한 비밀번호를 한번 더 입력하세요"
                       value={confirmPassword}
@@ -648,6 +835,16 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                         if (fieldErrors.confirmPassword) setFieldErrors({ ...fieldErrors, confirmPassword: '' });
                       }}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="input-action-btn"
+                      tabIndex={-1}
+                      disabled={!isResetEmailVerified}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', color: 'var(--text-muted)' }}
+                    >
+                      {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
                   </div>
                   {fieldErrors.confirmPassword && <span className="field-error-text">{fieldErrors.confirmPassword}</span>}
                 </div>
@@ -659,7 +856,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 className="login-btn-submit"
                 style={{ marginTop: '12px' }}
               >
-                {loading ? (
+                {loading && loadingLabel === '재설정 중...' ? (
                   <>
                     <Loader2 size={18} className="spin-animation" />
                     <span>재설정 중...</span>

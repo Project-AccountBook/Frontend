@@ -1,12 +1,29 @@
+import { resolveApiUrl } from './config';
 import type { ApiResponse, RequestResult, TokenResponse } from './types';
 import { tokenStorage } from './tokenStorage';
 
 async function parseResponse<T>(res: Response): Promise<RequestResult<T>> {
-  const body: ApiResponse<T> = await res.json();
+  let body: ApiResponse<T> | null = null;
+
+  try {
+    body = await res.json();
+  } catch {
+    return {
+      ok: false,
+      status: res.status,
+      data: null,
+      error: res.ok
+        ? '서버 응답을 처리할 수 없습니다.'
+        : `요청에 실패했습니다. (${res.status})`,
+    };
+  }
+
+  const success = body.success === true;
+
   return {
-    ok: res.ok && body.success,
+    ok: res.ok && success,
     status: res.status,
-    data: body.success ? body.data : null,
+    data: success ? body.data : null,
     error: body.error,
   };
 }
@@ -21,7 +38,7 @@ async function tryReissue(): Promise<boolean> {
     if (!refreshToken) return false;
 
     try {
-      const res = await fetch('/api/v1/auth/reissue', {
+      const res = await fetch(resolveApiUrl('/api/v1/auth/reissue'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
@@ -53,7 +70,7 @@ export async function publicRequest<T>(
     headers.set('Content-Type', 'application/json');
   }
 
-  const res = await fetch(url, { ...init, headers });
+  const res = await fetch(resolveApiUrl(url), { ...init, headers });
   return parseResponse<T>(res);
 }
 
@@ -69,13 +86,14 @@ export async function authRequest<T>(
     headers.set('Authorization', `Bearer ${accessToken}`);
   }
 
-  let res = await fetch(url, { ...init, headers });
+  const requestUrl = resolveApiUrl(url);
+  let res = await fetch(requestUrl, { ...init, headers });
 
   if (res.status === 401) {
     const renewed = await tryReissue();
     if (renewed) {
       headers.set('Authorization', `Bearer ${tokenStorage.getAccessToken()}`);
-      res = await fetch(url, { ...init, headers });
+      res = await fetch(requestUrl, { ...init, headers });
     }
   }
 

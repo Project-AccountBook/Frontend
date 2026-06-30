@@ -19,6 +19,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { authApi, tokenStorage, userApi, type UserProfileResponse } from '../api';
+import { openAddressSearch } from '../utils/daumPostcode';
 
 type UserProfile = UserProfileResponse;
 
@@ -33,6 +34,8 @@ export const MyPageView: React.FC = () => {
   // Profile edit
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState<Partial<UserProfile>>({});
+  const [editBaseAddress, setEditBaseAddress] = useState('');
+  const [editDetailAddress, setEditDetailAddress] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
 
@@ -94,16 +97,44 @@ export const MyPageView: React.FC = () => {
     setPwSuccess(null);
   };
 
+  const startEditing = () => {
+    if (!profile) return;
+    setEditing(true);
+    setEditForm(profile);
+    setEditBaseAddress(profile.address ?? '');
+    setEditDetailAddress('');
+  };
+
+  const cancelEditing = () => {
+    setEditing(false);
+    setEditBaseAddress('');
+    setEditDetailAddress('');
+  };
+
+  const handleAddressSearch = async () => {
+    try {
+      await openAddressSearch((selectedAddress) => {
+        setEditBaseAddress(selectedAddress);
+        setEditDetailAddress('');
+      });
+    } catch (err) {
+      console.error(err);
+      setProfileError('주소 검색 창을 열 수 없습니다. 잠시 후 다시 시도해 주세요.');
+    }
+  };
+
   // 프로필 저장
   const handleSaveProfile = async () => {
     setSavingProfile(true);
     setProfileSuccess(null);
     setProfileError(null);
     try {
+      const fullAddress = [editBaseAddress, editDetailAddress.trim()].filter(Boolean).join(' ') || null;
+
       const result = await userApi.updateMyProfile({
         username: editForm.username ?? '',
         birthDate: editForm.birthDate ?? null,
-        address: editForm.address ?? null,
+        address: fullAddress,
         budgetAlertThreshold: editForm.budgetAlertThreshold ?? 80,
         isPortfolioPublic: editForm.isPortfolioPublic ?? false,
         isBudgetAlertEnabled: editForm.isBudgetAlertEnabled ?? true,
@@ -111,8 +142,10 @@ export const MyPageView: React.FC = () => {
         isSystemAlertEnabled: editForm.isSystemAlertEnabled ?? true,
       });
       if (result.ok) {
-        setProfile({ ...profile!, ...editForm } as UserProfile);
+        setProfile({ ...profile!, ...editForm, address: fullAddress } as UserProfile);
         setEditing(false);
+        setEditBaseAddress('');
+        setEditDetailAddress('');
         setProfileSuccess('프로필이 성공적으로 저장되었습니다.');
         setTimeout(() => setProfileSuccess(null), 3000);
       } else {
@@ -331,7 +364,7 @@ export const MyPageView: React.FC = () => {
                   <p className="mypage-section-desc">닉네임, 생년월일, 주소 등 기본 정보를 관리합니다</p>
                 </div>
                 {!editing && profile && (
-                  <button className="mypage-btn-edit" onClick={() => { setEditing(true); setEditForm(profile); }}>
+                  <button className="mypage-btn-edit" onClick={startEditing}>
                     <Edit2 size={15} />
                     <span>수정</span>
                   </button>
@@ -389,15 +422,34 @@ export const MyPageView: React.FC = () => {
                   </div>
 
                   {/* Address */}
-                  <div className="mypage-field">
+                  <div className="mypage-field span-full">
                     <label className="mypage-field-label"><MapPin size={14} /> 주소</label>
                     {editing ? (
-                      <input
-                        className="mypage-input"
-                        value={editForm.address ?? ''}
-                        onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
-                        placeholder="주소를 입력하세요"
-                      />
+                      <div className="mypage-address-edit">
+                        <div className="mypage-address-search-row">
+                          <input
+                            className="mypage-input"
+                            value={editBaseAddress}
+                            readOnly
+                            placeholder="주소 검색을 눌러 주소를 선택하세요"
+                          />
+                          <button
+                            type="button"
+                            className="mypage-btn-address-search"
+                            onClick={handleAddressSearch}
+                          >
+                            주소 검색
+                          </button>
+                        </div>
+                        {editBaseAddress && (
+                          <input
+                            className="mypage-input mypage-address-detail"
+                            value={editDetailAddress}
+                            onChange={(e) => setEditDetailAddress(e.target.value)}
+                            placeholder="동/호수 등 상세 주소를 입력하세요"
+                          />
+                        )}
+                      </div>
                     ) : (
                       <div className="mypage-field-value">
                         <span>{profile.address ?? '—'}</span>
@@ -432,7 +484,7 @@ export const MyPageView: React.FC = () => {
 
               {editing && (
                 <div className="mypage-action-row">
-                  <button className="mypage-btn-cancel" onClick={() => setEditing(false)}>
+                  <button className="mypage-btn-cancel" onClick={cancelEditing}>
                     <X size={15} /> 취소
                   </button>
                   <button className="mypage-btn-save" onClick={handleSaveProfile} disabled={savingProfile}>

@@ -2522,6 +2522,46 @@ a {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
+.mypage-address-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mypage-address-search-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.mypage-address-search-row .mypage-input {
+  flex: 1;
+  cursor: default;
+}
+
+.mypage-btn-address-search {
+  flex-shrink: 0;
+  height: 44px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 10px;
+  background: var(--navy);
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--transition-fast);
+}
+
+.mypage-btn-address-search:hover {
+  background: var(--navy-light);
+}
+
+.mypage-address-detail {
+  margin-top: 0;
+}
+
 /* Password field */
 .mypage-pw-wrapper {
   position: relative;
