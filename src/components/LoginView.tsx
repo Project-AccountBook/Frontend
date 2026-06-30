@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, Lock, AlertCircle, Loader2, Play, User, Calendar, MapPin, CheckCircle, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, AlertCircle, Loader2, User, Calendar, MapPin, CheckCircle, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { authApi, tokenStorage, userApi } from '../api';
 
 interface LoginViewProps {
@@ -149,7 +149,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       }
     } catch (err) {
       console.error(err);
-      setErrorMsg('서버 연결에 실패했습니다. 백엔드가 실행 중인지 확인하시거나, 데모 모드로 로그인해 주세요.');
+      setErrorMsg('서버 연결에 실패했습니다. 백엔드가 실행 중인지 확인해 주세요.');
     } finally {
       setLoading(false);
     }
@@ -246,21 +246,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     }
   };
 
-  const handleDemoLogin = () => {
-    tokenStorage.setTokens('mock-access-token', 'mock-refresh-token', 'demo@jointliving.com');
-    onLoginSuccess();
-  };
-
-  // Demo signup handler (unused, commented out for strict TS)
-  /*
-  const handleDemoSignup = () => {
-    localStorage.setItem('accessToken', 'mock-access-token');
-    localStorage.setItem('refreshToken', 'mock-refresh-token');
-    localStorage.setItem('userEmail', email || 'demo-user@jointliving.com');
-    onLoginSuccess();
-  };
-  */
-
   return (
     <div className="login-wrapper">
       <div className="login-card-container fade-in">
@@ -299,7 +284,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                   <input
                     type="email"
                     className="form-input"
-                    placeholder="아이디"
+                    placeholder="이메일"
                     value={email}
                     onChange={(e) => {
                       setEmail(e.target.value);
@@ -397,15 +382,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             <div className="login-footer-actions" style={{ marginTop: '28px' }}>
               <span>아직 계정이 없으신가요? <button onClick={() => handleModeChange('signup')} className="login-text-link font-bold" style={{ color: '#2563eb', marginLeft: '4px' }}>회원가입</button></span>
             </div>
-
-            <div className="login-divider" style={{ margin: '16px 0' }}>
-              <span>또는</span>
-            </div>
-
-            <button onClick={handleDemoLogin} className="login-btn-demo">
-              <Play size={14} />
-              <span>데모 모드로 체험하기</span>
-            </button>
           </>
         )}
 

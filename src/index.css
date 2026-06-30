@@ -1960,25 +1960,6 @@ a {
 
 .login-divider:not(:empty)::after {
   margin-left: 12px;
-}.login-btn-demo {
-  background: transparent;
-  color: var(--blue);
-  border: 1.5px dashed var(--blue-border);
-  height: 48px;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  transition: all var(--transition-fast);
-}
-
-.login-btn-demo:hover {
-  background: var(--blue-bg);
-  border-style: solid;
-  border-color: var(--blue);
 }
 
 /* Logout Button in Sidebar */
@@ -4030,6 +4011,14 @@ a {
 
 .form-input:focus, .form-textarea:focus, .form-select:focus {
   border-color: var(--blue);
+}
+
+.input-icon-wrapper .form-input,
+.input-icon-wrapper .form-input:focus {
+  border: none;
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .form-textarea {
