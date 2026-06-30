@@ -1,17 +1,18 @@
 import React from 'react';
-import { 
-  LayoutDashboard, 
-  ReceiptText, 
-  LineChart, 
-  TrendingUp, 
-  MessageSquare, 
-  Lightbulb, 
-  ShoppingBag, 
+import {
+  LayoutDashboard,
+  ReceiptText,
+  LineChart,
+  TrendingUp,
+  MessageSquare,
+  Lightbulb,
+  ShoppingBag,
   Settings,
   Wallet,
   Shield,
   PiggyBank,
-  LogOut
+  LogOut,
+  MapPin
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -27,6 +28,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLog
     { id: 'budget', label: '예산 관리', icon: PiggyBank },
     { id: 'analysis', label: '소비/예산 분석', icon: LineChart },
     { id: 'comparison', label: '이웃 자산 비교', icon: TrendingUp },
+    { id: 'locationComparison', label: '위치 기반 비교', icon: MapPin },
     { id: 'qa', label: 'Q&A 게시판', icon: MessageSquare },
     { id: 'knowhow', label: '노하우 공유', icon: Lightbulb },
     { id: 'groupbuy', label: '동네 공동구매', icon: ShoppingBag, isHot: true },
