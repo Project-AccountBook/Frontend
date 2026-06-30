@@ -63,6 +63,7 @@ export interface UserProfileResponse {
   username: string;
   birthDate: string | null;
   address: string | null;
+  hasPassword: boolean;
   budgetAlertThreshold: number;
   isPortfolioPublic: boolean;
   isBudgetAlertEnabled: boolean;
@@ -82,6 +83,6 @@ export interface UpdateProfileRequest {
 }
 
 export interface UpdatePasswordRequest {
-  currentPassword: string;
+  currentPassword?: string;
   newPassword: string;
 }

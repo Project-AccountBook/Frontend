@@ -200,18 +200,29 @@ export const MyPageView: React.FC = () => {
     }
     if (newPassword !== confirmPassword) { setPwError('새 비밀번호가 일치하지 않습니다.'); return; }
 
+    const isSettingPassword = profile?.hasPassword === false;
+
     setPwLoading(true);
     try {
-      const result = await userApi.updatePassword({ currentPassword, newPassword });
+      const result = await userApi.updatePassword(
+        isSettingPassword
+          ? { newPassword }
+          : { currentPassword, newPassword },
+      );
       if (result.ok) {
-        setPwSuccess('비밀번호가 성공적으로 변경되었습니다.');
+        setPwSuccess(isSettingPassword
+          ? '비밀번호가 성공적으로 설정되었습니다. 이제 이메일·비밀번호로도 로그인할 수 있습니다.'
+          : '비밀번호가 성공적으로 변경되었습니다.');
         setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
         setIsCurrentPasswordVerified(false);
+        if (profile) {
+          setProfile({ ...profile, hasPassword: true });
+        }
         setTimeout(() => setPwSuccess(null), 3000);
       } else {
-        setPwError(result.error ?? '비밀번호 변경에 실패했습니다.');
+        setPwError(result.error ?? (isSettingPassword ? '비밀번호 설정에 실패했습니다.' : '비밀번호 변경에 실패했습니다.'));
       }
     } catch {
       setPwError('서버와 통신 중 오류가 발생했습니다.');
@@ -240,9 +251,12 @@ export const MyPageView: React.FC = () => {
     }
   };
 
+  const needsPasswordSetup = profile?.hasPassword === false;
+  const passwordTabLabel = needsPasswordSetup ? '비밀번호 설정' : '비밀번호 변경';
+
   const tabs: { id: MyPageTab; label: string; icon: React.ElementType }[] = [
     { id: 'profile', label: '프로필 정보', icon: User },
-    { id: 'password', label: '비밀번호 변경', icon: Lock },
+    { id: 'password', label: passwordTabLabel, icon: Lock },
     { id: 'notifications', label: '알림 설정', icon: Bell },
     { id: 'withdraw', label: '회원 탈퇴', icon: Trash2 },
   ];
@@ -435,11 +449,13 @@ export const MyPageView: React.FC = () => {
             <div>
               <div className="mypage-section-head">
                 <div>
-                  <h2 className="mypage-section-title">비밀번호 변경</h2>
+                  <h2 className="mypage-section-title">{passwordTabLabel}</h2>
                   <p className="mypage-section-desc">
-                    {isCurrentPasswordVerified
-                      ? '새로운 비밀번호를 입력해 주세요'
-                      : '현재 비밀번호를 입력하여 본인 확인을 진행해 주세요'}
+                    {needsPasswordSetup
+                      ? '간편 로그인으로 가입한 계정입니다. 이메일·비밀번호 로그인을 사용하려면 비밀번호를 설정해 주세요.'
+                      : isCurrentPasswordVerified
+                        ? '새로운 비밀번호를 입력해 주세요'
+                        : '현재 비밀번호를 입력하여 본인 확인을 진행해 주세요'}
                   </p>
                 </div>
               </div>
@@ -447,7 +463,48 @@ export const MyPageView: React.FC = () => {
               {pwSuccess && <Feedback msg={pwSuccess} type="success" />}
               {pwError && <Feedback msg={pwError} type="error" />}
 
-              {!isCurrentPasswordVerified ? (
+              {needsPasswordSetup ? (
+                <form onSubmit={handleChangePassword} className="mypage-form mypage-form-password">
+                  <div className="mypage-field span-full">
+                    <label className="mypage-field-label">새 비밀번호 <span style={{ color: 'var(--red)', marginLeft: '2px' }}>*</span></label>
+                    <div className="mypage-pw-wrapper">
+                      <input
+                        type={showNewPw ? 'text' : 'password'}
+                        className="mypage-input"
+                        placeholder="8~16자 영문 대소문자, 숫자, 특수문자 조합"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                      />
+                      <button type="button" className="mypage-pw-toggle" onClick={() => setShowNewPw(!showNewPw)}>
+                        {showNewPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mypage-field span-full">
+                    <label className="mypage-field-label">새 비밀번호 확인 <span style={{ color: 'var(--red)', marginLeft: '2px' }}>*</span></label>
+                    <div className="mypage-pw-wrapper">
+                      <input
+                        type={showConfirmPw ? 'text' : 'password'}
+                        className="mypage-input"
+                        placeholder="동일한 비밀번호를 한번 더 입력하세요"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                      />
+                      <button type="button" className="mypage-pw-toggle" onClick={() => setShowConfirmPw(!showConfirmPw)}>
+                        {showConfirmPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mypage-action-row">
+                    <button type="submit" className="mypage-btn-save" disabled={pwLoading}>
+                      {pwLoading ? <Loader2 size={15} className="spin-animation" /> : <Save size={15} />}
+                      비밀번호 설정
+                    </button>
+                  </div>
+                </form>
+              ) : !isCurrentPasswordVerified ? (
                 <form onSubmit={handleVerifyCurrentPassword} className="mypage-form mypage-form-password">
                   <div className="mypage-field span-full">
                     <label className="mypage-field-label">현재 비밀번호</label>
