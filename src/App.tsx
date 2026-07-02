@@ -19,6 +19,7 @@ import { AssetView, type AssetActiveSection } from './components/AssetView';
 import { LoginView } from './components/LoginView';
 import { MyPageView } from './components/MyPageView';
 import { authApi, setAuthExpiredHandler, tokenStorage } from './api';
+import { clearMyUserIdCache } from './lib/boardApi';
 import { Construction } from 'lucide-react';
 
 type BoardMode = 'list' | 'detail' | 'write';
@@ -69,6 +70,7 @@ function App() {
       }
     }
     tokenStorage.clear();
+    clearMyUserIdCache();
     setIsLoggedIn(false);
     setActiveTab('dashboard');
   };

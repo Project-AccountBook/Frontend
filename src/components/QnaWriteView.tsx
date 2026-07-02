@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ArrowLeft,
   PenSquare,
@@ -8,12 +8,11 @@ import {
   AlertCircle,
   Lightbulb
 } from 'lucide-react';
-import { createBoard } from '../lib/boardApi';
+import type { BoardCategory } from '../lib/boardApi';
+import { createBoard, listBoardCategories } from '../lib/boardApi';
 
 const TITLE_MAX = 80;
 const CONTENT_MAX = 2000;
-
-const DEFAULT_CATEGORY_ID = 1;
 
 interface QnaWriteViewProps {
   onCancel: () => void;
@@ -23,18 +22,37 @@ interface QnaWriteViewProps {
 export const QnaWriteView: React.FC<QnaWriteViewProps> = ({ onCancel, onSubmit }) => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [categories, setCategories] = useState<BoardCategory[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canSubmit = title.trim().length > 0 && content.trim().length > 0 && !submitting;
+  useEffect(() => {
+    let cancelled = false;
+    listBoardCategories('QNA')
+      .then((data) => {
+        if (cancelled) return;
+        setCategories(data);
+        if (data.length > 0) setCategoryId(data[0].id);
+      })
+      .catch((e) => {
+        if (!cancelled) setError((e as Error).message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const canSubmit =
+    !!categoryId && title.trim().length > 0 && content.trim().length > 0 && !submitting;
 
   const handleSubmit = async () => {
-    if (!canSubmit) return;
+    if (!canSubmit || !categoryId) return;
     setSubmitting(true);
     setError(null);
     try {
       await createBoard({
-        categoryId: DEFAULT_CATEGORY_ID,
+        categoryId,
         title: title.trim(),
         content: content.trim(),
         type: 'QNA',
@@ -145,6 +163,37 @@ export const QnaWriteView: React.FC<QnaWriteViewProps> = ({ onCancel, onSubmit }
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', minWidth: 0 }}>
           <div className="card" style={{ padding: '28px' }}>
+            {categories.length > 0 && (
+              <div style={{ marginBottom: '20px' }}>
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '13px',
+                    fontWeight: '700',
+                    color: 'var(--text-primary)',
+                    marginBottom: '10px'
+                  }}
+                >
+                  <HelpCircle size={14} color="var(--purple)" />
+                  카테고리 <span style={{ color: 'var(--red)' }}>*</span>
+                </label>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  {categories.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setCategoryId(c.id)}
+                      className={`dashboard-tab-btn ${categoryId === c.id ? 'active' : ''}`}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div>
               <label
                 style={{

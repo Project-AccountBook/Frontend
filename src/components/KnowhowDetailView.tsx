@@ -7,7 +7,9 @@ import {
   Trash2,
   Pencil,
   Lightbulb,
-  AlertCircle
+  AlertCircle,
+  Heart,
+  Bookmark
 } from 'lucide-react';
 import type { BoardResponse, CommentResponse } from '../lib/boardApi';
 import {
@@ -20,6 +22,9 @@ import {
   getBoard,
   listComments,
   replyComment,
+  toggleBoardBookmark,
+  toggleBoardLike,
+  toggleCommentLike,
   updateBoard,
   updateComment,
 } from '../lib/boardApi';
@@ -178,6 +183,37 @@ export const KnowhowDetailView: React.FC<KnowhowDetailViewProps> = ({ postId, on
       setError((e as Error).message);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleToggleLike = async () => {
+    if (!post) return;
+    try {
+      const r = await toggleBoardLike(postId);
+      setPost({ ...post, liked: r.liked, likeCount: r.likeCount });
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const handleToggleBookmark = async () => {
+    if (!post) return;
+    try {
+      const r = await toggleBoardBookmark(postId);
+      setPost({ ...post, bookmarked: r.bookmarked });
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const handleToggleCommentLike = async (commentId: number) => {
+    try {
+      const r = await toggleCommentLike(commentId);
+      setComments((prev) =>
+        prev.map((c) => (c.id === commentId ? { ...c, liked: r.liked, likeCount: r.likeCount } : c))
+      );
+    } catch (e) {
+      setError((e as Error).message);
     }
   };
 
@@ -445,6 +481,56 @@ export const KnowhowDetailView: React.FC<KnowhowDetailViewProps> = ({ postId, on
             {post.content}
           </div>
         )}
+
+        {!editing && (
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '12px',
+              marginTop: '24px',
+              paddingTop: '24px',
+              borderTop: '1px solid var(--border)'
+            }}
+          >
+            <button
+              onClick={handleToggleLike}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 22px',
+                borderRadius: '12px',
+                fontSize: '13px',
+                fontWeight: '700',
+                background: post.liked ? 'var(--red-bg)' : 'white',
+                color: post.liked ? 'var(--red)' : 'var(--text-secondary)',
+                border: `1px solid ${post.liked ? 'var(--red-border)' : 'var(--border)'}`
+              }}
+            >
+              <Heart size={14} fill={post.liked ? 'var(--red)' : 'none'} />
+              좋아요 {post.likeCount}
+            </button>
+            <button
+              onClick={handleToggleBookmark}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 22px',
+                borderRadius: '12px',
+                fontSize: '13px',
+                fontWeight: '700',
+                background: post.bookmarked ? 'var(--blue-bg)' : 'white',
+                color: post.bookmarked ? 'var(--blue)' : 'var(--text-secondary)',
+                border: `1px solid ${post.bookmarked ? 'var(--blue-border)' : 'var(--border)'}`
+              }}
+            >
+              <Bookmark size={14} fill={post.bookmarked ? 'var(--blue)' : 'none'} />
+              {post.bookmarked ? '저장됨' : '저장'}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="card" style={{ padding: '28px' }}>
@@ -539,6 +625,7 @@ export const KnowhowDetailView: React.FC<KnowhowDetailViewProps> = ({ postId, on
                 setEditingCommentId(null);
                 setEditingCommentContent('');
               }}
+              onToggleLike={() => handleToggleCommentLike(c.id)}
             />
           ))}
         </div>
@@ -564,6 +651,7 @@ interface CommentItemProps {
   onEditChange: (v: string) => void;
   onSubmitEdit: (id: number) => void;
   onCancelEdit: () => void;
+  onToggleLike: () => void;
 }
 
 const CommentItem: React.FC<CommentItemProps> = ({
@@ -583,6 +671,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
   onEditChange,
   onSubmitEdit,
   onCancelEdit,
+  onToggleLike,
 }) => {
   const isEditing = editingCommentId === comment.id;
   return (
@@ -691,7 +780,23 @@ const CommentItem: React.FC<CommentItemProps> = ({
               {comment.content}
             </p>
           )}
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+            {!comment.deleted && (
+              <button
+                onClick={onToggleLike}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: comment.liked ? 'var(--blue)' : 'var(--text-secondary)'
+                }}
+              >
+                <Heart size={12} fill={comment.liked ? 'var(--blue)' : 'none'} />
+                {comment.likeCount}
+              </button>
+            )}
             <button
               onClick={onReply}
               style={{

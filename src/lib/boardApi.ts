@@ -10,6 +10,11 @@ export interface BoardResponse {
   content: string;
   type: BoardType;
   views: number;
+  resolved: boolean;
+  urgent: boolean;
+  likeCount: number;
+  liked: boolean;
+  bookmarked: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -44,8 +49,27 @@ export interface CommentResponse {
   parentId: number | null;
   content: string;
   deleted: boolean;
+  accepted: boolean;
+  likeCount: number;
+  liked: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface BoardCategory {
+  id: number;
+  name: string;
+  boardType: BoardType;
+  displayOrder: number;
+}
+
+export interface LikeToggleResponse {
+  liked: boolean;
+  likeCount: number;
+}
+
+export interface BookmarkToggleResponse {
+  bookmarked: boolean;
 }
 
 const authHeader = (): Record<string, string> => ({
@@ -115,6 +139,32 @@ export async function deleteBoard(id: number): Promise<number> {
   return request(`/api/v1/boards/${id}`, { method: 'DELETE' });
 }
 
+export async function setBoardResolved(id: number, value: boolean): Promise<boolean> {
+  return request(`/api/v1/boards/${id}/resolved`, {
+    method: 'PATCH',
+    body: JSON.stringify({ value }),
+  });
+}
+
+export async function setBoardUrgent(id: number, value: boolean): Promise<boolean> {
+  return request(`/api/v1/boards/${id}/urgent`, {
+    method: 'PATCH',
+    body: JSON.stringify({ value }),
+  });
+}
+
+export async function toggleBoardLike(id: number): Promise<LikeToggleResponse> {
+  return request(`/api/v1/boards/${id}/like`, { method: 'POST' });
+}
+
+export async function toggleCommentLike(id: number): Promise<LikeToggleResponse> {
+  return request(`/api/v1/comments/${id}/like`, { method: 'POST' });
+}
+
+export async function toggleBoardBookmark(id: number): Promise<BookmarkToggleResponse> {
+  return request(`/api/v1/boards/${id}/bookmark`, { method: 'POST' });
+}
+
 export async function listComments(
   postId: number,
   referenceType: ReferenceType
@@ -152,8 +202,32 @@ export async function updateComment(commentId: number, content: string): Promise
   });
 }
 
+export async function acceptComment(commentId: number): Promise<number> {
+  return request(`/api/v1/comments/${commentId}/accept`, { method: 'PATCH' });
+}
+
 export async function deleteComment(commentId: number): Promise<number> {
   return request(`/api/v1/comments/${commentId}`, { method: 'DELETE' });
+}
+
+export async function listBoardCategories(type: BoardType): Promise<BoardCategory[]> {
+  return request(`/api/v1/board-categories?type=${type}`);
+}
+
+let cachedMyUserId: Promise<number> | null = null;
+
+export async function getMyUserId(): Promise<number> {
+  if (!cachedMyUserId) {
+    cachedMyUserId = request<{ id: number }>(`/api/v1/users/me`).then((r) => r.id);
+    cachedMyUserId.catch(() => {
+      cachedMyUserId = null;
+    });
+  }
+  return cachedMyUserId;
+}
+
+export function clearMyUserIdCache(): void {
+  cachedMyUserId = null;
 }
 
 const COLOR_PALETTE = [

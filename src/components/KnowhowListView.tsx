@@ -3,13 +3,13 @@ import {
   Search,
   PenSquare,
   Eye,
-  MessageSquare,
   Lightbulb,
   TrendingUp,
   Clock,
   ChevronLeft,
   ChevronRight,
-  AlertCircle
+  AlertCircle,
+  Heart
 } from 'lucide-react';
 import type { BoardResponse } from '../lib/boardApi';
 import {
@@ -28,6 +28,7 @@ export interface KnowhowPost {
   authorNickname: string;
   createdAt: string;
   views: number;
+  likeCount: number;
 }
 
 const PAGE_SIZE = 10;
@@ -71,6 +72,7 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
                 authorNickname: `사용자 ${b.userId}`,
                 createdAt: b.createdAt,
                 views: 0,
+                likeCount: 0,
               }))
           );
         } else {
@@ -85,6 +87,7 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
               authorNickname: b.authorNickname,
               createdAt: b.createdAt,
               views: b.views,
+              likeCount: b.likeCount,
             }))
           );
         }
@@ -361,8 +364,8 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
                       {post.views.toLocaleString()}
                     </span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <MessageSquare size={13} />
-                      댓글
+                      <Heart size={13} />
+                      {post.likeCount}
                     </span>
                   </div>
                 </div>

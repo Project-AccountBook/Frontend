@@ -3,13 +3,14 @@ import {
   Search,
   PenSquare,
   Eye,
-  MessageSquare,
   HelpCircle,
   Clock,
   Flame,
   AlertCircle,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ThumbsUp,
+  CheckCircle2
 } from 'lucide-react';
 import type { BoardResponse } from '../lib/boardApi';
 import {
@@ -28,6 +29,9 @@ export interface QnaPost {
   authorNickname: string;
   createdAt: string;
   views: number;
+  likeCount: number;
+  resolved: boolean;
+  urgent: boolean;
 }
 
 const PAGE_SIZE = 10;
@@ -70,6 +74,9 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
               authorNickname: `사용자 ${b.userId}`,
               createdAt: b.createdAt,
               views: 0,
+              likeCount: 0,
+              resolved: false,
+              urgent: false,
             }));
           setPosts(filtered);
         } else {
@@ -84,6 +91,9 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
               authorNickname: b.authorNickname,
               createdAt: b.createdAt,
               views: b.views,
+              likeCount: b.likeCount,
+              resolved: b.resolved,
+              urgent: b.urgent,
             }))
           );
         }
@@ -271,6 +281,39 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
             >
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  {post.resolved && (
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '3px',
+                        fontSize: '10px',
+                        fontWeight: '700',
+                        background: '#dcfce7',
+                        color: '#16a34a',
+                        padding: '2px 6px',
+                        borderRadius: '4px'
+                      }}
+                    >
+                      <CheckCircle2 size={10} />
+                      해결완료
+                    </span>
+                  )}
+                  {post.urgent && (
+                    <span
+                      style={{
+                        fontSize: '10px',
+                        fontWeight: '800',
+                        background: 'var(--red-bg)',
+                        color: 'var(--red)',
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        border: '1px solid var(--red-border)'
+                      }}
+                    >
+                      급해요
+                    </span>
+                  )}
                   <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: 'auto' }}>
                     {formatRelativeKo(post.createdAt)}
                   </span>
@@ -356,8 +399,8 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
                       {post.views.toLocaleString()}
                     </span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <MessageSquare size={13} />
-                      댓글
+                      <ThumbsUp size={13} />
+                      {post.likeCount}
                     </span>
                   </div>
                 </div>

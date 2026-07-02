@@ -7,10 +7,15 @@ import {
   HelpCircle,
   Trash2,
   Pencil,
-  AlertCircle
+  AlertCircle,
+  ThumbsUp,
+  Bookmark,
+  CheckCircle2,
+  Award
 } from 'lucide-react';
 import type { BoardResponse, CommentResponse } from '../lib/boardApi';
 import {
+  acceptComment,
   authorColorForUser,
   authorInitialForUser,
   createComment,
@@ -18,8 +23,14 @@ import {
   deleteComment,
   formatRelativeKo,
   getBoard,
+  getMyUserId,
   listComments,
   replyComment,
+  setBoardResolved,
+  setBoardUrgent,
+  toggleBoardBookmark,
+  toggleBoardLike,
+  toggleCommentLike,
   updateBoard,
   updateComment,
 } from '../lib/boardApi';
@@ -43,6 +54,13 @@ export const QnaDetailView: React.FC<QnaDetailViewProps> = ({ postId, onBack }) 
   const [editContent, setEditContent] = useState('');
   const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
   const [editingCommentContent, setEditingCommentContent] = useState('');
+  const [myUserId, setMyUserId] = useState<number | null>(null);
+
+  useEffect(() => {
+    getMyUserId().then(setMyUserId).catch(() => setMyUserId(null));
+  }, []);
+
+  const isOwner = post !== null && myUserId !== null && post.userId === myUserId;
 
   const refreshComments = async () => {
     try {
@@ -181,6 +199,69 @@ export const QnaDetailView: React.FC<QnaDetailViewProps> = ({ postId, onBack }) 
     }
   };
 
+  const handleToggleLike = async () => {
+    if (!post) return;
+    try {
+      const r = await toggleBoardLike(postId);
+      setPost({ ...post, liked: r.liked, likeCount: r.likeCount });
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const handleToggleBookmark = async () => {
+    if (!post) return;
+    try {
+      const r = await toggleBoardBookmark(postId);
+      setPost({ ...post, bookmarked: r.bookmarked });
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const handleToggleResolved = async () => {
+    if (!post) return;
+    try {
+      const next = await setBoardResolved(postId, !post.resolved);
+      setPost({ ...post, resolved: next });
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const handleToggleUrgent = async () => {
+    if (!post) return;
+    try {
+      const next = await setBoardUrgent(postId, !post.urgent);
+      setPost({ ...post, urgent: next });
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const handleAcceptComment = async (commentId: number) => {
+    try {
+      await acceptComment(commentId);
+      await Promise.all([
+        getBoard(postId).then(setPost),
+        refreshComments(),
+      ]);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const handleToggleCommentLike = async (commentId: number) => {
+    try {
+      const r = await toggleCommentLike(commentId);
+      setComments((prev) =>
+        prev.map((c) => (c.id === commentId ? { ...c, liked: r.liked, likeCount: r.likeCount } : c))
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
   if (loading) {
     return (
       <div className="card" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
@@ -239,7 +320,7 @@ export const QnaDetailView: React.FC<QnaDetailViewProps> = ({ postId, onBack }) 
       )}
 
       <div className="card" style={{ padding: '32px', marginBottom: '24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
           <span
             style={{
               display: 'inline-flex',
@@ -257,6 +338,71 @@ export const QnaDetailView: React.FC<QnaDetailViewProps> = ({ postId, onBack }) 
             <HelpCircle size={12} />
             Q&A
           </span>
+          {post.resolved && (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: '12px',
+                fontWeight: '700',
+                background: '#dcfce7',
+                color: '#16a34a',
+                padding: '4px 10px',
+                borderRadius: '6px',
+                border: '1px solid #86efac'
+              }}
+            >
+              <CheckCircle2 size={12} />
+              해결완료
+            </span>
+          )}
+          {post.urgent && (
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: '800',
+                background: 'var(--red)',
+                color: 'white',
+                padding: '4px 8px',
+                borderRadius: '6px'
+              }}
+            >
+              급해요
+            </span>
+          )}
+          {isOwner && (
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px' }}>
+              <button
+                onClick={handleToggleResolved}
+                style={{
+                  fontSize: '11px',
+                  fontWeight: '700',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  border: '1px solid var(--border)',
+                  color: post.resolved ? '#16a34a' : 'var(--text-secondary)',
+                  background: 'white'
+                }}
+              >
+                {post.resolved ? '해결완료 해제' : '해결완료 표시'}
+              </button>
+              <button
+                onClick={handleToggleUrgent}
+                style={{
+                  fontSize: '11px',
+                  fontWeight: '700',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  border: '1px solid var(--border)',
+                  color: post.urgent ? 'var(--red)' : 'var(--text-secondary)',
+                  background: 'white'
+                }}
+              >
+                {post.urgent ? '급해요 해제' : '급해요 표시'}
+              </button>
+            </div>
+          )}
         </div>
 
         {editing ? (
@@ -448,6 +594,56 @@ export const QnaDetailView: React.FC<QnaDetailViewProps> = ({ postId, onBack }) 
             {post.content}
           </div>
         )}
+
+        {!editing && (
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '12px',
+              marginTop: '24px',
+              paddingTop: '24px',
+              borderTop: '1px solid var(--border)'
+            }}
+          >
+            <button
+              onClick={handleToggleLike}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 22px',
+                borderRadius: '12px',
+                fontSize: '13px',
+                fontWeight: '700',
+                background: post.liked ? 'var(--purple-bg)' : 'white',
+                color: post.liked ? 'var(--purple)' : 'var(--text-secondary)',
+                border: `1px solid ${post.liked ? 'var(--purple-border)' : 'var(--border)'}`
+              }}
+            >
+              <ThumbsUp size={14} fill={post.liked ? 'var(--purple)' : 'none'} />
+              도움돼요 {post.likeCount}
+            </button>
+            <button
+              onClick={handleToggleBookmark}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 22px',
+                borderRadius: '12px',
+                fontSize: '13px',
+                fontWeight: '700',
+                background: post.bookmarked ? 'var(--blue-bg)' : 'white',
+                color: post.bookmarked ? 'var(--blue)' : 'var(--text-secondary)',
+                border: `1px solid ${post.bookmarked ? 'var(--blue-border)' : 'var(--border)'}`
+              }}
+            >
+              <Bookmark size={14} fill={post.bookmarked ? 'var(--blue)' : 'none'} />
+              {post.bookmarked ? '저장됨' : '저장'}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="card" style={{ padding: '28px' }}>
@@ -542,6 +738,9 @@ export const QnaDetailView: React.FC<QnaDetailViewProps> = ({ postId, onBack }) 
                 setEditingCommentId(null);
                 setEditingCommentContent('');
               }}
+              isBoardOwner={isOwner}
+              onAccept={() => handleAcceptComment(c.id)}
+              onToggleLike={() => handleToggleCommentLike(c.id)}
             />
           ))}
         </div>
@@ -567,6 +766,9 @@ interface CommentItemProps {
   onEditChange: (v: string) => void;
   onSubmitEdit: (id: number) => void;
   onCancelEdit: () => void;
+  isBoardOwner: boolean;
+  onAccept: () => void;
+  onToggleLike: () => void;
 }
 
 const CommentItem: React.FC<CommentItemProps> = ({
@@ -586,6 +788,9 @@ const CommentItem: React.FC<CommentItemProps> = ({
   onEditChange,
   onSubmitEdit,
   onCancelEdit,
+  isBoardOwner,
+  onAccept,
+  onToggleLike,
 }) => {
   const isEditing = editingCommentId === comment.id;
   return (
@@ -593,10 +798,29 @@ const CommentItem: React.FC<CommentItemProps> = ({
       style={{
         padding: '20px',
         borderRadius: '12px',
-        border: '1px solid var(--border)',
-        background: 'white'
+        border: comment.accepted ? '2px solid #86efac' : '1px solid var(--border)',
+        background: comment.accepted ? '#f0fdf4' : 'white'
       }}
     >
+      {comment.accepted && (
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            fontSize: '11px',
+            fontWeight: '800',
+            background: '#16a34a',
+            color: 'white',
+            padding: '4px 10px',
+            borderRadius: '6px',
+            marginBottom: '14px'
+          }}
+        >
+          <Award size={12} />
+          채택된 답변
+        </div>
+      )}
       <div style={{ display: 'flex', gap: '12px' }}>
         <div
           style={{
@@ -697,7 +921,47 @@ const CommentItem: React.FC<CommentItemProps> = ({
             </p>
           )}
 
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+            {!comment.deleted && (
+              <button
+                onClick={onToggleLike}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  background: comment.liked ? 'var(--purple-bg)' : '#f8fafc',
+                  color: comment.liked ? 'var(--purple)' : 'var(--text-secondary)',
+                  border: `1px solid ${comment.liked ? 'var(--purple-border)' : 'var(--border)'}`
+                }}
+              >
+                <ThumbsUp size={12} fill={comment.liked ? 'var(--purple)' : 'none'} />
+                도움돼요 {comment.likeCount}
+              </button>
+            )}
+            {isBoardOwner && !comment.deleted && !comment.accepted && (
+              <button
+                onClick={onAccept}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  background: 'white',
+                  color: '#16a34a',
+                  border: '1px solid #86efac'
+                }}
+              >
+                <Award size={12} />
+                답변 채택
+              </button>
+            )}
             <button
               onClick={onReply}
               style={{
