@@ -549,7 +549,7 @@ export const MyPageView: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="mypage-action-row">
+                  <div className="mypage-action-row" style={{ marginTop: '32px' }}>
                     <button type="submit" className="mypage-btn-save" disabled={pwLoading}>
                       {pwLoading ? <Loader2 size={15} className="spin-animation" /> : <Save size={15} />}
                       비밀번호 설정
@@ -560,25 +560,24 @@ export const MyPageView: React.FC = () => {
                 <form onSubmit={handleVerifyCurrentPassword} className="mypage-form mypage-form-password">
                   <div className="mypage-field span-full">
                     <label className="mypage-field-label">현재 비밀번호</label>
-                    <div className="mypage-pw-wrapper">
-                      <input
-                        type={showCurrentPw ? 'text' : 'password'}
-                        className="mypage-input"
-                        placeholder="현재 비밀번호를 입력하세요"
-                        value={currentPassword}
-                        onChange={(e) => setCurrentPassword(e.target.value)}
-                      />
-                      <button type="button" className="mypage-pw-toggle" onClick={() => setShowCurrentPw(!showCurrentPw)}>
-                        {showCurrentPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                    <div className="mypage-pw-verify-row">
+                      <div className="mypage-pw-wrapper">
+                        <input
+                          type={showCurrentPw ? 'text' : 'password'}
+                          className="mypage-input"
+                          placeholder="현재 비밀번호를 입력하세요"
+                          value={currentPassword}
+                          onChange={(e) => setCurrentPassword(e.target.value)}
+                        />
+                        <button type="button" className="mypage-pw-toggle" onClick={() => setShowCurrentPw(!showCurrentPw)}>
+                          {showCurrentPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                      <button type="submit" className="mypage-btn-verify-pw" disabled={pwLoading}>
+                        {pwLoading ? <Loader2 size={15} className="spin-animation" /> : <Lock size={15} />}
+                        현재 비밀번호 확인
                       </button>
                     </div>
-                  </div>
-
-                  <div className="mypage-action-row">
-                    <button type="submit" className="mypage-btn-save" disabled={pwLoading}>
-                      {pwLoading ? <Loader2 size={15} className="spin-animation" /> : <Lock size={15} />}
-                      현재 비밀번호 확인
-                    </button>
                   </div>
                 </form>
               ) : (
@@ -615,7 +614,7 @@ export const MyPageView: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="mypage-action-row">
+                  <div className="mypage-action-row" style={{ marginTop: '32px' }}>
                     <button type="button" className="mypage-btn-cancel" onClick={resetPasswordFlow}>
                       <X size={15} /> 취소
                     </button>

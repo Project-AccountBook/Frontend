@@ -2639,21 +2639,52 @@ a {
 .mypage-form-password {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   gap: 20px;
 }
 
 .mypage-form-password .mypage-field.span-full {
   width: 100%;
-  max-width: 420px;
 }
 
-.mypage-form-password .mypage-action-row {
-  justify-content: center;
-  width: 100%;
-  margin-top: 8px;
-  padding-top: 0;
-  border-top: none;
+.mypage-pw-verify-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.mypage-pw-verify-row .mypage-pw-wrapper {
+  flex: 1;
+  min-width: 0;
+}
+
+.mypage-btn-verify-pw {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 10px;
+  background: var(--navy);
+  color: white;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+}
+
+.mypage-btn-verify-pw:hover:not(:disabled) {
+  background: var(--navy-light);
+  transform: translateY(-1px);
+}
+
+.mypage-btn-verify-pw:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .mypage-btn-edit {
