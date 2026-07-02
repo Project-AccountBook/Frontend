@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   ReceiptText,
   Calendar as CalendarIcon,
@@ -15,8 +15,17 @@ import {
   Sparkles,
   List,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
+import {
+  getAccounts,
+  createAccount,
+  updateAccount,
+  deleteAccount,
+  type AccountResponse
+} from '../api/accountApi';
 
 // ──────────────────────────────────────────────
 // Enums & Types
@@ -26,12 +35,7 @@ type TransactionType = 'INCOME' | 'EXPENSE' | 'TRANSFER';
 type FrequencyType = 'WEEKLY' | 'MONTHLY' | 'YEARLY';
 type ViewMode = 'calendar' | 'list';
 
-interface Account {
-  id: number;
-  accountName: string;
-  currentBalance: number;
-  initialBalance: number;
-}
+type Account = AccountResponse;
 
 interface Category {
   id: number;
@@ -94,12 +98,27 @@ export const AssetView: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showMonthPicker]);
 
-  const [accounts, setAccounts] = useState<Account[]>([
-    { id: 1, accountName: '신한 주거래 우대통장', currentBalance: 3450000, initialBalance: 2000000 },
-    { id: 2, accountName: '국민 생활비 통장', currentBalance: 1250000, initialBalance: 1000000 },
-    { id: 3, accountName: '카카오 26주 적금', currentBalance: 5200000, initialBalance: 0 },
-    { id: 4, accountName: '우리카드 (결제대금 계좌)', currentBalance: 450000, initialBalance: 500000 }
-  ]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accountsLoading, setAccountsLoading] = useState(true);
+  const [accountsError, setAccountsError] = useState<string | null>(null);
+  const [accountSubmitting, setAccountSubmitting] = useState(false);
+
+  const fetchAccounts = useCallback(async () => {
+    setAccountsLoading(true);
+    setAccountsError(null);
+    try {
+      const data = await getAccounts();
+      setAccounts(data);
+    } catch (err) {
+      setAccountsError(err instanceof Error ? err.message : '계좌 목록을 불러오는 데 실패했습니다.');
+    } finally {
+      setAccountsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAccounts();
+  }, [fetchAccounts]);
 
   const [categories, setCategories] = useState<Category[]>([
     { id: 1, name: '월급/급여', type: 'INCOME', isCustom: false },
@@ -221,7 +240,6 @@ export const AssetView: React.FC = () => {
       const acc = accounts.find(a => a.id === id);
       if (acc) {
         setFormAccountName(acc.accountName);
-        setFormInitialBalance(acc.initialBalance.toString());
       }
     } else if (activeSection === 'categories') {
       const cat = categories.find(c => c.id === id);
@@ -233,17 +251,25 @@ export const AssetView: React.FC = () => {
     setShowModal(true);
   };
 
-  const handleDeleteItem = (id: number) => {
-    if (window.confirm('정말 삭제하시겠습니까?')) {
-      if (activeSection === 'transactions') {
-        setTransactions(transactions.filter(t => t.id !== id));
-      } else if (activeSection === 'fixed') {
-        setFixedTransactions(fixedTransactions.filter(f => f.id !== id));
-      } else if (activeSection === 'accounts') {
-        setAccounts(accounts.filter(a => a.id !== id));
-      } else if (activeSection === 'categories') {
-        setCategories(categories.filter(c => c.id !== id));
+  const handleDeleteItem = async (id: number) => {
+    if (!window.confirm('정말 삭제하시겠습니까?')) return;
+
+    if (activeSection === 'accounts') {
+      try {
+        await deleteAccount(id);
+        await fetchAccounts();
+      } catch (err) {
+        alert(err instanceof Error ? err.message : '계좌 삭제에 실패했습니다.');
       }
+      return;
+    }
+
+    if (activeSection === 'transactions') {
+      setTransactions(transactions.filter(t => t.id !== id));
+    } else if (activeSection === 'fixed') {
+      setFixedTransactions(fixedTransactions.filter(f => f.id !== id));
+    } else if (activeSection === 'categories') {
+      setCategories(categories.filter(c => c.id !== id));
     }
   };
 
@@ -256,8 +282,30 @@ export const AssetView: React.FC = () => {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (activeSection === 'accounts') {
+      setAccountSubmitting(true);
+      try {
+        if (modalMode === 'create') {
+          await createAccount({
+            accountName: formAccountName,
+            initialBalance: parseFloat(formInitialBalance) || 0,
+          });
+        } else if (selectedId !== null) {
+          await updateAccount(selectedId, formAccountName);
+        }
+        await fetchAccounts();
+        setShowModal(false);
+        resetFormFields();
+      } catch (err) {
+        alert(err instanceof Error ? err.message : '계좌 저장에 실패했습니다.');
+      } finally {
+        setAccountSubmitting(false);
+      }
+      return;
+    }
 
     if (activeSection === 'transactions') {
       const accObj = accounts.find(a => a.id === parseInt(formAccount));
@@ -339,28 +387,6 @@ export const AssetView: React.FC = () => {
             };
           }
           return f;
-        }));
-      }
-    } else if (activeSection === 'accounts') {
-      if (modalMode === 'create') {
-        const newAcc: Account = {
-          id: accounts.length ? Math.max(...accounts.map(a => a.id)) + 1 : 1,
-          accountName: formAccountName,
-          initialBalance: parseFloat(formInitialBalance) || 0,
-          currentBalance: parseFloat(formInitialBalance) || 0
-        };
-        setAccounts([...accounts, newAcc]);
-      } else {
-        setAccounts(accounts.map(a => {
-          if (a.id === selectedId) {
-            return {
-              ...a,
-              accountName: formAccountName,
-              initialBalance: parseFloat(formInitialBalance) || 0,
-              currentBalance: parseFloat(formInitialBalance) || 0
-            };
-          }
-          return a;
         }));
       }
     } else if (activeSection === 'categories') {
@@ -1032,42 +1058,64 @@ export const AssetView: React.FC = () => {
           <div className="section-content fade-in">
             <div className="section-action-bar">
               <span className="section-action-bar-title">등록된 계좌 {accounts.length}개</span>
-              <button className="btn-section-add" onClick={() => handleOpenAddModal()}>
+              <button className="btn-section-add" onClick={() => handleOpenAddModal()} disabled={accountsLoading}>
                 <Plus size={14} />
                 자산계좌 추가
               </button>
             </div>
-            <div className="accounts-grid">
-              {accounts.map(acc => (
-                <div key={acc.id} className="account-card">
-                  <div className="account-card-header">
-                    <div className="icon-circle">
-                      <Wallet size={20} />
-                    </div>
-                    <div className="card-actions">
-                      <button className="btn-action-icon edit" onClick={() => handleOpenEditModal(acc.id)}>
-                        <Edit2 size={13} />
-                      </button>
-                      <button className="btn-action-icon delete" onClick={() => handleDeleteItem(acc.id)}>
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="account-card-body">
-                    <h3 className="account-title">{acc.accountName}</h3>
-                    <div className="balance-info-row">
-                      <span className="balance-label">현재 잔고</span>
-                      <span className="balance-value">{formatCurrency(acc.currentBalance)}</span>
-                    </div>
-                    <div className="balance-info-row secondary">
-                      <span className="balance-label">초기 잔고</span>
-                      <span className="balance-value">{formatCurrency(acc.initialBalance)}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
 
-            </div>
+            {accountsLoading && (
+              <div className="table-empty-row" style={{ padding: '40px 0' }}>
+                <Loader2 size={24} className="spin-animation" />
+                <p>계좌 목록을 불러오는 중...</p>
+              </div>
+            )}
+
+            {!accountsLoading && accountsError && (
+              <div className="table-empty-row" style={{ padding: '40px 0' }}>
+                <AlertCircle size={24} />
+                <p>{accountsError}</p>
+                <button className="btn-section-add" onClick={fetchAccounts} style={{ marginTop: '12px' }}>
+                  다시 시도
+                </button>
+              </div>
+            )}
+
+            {!accountsLoading && !accountsError && accounts.length === 0 && (
+              <div className="table-empty-row" style={{ padding: '40px 0' }}>
+                <Info size={20} />
+                <p>등록된 계좌가 없습니다. 자산계좌를 추가해 주세요.</p>
+              </div>
+            )}
+
+            {!accountsLoading && !accountsError && accounts.length > 0 && (
+              <div className="accounts-grid">
+                {accounts.map(acc => (
+                  <div key={acc.id} className="account-card">
+                    <div className="account-card-header">
+                      <div className="icon-circle">
+                        <Wallet size={20} />
+                      </div>
+                      <div className="card-actions">
+                        <button className="btn-action-icon edit" onClick={() => handleOpenEditModal(acc.id)}>
+                          <Edit2 size={13} />
+                        </button>
+                        <button className="btn-action-icon delete" onClick={() => handleDeleteItem(acc.id)}>
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="account-card-body">
+                      <h3 className="account-title">{acc.accountName}</h3>
+                      <div className="balance-info-row">
+                        <span className="balance-label">현재 잔고</span>
+                        <span className="balance-value">{formatCurrency(acc.currentBalance)}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -1427,17 +1475,19 @@ export const AssetView: React.FC = () => {
                     />
                   </div>
 
-                  <div className="form-item">
-                    <label className="form-label">초기 설정 잔고 (원)</label>
-                    <input
-                      type="number"
-                      required
-                      placeholder="초기 가입/등록 잔액 입력"
-                      value={formInitialBalance}
-                      onChange={(e) => setFormInitialBalance(e.target.value)}
-                      className="modal-input"
-                    />
-                  </div>
+                  {modalMode === 'create' && (
+                    <div className="form-item">
+                      <label className="form-label">초기 설정 잔고 (원)</label>
+                      <input
+                        type="number"
+                        required
+                        placeholder="초기 가입/등록 잔액 입력"
+                        value={formInitialBalance}
+                        onChange={(e) => setFormInitialBalance(e.target.value)}
+                        className="modal-input"
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1476,8 +1526,15 @@ export const AssetView: React.FC = () => {
                 <button type="button" className="btn-secondary" onClick={() => { setShowModal(false); resetFormFields(); }}>
                   취소
                 </button>
-                <button type="submit" className="btn-primary">
-                  등록/저장 완료
+                <button type="submit" className="btn-primary" disabled={accountSubmitting}>
+                  {accountSubmitting ? (
+                    <>
+                      <Loader2 size={14} className="spin-animation" />
+                      저장 중...
+                    </>
+                  ) : (
+                    '등록/저장 완료'
+                  )}
                 </button>
               </div>
 
