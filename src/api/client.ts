@@ -29,6 +29,17 @@ async function parseResponse<T>(res: Response): Promise<RequestResult<T>> {
 }
 
 let reissuePromise: Promise<boolean> | null = null;
+let authExpiredHandler: (() => void) | null = null;
+
+export function setAuthExpiredHandler(handler: (() => void) | null) {
+  authExpiredHandler = handler;
+}
+
+function handleAuthExpired() {
+  if (!tokenStorage.hasToken()) return;
+  tokenStorage.clear();
+  authExpiredHandler?.();
+}
 
 async function tryReissue(): Promise<boolean> {
   if (reissuePromise) return reissuePromise;
@@ -94,6 +105,8 @@ export async function authRequest<T>(
     if (renewed) {
       headers.set('Authorization', `Bearer ${tokenStorage.getAccessToken()}`);
       res = await fetch(requestUrl, { ...init, headers });
+    } else {
+      handleAuthExpired();
     }
   }
 

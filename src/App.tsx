@@ -18,7 +18,7 @@ import { BudgetView } from './components/BudgetView';
 import { AssetView } from './components/AssetView';
 import { LoginView } from './components/LoginView';
 import { MyPageView } from './components/MyPageView';
-import { authApi, tokenStorage } from './api';
+import { authApi, setAuthExpiredHandler, tokenStorage } from './api';
 import { Construction } from 'lucide-react';
 
 type BoardMode = 'list' | 'detail' | 'write';
@@ -36,6 +36,14 @@ function App() {
     () => notifications.filter((n) => !n.isRead).length,
     [notifications]
   );
+
+  useEffect(() => {
+    setAuthExpiredHandler(() => {
+      setIsLoggedIn(false);
+      setActiveTab('dashboard');
+    });
+    return () => setAuthExpiredHandler(null);
+  }, []);
 
   useEffect(() => {
     if (window.location.pathname === '/oauth2/redirect') {

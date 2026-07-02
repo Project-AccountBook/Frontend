@@ -1,3 +1,4 @@
+export { setAuthExpiredHandler } from './client';
 export { authApi } from './authApi';
 export { userApi } from './userApi';
 export { interestCategoryApi } from './interestCategoryApi';
