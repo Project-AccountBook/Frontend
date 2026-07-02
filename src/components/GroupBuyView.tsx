@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShoppingBag, 
   MapPin, 
@@ -48,109 +48,132 @@ interface Comment {
   date: string;
 }
 
+const MOCK_ITEMS: GroupBuyItem[] = [
+  {
+    id: 1,
+    category: '생활용품',
+    status: '모집중 (D-2)',
+    statusType: 'blue',
+    title: '친환경 세탁세제 대용량 공구',
+    progress: 125,
+    currentParticipants: 25,
+    targetParticipants: 20,
+    price: 15000,
+    views: 142,
+    bookmarks: 12,
+    creator: '서교동 썬더맘',
+    creatorTemp: '37.8℃',
+    distance: '0.5km',
+    description: '유기농 식물성 성분으로 만든 고농축 친환경 세탁 세제입니다. 대용량 3L 제품이며 배송비가 비싸서 동네 분들과 함께 저렴하게 구매하고자 공구를 모집합니다. 퇴근 시간 서교 초등학교 정문 앞에서 전달 가능해요!',
+    deadline: '2026-06-24 18:00',
+    imageColor: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)'
+  },
+  {
+    id: 2,
+    category: '식품',
+    status: '마감임박 (D-1)',
+    statusType: 'red',
+    title: '제주 유기농 흑돼지 삼겹살 1kg',
+    progress: 85,
+    currentParticipants: 17,
+    targetParticipants: 20,
+    price: 28000,
+    views: 241,
+    bookmarks: 24,
+    creator: '망원동 육식주의자',
+    creatorTemp: '39.2℃',
+    distance: '0.8km',
+    description: '제주도 농장에서 직송하는 무항생제 명품 흑돼지 삼겹살 1kg입니다. 진공 포장 후 아이스박스에 꼼꼼히 배송됩니다. 양이 1인가구가 먹기에는 너무 많아 분할 구매하실 이웃을 구해요. 수령 시간 조율 가능합니다!',
+    deadline: '2026-06-23 20:00',
+    imageColor: 'linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%)'
+  },
+  {
+    id: 3,
+    category: '육아용품',
+    status: '모집중 (D-4)',
+    statusType: 'blue',
+    title: '프리미엄 아기 물티슈 10팩 박스',
+    progress: 60,
+    currentParticipants: 6,
+    targetParticipants: 10,
+    price: 19800,
+    views: 98,
+    bookmarks: 8,
+    creator: '서교동 두아이아빠',
+    creatorTemp: '36.5℃',
+    distance: '1.2km',
+    description: '피부 저극 없는 유기농 엠보싱 물티슈 10팩들이 한 박스 공구 진행합니다. 박스 크기가 커서 택배비 절약용으로 공구 올려봐요. 합정역 3번출구 근처에서 전달해 드립니다.',
+    deadline: '2026-06-26 12:00',
+    imageColor: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)'
+  },
+  {
+    id: 4,
+    category: '가전',
+    status: '모집중 (D-7)',
+    statusType: 'blue',
+    title: '가성비 무선 에어 서큘레이터',
+    progress: 40,
+    currentParticipants: 2,
+    targetParticipants: 5,
+    price: 49000,
+    views: 112,
+    bookmarks: 15,
+    creator: '홍대입구 싱글남',
+    creatorTemp: '37.0℃',
+    distance: '1.4km',
+    description: '소음이 적고 풍량이 강해 서브 에어컨 대용으로 좋은 무선 서큘레이터입니다. 공동구매 5대 이상 묶음 시 대당 4.9만원 특가 구매 가능하다고 하여 멤버 모집합니다. 박스째 미개봉 상태로 드립니다.',
+    deadline: '2026-06-29 18:00',
+    imageColor: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)'
+  },
+  {
+    id: 5,
+    category: '생필품',
+    status: '진행완료',
+    statusType: 'grey',
+    title: '친환경 대나무 화장지 30롤',
+    progress: 100,
+    currentParticipants: 15,
+    targetParticipants: 15,
+    price: 12000,
+    views: 185,
+    bookmarks: 9,
+    creator: '합정동 환경지킴이',
+    creatorTemp: '38.0℃',
+    distance: '2.1km',
+    description: '먼지가 나지 않는 100% 천연 대나무 3겹 데코 화장지 30롤입니다. 모집 인원이 모두 찬 상태이며, 현재 제품 주문이 들어가 다음 주 월요일부터 순차 양도 예정입니다.',
+    deadline: '2026-06-20 15:00',
+    imageColor: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)'
+  }
+];
+
 export const GroupBuyView: React.FC = () => {
-  // Mock Data
-  const [items, setItems] = useState<GroupBuyItem[]>([
-    {
-      id: 1,
-      category: '생활용품',
-      status: '모집중 (D-2)',
-      statusType: 'blue',
-      title: '친환경 세탁세제 대용량 공구',
-      progress: 125,
-      currentParticipants: 25,
-      targetParticipants: 20,
-      price: 15000,
-      views: 142,
-      bookmarks: 12,
-      creator: '서교동 썬더맘',
-      creatorTemp: '37.8℃',
-      distance: '0.5km',
-      description: '유기농 식물성 성분으로 만든 고농축 친환경 세탁 세제입니다. 대용량 3L 제품이며 배송비가 비싸서 동네 분들과 함께 저렴하게 구매하고자 공구를 모집합니다. 퇴근 시간 서교 초등학교 정문 앞에서 전달 가능해요!',
-      deadline: '2026-06-24 18:00',
-      imageColor: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)'
-    },
-    {
-      id: 2,
-      category: '식품',
-      status: '마감임박 (D-1)',
-      statusType: 'red',
-      title: '제주 유기농 흑돼지 삼겹살 1kg',
-      progress: 85,
-      currentParticipants: 17,
-      targetParticipants: 20,
-      price: 28000,
-      views: 241,
-      bookmarks: 24,
-      creator: '망원동 육식주의자',
-      creatorTemp: '39.2℃',
-      distance: '0.8km',
-      description: '제주도 농장에서 직송하는 무항생제 명품 흑돼지 삼겹살 1kg입니다. 진공 포장 후 아이스박스에 꼼꼼히 배송됩니다. 양이 1인가구가 먹기에는 너무 많아 분할 구매하실 이웃을 구해요. 수령 시간 조율 가능합니다!',
-      deadline: '2026-06-23 20:00',
-      imageColor: 'linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%)'
-    },
-    {
-      id: 3,
-      category: '육아용품',
-      status: '모집중 (D-4)',
-      statusType: 'blue',
-      title: '프리미엄 아기 물티슈 10팩 박스',
-      progress: 60,
-      currentParticipants: 6,
-      targetParticipants: 10,
-      price: 19800,
-      views: 98,
-      bookmarks: 8,
-      creator: '서교동 두아이아빠',
-      creatorTemp: '36.5℃',
-      distance: '1.2km',
-      description: '피부 저극 없는 유기농 엠보싱 물티슈 10팩들이 한 박스 공구 진행합니다. 박스 크기가 커서 택배비 절약용으로 공구 올려봐요. 합정역 3번출구 근처에서 전달해 드립니다.',
-      deadline: '2026-06-26 12:00',
-      imageColor: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)'
-    },
-    {
-      id: 4,
-      category: '가전',
-      status: '모집중 (D-7)',
-      statusType: 'blue',
-      title: '가성비 무선 에어 서큘레이터',
-      progress: 40,
-      currentParticipants: 2,
-      targetParticipants: 5,
-      price: 49000,
-      views: 112,
-      bookmarks: 15,
-      creator: '홍대입구 싱글남',
-      creatorTemp: '37.0℃',
-      distance: '1.4km',
-      description: '소음이 적고 풍량이 강해 서브 에어컨 대용으로 좋은 무선 서큘레이터입니다. 공동구매 5대 이상 묶음 시 대당 4.9만원 특가 구매 가능하다고 하여 멤버 모집합니다. 박스째 미개봉 상태로 드립니다.',
-      deadline: '2026-06-29 18:00',
-      imageColor: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)'
-    },
-    {
-      id: 5,
-      category: '생필품',
-      status: '진행완료',
-      statusType: 'grey',
-      title: '친환경 대나무 화장지 30롤',
-      progress: 100,
-      currentParticipants: 15,
-      targetParticipants: 15,
-      price: 12000,
-      views: 185,
-      bookmarks: 9,
-      creator: '합정동 환경지킴이',
-      creatorTemp: '38.0℃',
-      distance: '2.1km',
-      description: '먼지가 나지 않는 100% 천연 대나무 3겹 데코 화장지 30롤입니다. 모집 인원이 모두 찬 상태이며, 현재 제품 주문이 들어가 다음 주 월요일부터 순차 양도 예정입니다.',
-      deadline: '2026-06-20 15:00',
-      imageColor: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)'
+  // API Call Helper
+  const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
+    const token = localStorage.getItem('accessToken');
+    const headers = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    };
+    const response = await fetch(url, { ...options, headers });
+    if (!response.ok) {
+      const errText = await response.text();
+      let errMsg = `HTTP error! status: ${response.status}`;
+      try {
+        const errJson = JSON.parse(errText);
+        errMsg = errJson.message || errJson.error || errMsg;
+      } catch (e) {}
+      throw new Error(errMsg);
     }
-  ]);
+    return response.json();
+  };
 
   // States
+  const [items, setItems] = useState<GroupBuyItem[]>(MOCK_ITEMS);
+  const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
+  const [userLocationText, setUserLocationText] = useState('서울시 마포구 서교동');
   const [userBudget, setUserBudget] = useState(3140894);
-  const [userBookmarks, setUserBookmarks] = useState<number[]>([2]); // Default bookmark Item 2
+  const [userBookmarks, setUserBookmarks] = useState<number[]>([]);
   const [participatedItems, setParticipatedItems] = useState<number[]>([]);
   const [activeCategory, setActiveCategory] = useState('전체');
   const [sortBy, setSortBy] = useState('latest');
@@ -171,15 +194,214 @@ export const GroupBuyView: React.FC = () => {
   const [formDesc, setFormDesc] = useState('');
 
   // Comment Board States
-  const [comments, setComments] = useState<Record<number, Comment[]>>({
-    2: [
-      { id: 1, sender: '서교동 썬더맘', text: '삼겹살 부위 비율이 어떻게 되나요? 살코기가 많은 편인가요?', date: '3시간 전' },
-      { id: 2, sender: '망원동 육식주의자', text: '껍질 제거된 오리지널 삼겹살이고, 비계와 살코기 비율이 3:7 정도로 적당히 고소한 부위들로 선별 발송됩니다!', date: '2시간 전' },
-      { id: 3, sender: '합정동 환경지킴이', text: '저 퇴근이 7시 반쯤인데, 수령 시간을 그때 맞춰주실 수 있을까요?', date: '1시간 전' },
-      { id: 4, sender: '망원동 육식주의자', text: '네, 아이스팩 동봉 상태라 8시 전까지만 수령해 가시면 문제 없습니다!', date: '30분 전' }
-    ]
-  });
+  const [comments, setComments] = useState<Record<number, Comment[]>>({});
   const [newCommentText, setNewCommentText] = useState('');
+
+  // Load initial data
+  useEffect(() => {
+    const loadInitialData = async () => {
+      try {
+        const catRes = await fetchWithAuth('/api/v1/group-purchase-categories');
+        if (catRes.success && catRes.data) {
+          setCategories(catRes.data);
+        }
+      } catch (err) {
+        console.error("Failed to load categories:", err);
+      }
+
+      try {
+        const profileRes = await fetchWithAuth('/api/v1/users/me');
+        if (profileRes.success && profileRes.data) {
+          setUserLocationText(profileRes.data.address || '서울시 마포구 서교동');
+        }
+      } catch (err) {
+        console.error("Failed to load profile:", err);
+      }
+
+      fetchBudget();
+      fetchUserWishedAndJoinedIds();
+    };
+
+    loadInitialData();
+  }, []);
+
+  const fetchBudget = async () => {
+    try {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const yearMonth = `${year}-${month}`;
+      const budgetRes = await fetchWithAuth(`/api/v1/budget/${yearMonth}/summary`);
+      if (budgetRes.success && budgetRes.data) {
+        setUserBudget(Number(budgetRes.data.totalRemainingBudget));
+      }
+    } catch (err) {
+      console.error("Failed to load budget:", err);
+    }
+  };
+
+  const fetchUserWishedAndJoinedIds = async () => {
+    try {
+      const wishedRes = await fetchWithAuth('/api/v1/group-purchases/wished-ids');
+      if (wishedRes.success && wishedRes.data) {
+        setUserBookmarks(wishedRes.data);
+      }
+      const joinedRes = await fetchWithAuth('/api/v1/group-purchases/joined-ids');
+      if (joinedRes.success && joinedRes.data) {
+        setParticipatedItems(joinedRes.data);
+      }
+    } catch (err) {
+      console.error("Failed to load wished/joined IDs:", err);
+    }
+  };
+
+  const mapBackendItemToFrontend = (bp: any, catList: { id: number; name: string }[]): GroupBuyItem => {
+    const categoryName = catList.find(c => c.id === bp.categoryId)?.name || '기타';
+    
+    let statusText = '모집중';
+    let statusType: 'blue' | 'red' | 'grey' = 'blue';
+    if (bp.status === 'SUCCESS') {
+      statusText = '모집 성공';
+      statusType = 'blue';
+    } else if (bp.status === 'FAILED') {
+      statusText = '무산됨';
+      statusType = 'grey';
+    } else if (bp.status === 'CLOSED') {
+      statusText = '거래 종료';
+      statusType = 'grey';
+    } else if (bp.status === 'BLIND') {
+      statusText = '블라인드';
+      statusType = 'grey';
+    } else if (bp.status === 'RECRUITING') {
+      const deadlineDate = new Date(bp.deadline);
+      const diffTime = deadlineDate.getTime() - new Date().getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      if (diffDays <= 0) {
+        statusText = '마감임박';
+        statusType = 'red';
+      } else if (diffDays <= 2) {
+        statusText = `마감임박 (D-${diffDays})`;
+        statusType = 'red';
+      } else {
+        statusText = `모집중 (D-${diffDays})`;
+        statusType = 'blue';
+      }
+    }
+
+    const imageColorMap: Record<string, string> = {
+      '식품': 'linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%)',
+      '생활용품': 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+      '육아용품': 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)',
+      '가전': 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)',
+    };
+    const imageColor = imageColorMap[categoryName] || 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)';
+    const deadlineStr = bp.deadline ? bp.deadline.replace('T', ' ').substring(0, 16) : '';
+
+    return {
+      id: bp.id,
+      category: categoryName,
+      status: statusText,
+      statusType: statusType,
+      title: bp.title,
+      progress: Math.round(bp.achievementRate),
+      currentParticipants: bp.currentParticipants,
+      targetParticipants: bp.maxParticipants,
+      price: bp.price,
+      views: bp.viewCount,
+      bookmarks: 0,
+      creator: bp.creatorNickname || '이웃',
+      creatorTemp: '36.5℃',
+      distance: '0.8km',
+      description: bp.content,
+      deadline: deadlineStr,
+      imageColor: imageColor
+    };
+  };
+
+  const fetchGroupPurchases = async () => {
+    try {
+      let url = '/api/v1/group-purchases';
+      const params = new URLSearchParams();
+      
+      if (activeCategory !== '전체') {
+        const catId = categories.find(c => c.name === activeCategory)?.id;
+        if (catId) {
+          params.append('categoryId', String(catId));
+        }
+      }
+
+      if (distanceLimit !== '전체') {
+        params.append('nearMe', 'true');
+      }
+
+      params.append('sortBy', sortBy);
+
+      if (params.toString()) {
+        url += `?${params.toString()}`;
+      }
+
+      const res = await fetchWithAuth(url);
+      if (res.success && res.data) {
+        const mapped = res.data.map((item: any) => mapBackendItemToFrontend(item, categories));
+        setItems(mapped);
+      }
+    } catch (err) {
+      console.error("Failed to fetch group purchases:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (categories.length > 0) {
+      fetchGroupPurchases();
+    }
+  }, [activeCategory, sortBy, distanceLimit, categories]);
+
+  const handleItemClick = async (item: GroupBuyItem) => {
+    try {
+      const res = await fetchWithAuth(`/api/v1/group-purchases/${item.id}`);
+      if (res.success && res.data) {
+        const updated = mapBackendItemToFrontend(res.data, categories);
+        setSelectedItem(updated);
+        fetchGroupPurchases();
+      }
+    } catch (err) {
+      console.error("Failed to fetch single item:", err);
+      setSelectedItem(item);
+    }
+    fetchComments(item.id);
+  };
+
+  const fetchComments = async (postId: number) => {
+    try {
+      const res = await fetchWithAuth(`/api/v1/comments/${postId}?referenceType=GROUPPURCHASE`);
+      if (res.success && res.data) {
+        const mappedComments = res.data.map((comm: any) => {
+          const dateVal = new Date(comm.createdAt);
+          const diffMs = new Date().getTime() - dateVal.getTime();
+          const diffMin = Math.floor(diffMs / (1000 * 60));
+          const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+          let dateStr = '방금 전';
+          if (diffHrs > 24) {
+            dateStr = dateVal.toLocaleDateString();
+          } else if (diffHrs > 0) {
+            dateStr = `${diffHrs}시간 전`;
+          } else if (diffMin > 0) {
+            dateStr = `${diffMin}분 전`;
+          }
+          
+          return {
+            id: comm.id,
+            sender: comm.userNickname || '이웃',
+            text: comm.content,
+            date: dateStr
+          };
+        });
+        setComments(prev => ({ ...prev, [postId]: mappedComments }));
+      }
+    } catch (err) {
+      console.error("Failed to fetch comments:", err);
+    }
+  };
 
   // Trigger Toast Notification
   const triggerToast = (msg: string) => {
@@ -190,55 +412,87 @@ export const GroupBuyView: React.FC = () => {
   };
 
   // Toggle Bookmark
-  const toggleBookmark = (id: number, e?: React.MouseEvent) => {
+  const toggleBookmark = async (id: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (userBookmarks.includes(id)) {
-      setUserBookmarks(userBookmarks.filter(bId => bId !== id));
-      setItems(items.map(item => item.id === id ? { ...item, bookmarks: item.bookmarks - 1 } : item));
-      triggerToast('관심 목록에서 해제되었습니다.');
-    } else {
-      setUserBookmarks([...userBookmarks, id]);
-      setItems(items.map(item => item.id === id ? { ...item, bookmarks: item.bookmarks + 1 } : item));
-      triggerToast('관심 목록에 등록되었습니다!');
+    try {
+      const res = await fetchWithAuth(`/api/v1/group-purchases/${id}/wish`, {
+        method: 'POST'
+      });
+      if (res.success) {
+        const isBookmarkedNow = res.data;
+        if (isBookmarkedNow) {
+          setUserBookmarks(prev => [...prev, id]);
+          triggerToast('관심 목록에 등록되었습니다!');
+        } else {
+          setUserBookmarks(prev => prev.filter(bId => bId !== id));
+          triggerToast('관심 목록에서 해제되었습니다.');
+        }
+        fetchUserWishedAndJoinedIds();
+      }
+    } catch (err: any) {
+      console.error("Failed to toggle wish:", err);
+      alert(err.message || '찜하기 토글에 실패했습니다.');
     }
   };
 
   // Submit suggestion/request
-  const handleSubmitSuggestion = (e: React.FormEvent) => {
+  const handleSubmitSuggestion = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formTitle || !formPrice) {
       alert('상품명과 희망 가격을 입력해 주세요.');
       return;
     }
-    setShowRequestModal(false);
-    triggerToast(
-      formType === 'request' 
-        ? '공구 신청 접수가 완료되었습니다! 관리자 검토 후 연락드리겠습니다.'
-        : '공구 제보가 성공적으로 접수되었습니다. 개설 시 알림을 보내드립니다!'
-    );
-    // Reset forms
-    setFormTitle('');
-    setFormPrice('');
-    setFormLink('');
-    setFormDesc('');
+
+    try {
+      const res = await fetchWithAuth('/api/v1/group-purchase-applications', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: formTitle,
+          content: formDesc || `${formType === 'request' ? '공구 신청' : '이웃 추천'} - ${formTitle}`,
+          productUrl: formLink || null,
+          expectedPrice: Number(formPrice)
+        })
+      });
+      
+      if (res.success) {
+        setShowRequestModal(false);
+        triggerToast(
+          formType === 'request' 
+            ? '공구 신청 접수가 완료되었습니다! 관리자 검토 후 연락드리겠습니다.'
+            : '공구 제보가 성공적으로 접수되었습니다. 개설 시 알림을 보내드립니다!'
+        );
+        setFormTitle('');
+        setFormPrice('');
+        setFormLink('');
+        setFormDesc('');
+      }
+    } catch (err: any) {
+      console.error("Failed to submit suggestion:", err);
+      alert(err.message || '신청/제보 등록에 실패했습니다.');
+    }
   };
 
   // Add Comment
-  const handleAddComment = () => {
+  const handleAddComment = async () => {
     if (!newCommentText.trim() || !selectedItem) return;
 
-    const newItemComment: Comment = {
-      id: Date.now(),
-      sender: '나 (가계부 회원)',
-      text: newCommentText,
-      date: '방금 전'
-    };
-
-    setComments({
-      ...comments,
-      [selectedItem.id]: [...(comments[selectedItem.id] || []), newItemComment]
-    });
-    setNewCommentText('');
+    try {
+      const res = await fetchWithAuth(`/api/v1/comments/${selectedItem.id}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          referenceType: 'GROUPPURCHASE',
+          content: newCommentText
+        })
+      });
+      if (res.success) {
+        setNewCommentText('');
+        fetchComments(selectedItem.id);
+        triggerToast('댓글이 성공적으로 등록되었습니다.');
+      }
+    } catch (err: any) {
+      console.error("Failed to add comment:", err);
+      alert(err.message || '댓글 등록에 실패했습니다.');
+    }
   };
 
   // Click Participate
@@ -252,59 +506,45 @@ export const GroupBuyView: React.FC = () => {
   };
 
   // Confirm Participation & Account budget deduct
-  const handleConfirmParticipation = () => {
+  const handleConfirmParticipation = async () => {
     if (!selectedItem) return;
 
-    if (userBudget < selectedItem.price) {
-      alert(`경고: 가계부 예산 잔액이 부족합니다!\n현재 잔액: ${formatKRW(userBudget)}원\n필요 금액: ${formatKRW(selectedItem.price)}원`);
-      setShowConfirmation(false);
-      return;
-    }
+    try {
+      const res = await fetchWithAuth(`/api/v1/group-purchases/${selectedItem.id}/join`, {
+        method: 'POST'
+      });
+      if (res.success) {
+        const joinData = res.data;
+        
+        fetchBudget();
+        fetchUserWishedAndJoinedIds();
+        fetchGroupPurchases();
 
-    // Deduct budget
-    setUserBudget(userBudget - selectedItem.price);
-    setParticipatedItems([...participatedItems, selectedItem.id]);
-    
-    // Update participant counts
-    setItems(items.map(item => {
-      if (item.id === selectedItem.id) {
-        const nextParticipants = item.currentParticipants + 1;
-        const nextProgress = Math.round((nextParticipants / item.targetParticipants) * 100);
-        return {
-          ...item,
-          currentParticipants: nextParticipants,
-          progress: nextProgress
-        };
+        setShowConfirmation(false);
+        setSelectedItem(null);
+
+        if (joinData.budgetWarning) {
+          triggerToast('공구 참여 완료! 예산 잔액이 초과 경고 범위를 지났습니다.');
+        } else {
+          triggerToast('공동구매 신청 완료! 가계부 지출 내역에 자동으로 기입됩니다.');
+        }
       }
-      return item;
-    }));
-
-    setShowConfirmation(false);
-    setSelectedItem(null);
-    triggerToast('공동구매 신청 완료! 가계부 지출 내역에 자동으로 기입됩니다.');
+    } catch (err: any) {
+      console.error("Failed to join group purchase:", err);
+      alert(err.message || '공동구매 신청에 실패했습니다.');
+      setShowConfirmation(false);
+    }
   };
 
   // Filter logic
   const filteredItems = items
     .filter(item => {
-      // Category filter
       if (activeCategory !== '전체' && item.category !== activeCategory) return false;
-      
-      // Location certified radius filter
-      const distanceVal = parseFloat(item.distance);
-      const limitVal = parseFloat(distanceLimit);
-      if (distanceVal > limitVal) return false;
-
-      // Bookmark toggle
       if (showBookmarksOnly && !userBookmarks.includes(item.id)) return false;
-
-      // Participated toggle
       if (showParticipatedOnly && !participatedItems.includes(item.id)) return false;
-
       return true;
     })
     .sort((a, b) => {
-      // Sort logic
       if (sortBy === 'latest') return b.id - a.id;
       if (sortBy === 'deadline') {
         if (a.statusType === 'red') return -1;
@@ -332,7 +572,7 @@ export const GroupBuyView: React.FC = () => {
         <div className="groupbuy-budget-right">
           <div className="groupbuy-location-badge">
             <MapPin size={14} />
-            <span>서울시 마포구 서교동 (인증 1.5km 반경)</span>
+            <span>{userLocationText} (인증 {distanceLimit} 반경)</span>
           </div>
           <span style={{ fontSize: '11px', opacity: 0.6 }}>최종 결제 시 가계부 지출 자동 기입</span>
         </div>
@@ -415,11 +655,7 @@ export const GroupBuyView: React.FC = () => {
             <div 
               key={item.id} 
               className="group-buy-card"
-              onClick={() => {
-                // Increment views mock count
-                setItems(items.map(i => i.id === item.id ? { ...i, views: i.views + 1 } : i));
-                setSelectedItem({ ...item, views: item.views + 1 });
-              }}
+              onClick={() => handleItemClick(item)}
               style={{ cursor: 'pointer', position: 'relative' }}
             >
               {isParticipated && (
