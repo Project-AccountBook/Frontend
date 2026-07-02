@@ -2,20 +2,18 @@ import React, { useState } from 'react';
 import {
   ArrowLeft,
   PenSquare,
-  Hash,
-  Eye,
   Type,
   AlignLeft,
   HelpCircle,
-  Save,
   AlertCircle,
   Lightbulb
 } from 'lucide-react';
-
-const CATEGORIES = ['재테크', '가계부', '육아 비용', '절약', '공동구매', '살림'];
+import { createBoard } from '../lib/boardApi';
 
 const TITLE_MAX = 80;
 const CONTENT_MAX = 2000;
+
+const DEFAULT_CATEGORY_ID = 1;
 
 interface QnaWriteViewProps {
   onCancel: () => void;
@@ -23,32 +21,34 @@ interface QnaWriteViewProps {
 }
 
 export const QnaWriteView: React.FC<QnaWriteViewProps> = ({ onCancel, onSubmit }) => {
-  const [category, setCategory] = useState<string>('');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [isUrgent, setIsUrgent] = useState(false);
-  const [tags, setTags] = useState<string[]>([]);
-  const [tagInput, setTagInput] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const canSubmit = category && title.trim().length > 0 && content.trim().length > 0;
+  const canSubmit = title.trim().length > 0 && content.trim().length > 0 && !submitting;
 
-  const handleAddTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key !== 'Enter' && e.key !== ',') return;
-    e.preventDefault();
-    const v = tagInput.trim().replace(/^#/, '');
-    if (!v || tags.includes(v) || tags.length >= 5) {
-      setTagInput('');
-      return;
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await createBoard({
+        categoryId: DEFAULT_CATEGORY_ID,
+        title: title.trim(),
+        content: content.trim(),
+        type: 'QNA',
+      });
+      onSubmit();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSubmitting(false);
     }
-    setTags([...tags, v]);
-    setTagInput('');
   };
-
-  const handleRemoveTag = (t: string) => setTags(tags.filter((x) => x !== t));
 
   return (
     <div className="fade-in">
-      {/* Header */}
       <div className="dashboard-view-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button
@@ -105,24 +105,7 @@ export const QnaWriteView: React.FC<QnaWriteViewProps> = ({ onCancel, onSubmit }
             취소
           </button>
           <button
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '10px 18px',
-              borderRadius: '10px',
-              background: 'white',
-              border: '1px solid var(--border)',
-              color: 'var(--text-secondary)',
-              fontSize: '13px',
-              fontWeight: '700'
-            }}
-          >
-            <Save size={14} />
-            임시저장
-          </button>
-          <button
-            onClick={onSubmit}
+            onClick={handleSubmit}
             disabled={!canSubmit}
             className="header-btn-primary"
             style={{
@@ -131,10 +114,27 @@ export const QnaWriteView: React.FC<QnaWriteViewProps> = ({ onCancel, onSubmit }
             }}
           >
             <PenSquare size={14} />
-            <span>질문 등록</span>
+            <span>{submitting ? '등록 중...' : '질문 등록'}</span>
           </button>
         </div>
       </div>
+
+      {error && (
+        <div
+          className="card"
+          style={{
+            padding: '12px 16px',
+            marginBottom: '16px',
+            border: '1px solid var(--red-border)',
+            background: 'var(--red-bg)',
+            color: 'var(--red)',
+            fontSize: '13px'
+          }}
+        >
+          <AlertCircle size={14} style={{ verticalAlign: 'middle', marginRight: 8 }} />
+          {error}
+        </div>
+      )}
 
       <div
         style={{
@@ -143,40 +143,9 @@ export const QnaWriteView: React.FC<QnaWriteViewProps> = ({ onCancel, onSubmit }
           gap: '24px'
         }}
       >
-        {/* Editor Column */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', minWidth: 0 }}>
-          {/* Category & Title */}
           <div className="card" style={{ padding: '28px' }}>
-            <div style={{ marginBottom: '24px' }}>
-              <label
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  fontSize: '13px',
-                  fontWeight: '700',
-                  color: 'var(--text-primary)',
-                  marginBottom: '10px'
-                }}
-              >
-                <HelpCircle size={14} color="var(--purple)" />
-                카테고리 <span style={{ color: 'var(--red)' }}>*</span>
-              </label>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {CATEGORIES.map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => setCategory(cat)}
-                    className={`dashboard-tab-btn ${category === cat ? 'active' : ''}`}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Title */}
-            <div style={{ marginBottom: '24px' }}>
+            <div>
               <label
                 style={{
                   display: 'flex',
@@ -217,84 +186,12 @@ export const QnaWriteView: React.FC<QnaWriteViewProps> = ({ onCancel, onSubmit }
                   fontWeight: '600',
                   fontFamily: 'inherit',
                   color: 'var(--text-primary)',
-                  outline: 'none',
-                  transition: 'all 0.15s'
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.background = '#fff';
-                  e.currentTarget.style.borderColor = 'var(--purple)';
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.background = '#f8fafc';
-                  e.currentTarget.style.borderColor = 'var(--border)';
+                  outline: 'none'
                 }}
               />
             </div>
-
-            {/* Urgent toggle */}
-            <button
-              onClick={() => setIsUrgent(!isUrgent)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                width: '100%',
-                padding: '14px 16px',
-                background: isUrgent ? 'var(--red-bg)' : '#f8fafc',
-                border: `1px solid ${isUrgent ? 'var(--red-border)' : 'var(--border)'}`,
-                borderRadius: '10px',
-                textAlign: 'left',
-                transition: 'all 0.15s'
-              }}
-            >
-              <div
-                style={{
-                  width: '20px',
-                  height: '20px',
-                  borderRadius: '6px',
-                  border: `2px solid ${isUrgent ? 'var(--red)' : 'var(--border-hover)'}`,
-                  background: isUrgent ? 'var(--red)' : 'white',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0
-                }}
-              >
-                {isUrgent && (
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <path d="M2 6L5 9L10 3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div
-                  style={{
-                    fontSize: '13px',
-                    fontWeight: '700',
-                    color: isUrgent ? 'var(--red)' : 'var(--text-primary)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px'
-                  }}
-                >
-                  <AlertCircle size={14} />
-                  급해요 표시
-                </div>
-                <div
-                  style={{
-                    fontSize: '11px',
-                    color: isUrgent ? '#b91c1c' : 'var(--text-secondary)',
-                    marginTop: '2px',
-                    fontWeight: '500'
-                  }}
-                >
-                  빠른 답변이 필요한 질문에 표시해주세요
-                </div>
-              </div>
-            </button>
           </div>
 
-          {/* Content */}
           <div className="card" style={{ padding: '28px' }}>
             <label
               style={{
@@ -337,209 +234,13 @@ export const QnaWriteView: React.FC<QnaWriteViewProps> = ({ onCancel, onSubmit }
                 color: 'var(--text-primary)',
                 outline: 'none',
                 resize: 'vertical',
-                lineHeight: '1.7',
-                transition: 'all 0.15s'
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.background = '#fff';
-                e.currentTarget.style.borderColor = 'var(--purple)';
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.background = '#f8fafc';
-                e.currentTarget.style.borderColor = 'var(--border)';
+                lineHeight: '1.7'
               }}
             />
           </div>
-
-          {/* Tags */}
-          <div className="card" style={{ padding: '28px' }}>
-            <label
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                fontSize: '13px',
-                fontWeight: '700',
-                color: 'var(--text-primary)',
-                marginBottom: '10px'
-              }}
-            >
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Hash size={14} color="var(--purple)" />
-                태그
-                <span
-                  style={{
-                    fontSize: '11px',
-                    color: 'var(--text-muted)',
-                    fontWeight: '500',
-                    marginLeft: '4px'
-                  }}
-                >
-                  (최대 5개)
-                </span>
-              </span>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '500' }}>
-                {tags.length} / 5
-              </span>
-            </label>
-
-            <div
-              style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: '8px',
-                padding: '12px 14px',
-                background: '#f8fafc',
-                border: '1px solid var(--border)',
-                borderRadius: '10px',
-                minHeight: '50px',
-                alignItems: 'center'
-              }}
-            >
-              {tags.map((t) => (
-                <span
-                  key={t}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    color: 'var(--purple)',
-                    background: 'var(--purple-bg)',
-                    border: '1px solid var(--purple-border)',
-                    padding: '4px 4px 4px 10px',
-                    borderRadius: '20px'
-                  }}
-                >
-                  #{t}
-                  <button
-                    onClick={() => handleRemoveTag(t)}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: '16px',
-                      height: '16px',
-                      borderRadius: '50%',
-                      color: 'var(--purple)'
-                    }}
-                    aria-label={`${t} 태그 제거`}
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-              <input
-                type="text"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={handleAddTag}
-                placeholder={tags.length === 0 ? '태그 입력 후 Enter (예: 청약통장)' : ''}
-                disabled={tags.length >= 5}
-                style={{
-                  flex: 1,
-                  minWidth: '160px',
-                  border: 'none',
-                  background: 'transparent',
-                  outline: 'none',
-                  fontSize: '13px',
-                  fontFamily: 'inherit',
-                  color: 'var(--text-primary)'
-                }}
-              />
-            </div>
-          </div>
         </div>
 
-        {/* Side Column */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {/* Preview */}
-          <div className="card" style={{ padding: '24px' }}>
-            <div className="card-header-row" style={{ marginBottom: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Eye size={16} color="var(--text-primary)" />
-                <span className="card-title" style={{ fontSize: '14px' }}>
-                  미리보기
-                </span>
-              </div>
-            </div>
-
-            <div
-              style={{
-                border: '1px solid var(--border)',
-                borderRadius: '12px',
-                padding: '16px',
-                background: '#fafbfc'
-              }}
-            >
-              <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', flexWrap: 'wrap' }}>
-                <span
-                  style={{
-                    fontSize: '10px',
-                    fontWeight: '700',
-                    background: 'var(--red-bg)',
-                    color: 'var(--red)',
-                    padding: '3px 8px',
-                    borderRadius: '4px'
-                  }}
-                >
-                  답변대기
-                </span>
-                {category && (
-                  <span className="group-buy-category" style={{ fontSize: '10px' }}>
-                    {category}
-                  </span>
-                )}
-                {isUrgent && (
-                  <span
-                    style={{
-                      fontSize: '10px',
-                      fontWeight: '800',
-                      background: 'var(--red)',
-                      color: 'white',
-                      padding: '3px 6px',
-                      borderRadius: '4px'
-                    }}
-                  >
-                    급해요
-                  </span>
-                )}
-              </div>
-
-              <div
-                style={{
-                  fontSize: '14px',
-                  fontWeight: '700',
-                  color: title ? 'var(--text-primary)' : 'var(--text-muted)',
-                  lineHeight: '1.4',
-                  marginBottom: '8px',
-                  display: '-webkit-box',
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: 'vertical',
-                  overflow: 'hidden'
-                }}
-              >
-                <span style={{ color: 'var(--purple)' }}>Q. </span>
-                {title || '질문 제목이 여기에 표시됩니다'}
-              </div>
-              <div
-                style={{
-                  fontSize: '12px',
-                  color: content ? 'var(--text-secondary)' : 'var(--text-muted)',
-                  lineHeight: '1.5',
-                  display: '-webkit-box',
-                  WebkitLineClamp: 3,
-                  WebkitBoxOrient: 'vertical',
-                  overflow: 'hidden'
-                }}
-              >
-                {content || '질문 내용 미리보기가 여기에 표시됩니다'}
-              </div>
-            </div>
-          </div>
-
-          {/* Tips */}
           <div className="card" style={{ padding: '24px' }}>
             <div className="card-header-row" style={{ marginBottom: '12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -561,8 +262,7 @@ export const QnaWriteView: React.FC<QnaWriteViewProps> = ({ onCancel, onSubmit }
               {[
                 '상황을 구체적으로 설명해주세요',
                 '관련 숫자(금액·기간)를 함께 적어주세요',
-                '원하는 답변의 방향을 명시해주세요',
-                '관련 태그를 달면 답변자가 찾기 쉬워요'
+                '원하는 답변의 방향을 명시해주세요'
               ].map((tip, i) => (
                 <li
                   key={i}
@@ -596,38 +296,6 @@ export const QnaWriteView: React.FC<QnaWriteViewProps> = ({ onCancel, onSubmit }
                 </li>
               ))}
             </ul>
-          </div>
-
-          {/* Guidelines */}
-          <div
-            className="card"
-            style={{
-              padding: '20px',
-              background: '#fff7ed',
-              borderColor: '#fed7aa'
-            }}
-          >
-            <div
-              style={{
-                fontSize: '12px',
-                fontWeight: '700',
-                color: '#c2410c',
-                marginBottom: '8px'
-              }}
-            >
-              ⚠ 게시 전 확인해주세요
-            </div>
-            <p
-              style={{
-                fontSize: '11px',
-                color: '#9a3412',
-                lineHeight: '1.6',
-                fontWeight: '500'
-              }}
-            >
-              개인정보(실명·연락처·계좌번호 등), 욕설/비방, 광고성 글은 사전 동의 없이 삭제될 수
-              있어요. 좋은 답변을 위해 깨끗한 Q&A 공간을 함께 만들어주세요.
-            </p>
           </div>
         </div>
       </div>
