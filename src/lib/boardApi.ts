@@ -28,6 +28,7 @@ export interface BoardSearchResponse {
   title: string;
   content: string;
   type: string;
+  tags: string[];
   createdAt: string;
 }
 

@@ -82,7 +82,7 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
               likeCount: 0,
               resolved: false,
               urgent: false,
-              tags: [],
+              tags: b.tags ?? [],
             }))
           );
           setTotalPages(data.totalPages);

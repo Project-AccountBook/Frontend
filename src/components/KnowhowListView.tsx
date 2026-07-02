@@ -85,7 +85,7 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
               createdAt: b.createdAt,
               views: 0,
               likeCount: 0,
-              tags: [],
+              tags: b.tags ?? [],
             }))
           );
           setTotalPages(data.totalPages);
