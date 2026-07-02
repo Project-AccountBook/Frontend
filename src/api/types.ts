@@ -86,3 +86,18 @@ export interface UpdatePasswordRequest {
   currentPassword?: string;
   newPassword: string;
 }
+
+export interface GroupPurchaseCategoryResponse {
+  id: number;
+  name: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InterestCategoryResponse {
+  id: number;
+  categoryId: number;
+  categoryName: string;
+  isAlarmEnabled: boolean;
+}

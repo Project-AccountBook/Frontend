@@ -3,6 +3,7 @@ import {
   User,
   Lock,
   Bell,
+  Tags,
   Trash2,
   Edit2,
   Save,
@@ -17,13 +18,23 @@ import {
   Mail,
   Shield,
   ChevronRight,
+  Plus,
 } from 'lucide-react';
-import { authApi, tokenStorage, userApi, type UserProfileResponse } from '../api';
+import {
+  authApi,
+  tokenStorage,
+  userApi,
+  interestCategoryApi,
+  groupPurchaseCategoryApi,
+  type UserProfileResponse,
+  type InterestCategoryResponse,
+  type GroupPurchaseCategoryResponse,
+} from '../api';
 import { openAddressSearch } from '../utils/daumPostcode';
 
 type UserProfile = UserProfileResponse;
 
-type MyPageTab = 'profile' | 'password' | 'notifications' | 'withdraw';
+type MyPageTab = 'profile' | 'password' | 'notifications' | 'interestCategories' | 'withdraw';
 
 export const MyPageView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<MyPageTab>('profile');
@@ -55,6 +66,15 @@ export const MyPageView: React.FC = () => {
   const [withdrawConfirm, setWithdrawConfirm] = useState('');
   const [withdrawLoading, setWithdrawLoading] = useState(false);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
+
+  // Interest categories
+  const [interestCategories, setInterestCategories] = useState<InterestCategoryResponse[]>([]);
+  const [allCategories, setAllCategories] = useState<GroupPurchaseCategoryResponse[]>([]);
+  const [loadingInterestCategories, setLoadingInterestCategories] = useState(false);
+  const [interestCategoryError, setInterestCategoryError] = useState<string | null>(null);
+  const [interestCategorySuccess, setInterestCategorySuccess] = useState<string | null>(null);
+  const [interestActionId, setInterestActionId] = useState<number | null>(null);
+  const [addingCategoryId, setAddingCategoryId] = useState<number | null>(null);
 
   // 프로필 불러오기
   useEffect(() => {
@@ -88,6 +108,108 @@ export const MyPageView: React.FC = () => {
       setPwSuccess(null);
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== 'interestCategories') return;
+
+    const fetchInterestCategories = async () => {
+      setLoadingInterestCategories(true);
+      setInterestCategoryError(null);
+      try {
+        const [interestResult, categoryResult] = await Promise.all([
+          interestCategoryApi.getMyCategories(),
+          groupPurchaseCategoryApi.getAll(),
+        ]);
+
+        if (interestResult.ok && interestResult.data) {
+          setInterestCategories(interestResult.data);
+        } else {
+          setInterestCategoryError(interestResult.error ?? '관심 카테고리를 불러오지 못했습니다.');
+        }
+
+        if (categoryResult.ok && categoryResult.data) {
+          setAllCategories(categoryResult.data);
+        }
+      } catch {
+        setInterestCategoryError('서버와 통신 중 오류가 발생했습니다.');
+      } finally {
+        setLoadingInterestCategories(false);
+      }
+    };
+
+    fetchInterestCategories();
+  }, [activeTab]);
+
+  const unsubscribedCategories = allCategories.filter(
+    (cat) => !interestCategories.some((ic) => ic.categoryId === cat.id),
+  );
+
+  const handleToggleInterestAlarm = async (item: InterestCategoryResponse) => {
+    setInterestActionId(item.id);
+    setInterestCategoryError(null);
+    setInterestCategorySuccess(null);
+    try {
+      const nextEnabled = !item.isAlarmEnabled;
+      const result = await interestCategoryApi.updateAlarm(item.id, nextEnabled);
+      if (result.ok) {
+        setInterestCategories((prev) =>
+          prev.map((ic) => (ic.id === item.id ? { ...ic, isAlarmEnabled: nextEnabled } : ic)),
+        );
+        setInterestCategorySuccess(
+          nextEnabled
+            ? `"${item.categoryName}" 카테고리 알림을 켰습니다.`
+            : `"${item.categoryName}" 카테고리 알림을 껐습니다.`,
+        );
+        setTimeout(() => setInterestCategorySuccess(null), 3000);
+      } else {
+        setInterestCategoryError(result.error ?? '알림 설정 변경에 실패했습니다.');
+      }
+    } catch {
+      setInterestCategoryError('서버와 통신 중 오류가 발생했습니다.');
+    } finally {
+      setInterestActionId(null);
+    }
+  };
+
+  const handleDeleteInterestCategory = async (item: InterestCategoryResponse) => {
+    setInterestActionId(item.id);
+    setInterestCategoryError(null);
+    setInterestCategorySuccess(null);
+    try {
+      const result = await interestCategoryApi.delete(item.id);
+      if (result.ok) {
+        setInterestCategories((prev) => prev.filter((ic) => ic.id !== item.id));
+        setInterestCategorySuccess(`"${item.categoryName}" 관심 카테고리를 해제했습니다.`);
+        setTimeout(() => setInterestCategorySuccess(null), 3000);
+      } else {
+        setInterestCategoryError(result.error ?? '관심 카테고리 해제에 실패했습니다.');
+      }
+    } catch {
+      setInterestCategoryError('서버와 통신 중 오류가 발생했습니다.');
+    } finally {
+      setInterestActionId(null);
+    }
+  };
+
+  const handleAddInterestCategory = async (categoryId: number) => {
+    setAddingCategoryId(categoryId);
+    setInterestCategoryError(null);
+    setInterestCategorySuccess(null);
+    try {
+      const result = await interestCategoryApi.register(categoryId);
+      if (result.ok && result.data) {
+        setInterestCategories((prev) => [...prev, result.data!]);
+        setInterestCategorySuccess(`"${result.data.categoryName}" 관심 카테고리를 등록했습니다.`);
+        setTimeout(() => setInterestCategorySuccess(null), 3000);
+      } else {
+        setInterestCategoryError(result.error ?? '관심 카테고리 등록에 실패했습니다.');
+      }
+    } catch {
+      setInterestCategoryError('서버와 통신 중 오류가 발생했습니다.');
+    } finally {
+      setAddingCategoryId(null);
+    }
+  };
 
   const resetPasswordFlow = () => {
     setIsCurrentPasswordVerified(false);
@@ -291,6 +413,7 @@ export const MyPageView: React.FC = () => {
     { id: 'profile', label: '프로필 정보', icon: User },
     { id: 'password', label: passwordTabLabel, icon: Lock },
     { id: 'notifications', label: '알림 설정', icon: Bell },
+    { id: 'interestCategories', label: '관심 카테고리', icon: Tags },
     { id: 'withdraw', label: '회원 탈퇴', icon: Trash2 },
   ];
 
@@ -687,6 +810,114 @@ export const MyPageView: React.FC = () => {
                   설정 저장
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* ── Interest Categories Tab ─────── */}
+          {activeTab === 'interestCategories' && (
+            <div>
+              <div className="mypage-section-head">
+                <div>
+                  <h2 className="mypage-section-title">관심 카테고리</h2>
+                  <p className="mypage-section-desc">
+                    구독 중인 공동구매 카테고리를 관리합니다. 새 공구가 올라오면 알림을 받을 수 있습니다.
+                  </p>
+                </div>
+              </div>
+
+              {interestCategorySuccess && <Feedback msg={interestCategorySuccess} type="success" />}
+              {interestCategoryError && <Feedback msg={interestCategoryError} type="error" />}
+
+              {loadingInterestCategories ? (
+                <div className="mypage-loading">
+                  <Loader2 size={24} className="spin-animation" />
+                  <span>관심 카테고리 불러오는 중...</span>
+                </div>
+              ) : (
+                <>
+                  {interestCategories.length === 0 ? (
+                    <div
+                      style={{
+                        padding: '32px 20px',
+                        textAlign: 'center',
+                        color: 'var(--text-secondary)',
+                        fontSize: '14px',
+                        border: '1px dashed var(--border)',
+                        borderRadius: '12px',
+                        marginBottom: '24px',
+                      }}
+                    >
+                      등록된 관심 카테고리가 없습니다.
+                      <br />
+                      아래에서 추가하거나, 공동구매 페이지에서 카테고리를 선택해 알림을 등록해 보세요.
+                    </div>
+                  ) : (
+                    <div className="mypage-interest-list" style={{ marginBottom: '32px' }}>
+                      {interestCategories.map((item) => (
+                        <div key={item.id} className="mypage-interest-item">
+                          <div className="mypage-interest-item-info">
+                            <span className="mypage-interest-item-name">{item.categoryName}</span>
+                            <span className="mypage-interest-item-desc">
+                              {item.isAlarmEnabled
+                                ? '새 공동구매 등록 시 알림을 받습니다'
+                                : '알림이 꺼져 있습니다 (구독은 유지됨)'}
+                            </span>
+                          </div>
+                          <div className="mypage-interest-item-actions">
+                            <ToggleSwitch
+                              checked={item.isAlarmEnabled}
+                              onChange={() => handleToggleInterestAlarm(item)}
+                              label=""
+                            />
+                            <button
+                              type="button"
+                              className="mypage-btn-icon-danger"
+                              onClick={() => handleDeleteInterestCategory(item)}
+                              disabled={interestActionId === item.id}
+                              title="관심 카테고리 해제"
+                            >
+                              {interestActionId === item.id ? (
+                                <Loader2 size={14} className="spin-animation" />
+                              ) : (
+                                <Trash2 size={14} />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {unsubscribedCategories.length > 0 && (
+                    <div>
+                      <h3 className="mypage-field-label" style={{ marginBottom: '4px' }}>
+                        카테고리 추가
+                      </h3>
+                      <p className="mypage-section-desc" style={{ marginBottom: '8px' }}>
+                        아직 등록하지 않은 카테고리를 선택해 관심 카테고리로 추가할 수 있습니다.
+                      </p>
+                      <div className="mypage-interest-add-grid">
+                        {unsubscribedCategories.map((cat) => (
+                          <button
+                            key={cat.id}
+                            type="button"
+                            className="mypage-interest-add-btn"
+                            onClick={() => handleAddInterestCategory(cat.id)}
+                            disabled={addingCategoryId === cat.id}
+                          >
+                            {addingCategoryId === cat.id ? (
+                              <Loader2 size={14} className="spin-animation" />
+                            ) : (
+                              <Plus size={14} />
+                            )}
+                            {cat.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
 
