@@ -179,6 +179,11 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   };
 
   // --- Login Submit ---
+  const handleSocialLogin = (provider: 'kakao' | 'naver' | 'google') => {
+    tokenStorage.setPendingRememberMe(rememberMe);
+    window.location.href = `http://localhost:8000/oauth2/authorization/${provider}`;
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -196,7 +201,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     try {
       const result = await authApi.login({ email: email.trim(), password });
       if (result.ok && result.data) {
-        tokenStorage.setTokens(result.data.accessToken, result.data.refreshToken, email);
+        tokenStorage.setTokens(result.data.accessToken, result.data.refreshToken, email, rememberMe);
         onLoginSuccess();
       } else {
         setErrorMsg(result.error || '로그인에 실패했습니다. 이메일과 비밀번호를 확인해 주세요.');
@@ -439,17 +444,41 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             </div>
 
             <div className="social-login-icons-row">
-              <a href="http://localhost:8000/oauth2/authorization/kakao" className="social-icon-btn kakao" title="카카오 로그인">
+              <a
+                href="http://localhost:8000/oauth2/authorization/kakao"
+                className="social-icon-btn kakao"
+                title="카카오 로그인"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleSocialLogin('kakao');
+                }}
+              >
                 <svg viewBox="0 0 24 24" width="22" height="22">
                   <path fill="#3C1E1E" d="M12 3c-4.97 0-9 3.185-9 7.115 0 2.553 1.706 4.8 4.29 5.99l-.865 3.167c-.078.29.088.59.366.666.084.024.17.025.25.004l3.727-2.47c.4.053.808.082 1.232.082 4.97 0 9-3.186 9-7.115C21 6.185 16.97 3 12 3z" />
                 </svg>
               </a>
-              <a href="http://localhost:8000/oauth2/authorization/naver" className="social-icon-btn naver" title="네이버 로그인">
+              <a
+                href="http://localhost:8000/oauth2/authorization/naver"
+                className="social-icon-btn naver"
+                title="네이버 로그인"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleSocialLogin('naver');
+                }}
+              >
                 <svg viewBox="0 0 24 24" width="18" height="18">
                   <path fill="#FFF" d="M16.2 3H21v18h-4.8l-8.4-12v12H3V3h4.8l8.4 12V3z" />
                 </svg>
               </a>
-              <a href="http://localhost:8000/oauth2/authorization/google" className="social-icon-btn google" title="구글 로그인">
+              <a
+                href="http://localhost:8000/oauth2/authorization/google"
+                className="social-icon-btn google"
+                title="구글 로그인"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleSocialLogin('google');
+                }}
+              >
                 <svg viewBox="0 0 24 24" width="20" height="20">
                   <path fill="#EA4335" d="M12 5.04c1.66 0 3.2.57 4.38 1.69l3.27-3.27C17.67 1.47 15.01 0 12 0 7.33 0 3.3 2.68 1.34 6.6l3.85 2.99C6.1 6.88 8.85 5.04 12 5.04z" />
                   <path fill="#4285F4" d="M23.49 12.27c0-.81-.07-1.59-.2-2.35H12v4.51h6.46c-.29 1.48-1.14 2.73-2.4 3.58l3.73 2.89c2.18-2.01 3.7-4.99 3.7-8.63z" />

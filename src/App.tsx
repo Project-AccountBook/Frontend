@@ -43,7 +43,8 @@ function App() {
       const accessToken = params.get('accessToken');
       const refreshToken = params.get('refreshToken');
       if (accessToken && refreshToken) {
-        tokenStorage.setTokens(accessToken, refreshToken, 'social-login');
+        const rememberMe = tokenStorage.consumePendingRememberMe() ?? true;
+        tokenStorage.setTokens(accessToken, refreshToken, 'social-login', rememberMe);
         setIsLoggedIn(true);
       }
       window.history.replaceState({}, document.title, '/');
