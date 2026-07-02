@@ -9,9 +9,11 @@ import {
   Lightbulb,
   AlertCircle,
   Heart,
-  Bookmark
+  Bookmark,
+  UserPlus,
+  UserCheck
 } from 'lucide-react';
-import type { BoardResponse, CommentResponse } from '../lib/boardApi';
+import type { BoardResponse, CommentResponse, UserStatsResponse } from '../lib/boardApi';
 import {
   authorColorForUser,
   authorInitialForUser,
@@ -20,11 +22,14 @@ import {
   deleteComment,
   formatRelativeKo,
   getBoard,
+  getMyUserId,
+  getUserStats,
   listComments,
   replyComment,
   toggleBoardBookmark,
   toggleBoardLike,
   toggleCommentLike,
+  toggleFollow,
   updateBoard,
   updateComment,
 } from '../lib/boardApi';
@@ -48,6 +53,27 @@ export const KnowhowDetailView: React.FC<KnowhowDetailViewProps> = ({ postId, on
   const [editContent, setEditContent] = useState('');
   const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
   const [editingCommentContent, setEditingCommentContent] = useState('');
+  const [authorStats, setAuthorStats] = useState<UserStatsResponse | null>(null);
+  const [myUserId, setMyUserId] = useState<number | null>(null);
+
+  useEffect(() => {
+    getMyUserId().then(setMyUserId).catch(() => setMyUserId(null));
+  }, []);
+
+  useEffect(() => {
+    if (!post) return;
+    getUserStats(post.userId).then(setAuthorStats).catch(() => setAuthorStats(null));
+  }, [post?.userId]);
+
+  const handleToggleFollow = async () => {
+    if (!post || !authorStats) return;
+    try {
+      const r = await toggleFollow(post.userId);
+      setAuthorStats({ ...authorStats, following: r.following, followerCount: r.followerCount });
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
 
   const refreshComments = async () => {
     try {
@@ -415,6 +441,92 @@ export const KnowhowDetailView: React.FC<KnowhowDetailViewProps> = ({ postId, on
             </button>
           </div>
         </div>
+
+        {post.imageUrls && post.imageUrls.length > 0 && !editing && (
+          <div
+            style={{
+              display: 'flex',
+              gap: '12px',
+              flexWrap: 'wrap',
+              margin: '24px 0'
+            }}
+          >
+            {post.imageUrls.map((url, i) => (
+              <img
+                key={i}
+                src={url}
+                alt=""
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '400px',
+                  borderRadius: '12px'
+                }}
+              />
+            ))}
+          </div>
+        )}
+
+        {post.tags && post.tags.length > 0 && !editing && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '20px' }}>
+            {post.tags.map((t) => (
+              <span
+                key={t}
+                style={{
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: 'var(--blue)',
+                  background: 'var(--blue-bg)',
+                  padding: '4px 10px',
+                  borderRadius: '14px'
+                }}
+              >
+                #{t}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {authorStats && !editing && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '14px 16px',
+              marginTop: '20px',
+              background: '#f8fafc',
+              borderRadius: '12px',
+              border: '1px solid var(--border)'
+            }}
+          >
+            <div style={{ flex: 1, display: 'flex', gap: '16px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+              <span>게시글 <strong style={{ color: 'var(--text-primary)' }}>{authorStats.postCount}</strong></span>
+              <span>팔로워 <strong style={{ color: 'var(--text-primary)' }}>{authorStats.followerCount}</strong></span>
+              <span>팔로잉 <strong style={{ color: 'var(--text-primary)' }}>{authorStats.followingCount}</strong></span>
+            </div>
+            <button
+              onClick={handleToggleFollow}
+              disabled={myUserId === post.userId}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 14px',
+                borderRadius: '10px',
+                fontSize: '12px',
+                fontWeight: '700',
+                background: authorStats.following ? 'white' : 'var(--blue)',
+                color: authorStats.following ? 'var(--blue)' : 'white',
+                border: `1px solid ${authorStats.following ? 'var(--blue-border)' : 'var(--blue)'}`,
+                opacity: myUserId === post.userId ? 0.4 : 1,
+                cursor: myUserId === post.userId ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {authorStats.following ? <UserCheck size={12} /> : <UserPlus size={12} />}
+              {authorStats.following ? '팔로잉' : '팔로우'}
+            </button>
+          </div>
+        )}
 
         {editing ? (
           <>

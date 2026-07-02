@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Search,
   PenSquare,
@@ -9,14 +9,17 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertCircle,
-  Heart
+  Heart,
+  Flame,
+  Hash
 } from 'lucide-react';
-import type { BoardResponse } from '../lib/boardApi';
+import type { BoardHotResponse, BoardResponse } from '../lib/boardApi';
 import {
   authorColorForUser,
   authorInitialForUser,
   formatRelativeKo,
   listBoards,
+  listHotBoards,
   searchBoards,
 } from '../lib/boardApi';
 
@@ -29,9 +32,11 @@ export interface KnowhowPost {
   createdAt: string;
   views: number;
   likeCount: number;
+  tags: string[];
+  thumbnail?: string;
 }
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 8;
 
 const SORT_TABS = [
   { id: 'latest', label: '최신순', icon: Clock },
@@ -47,10 +52,18 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
   const [activeSort, setActiveSort] = useState('latest');
   const [search, setSearch] = useState('');
   const [submittedSearch, setSubmittedSearch] = useState('');
-  const [page, setPage] = useState(1);
+  const [tagFilter, setTagFilter] = useState('');
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalElements, setTotalElements] = useState(0);
   const [posts, setPosts] = useState<KnowhowPost[]>([]);
+  const [hotPosts, setHotPosts] = useState<BoardHotResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    listHotBoards('KNOWHOW', 7, 3).then(setHotPosts).catch(() => setHotPosts([]));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -59,24 +72,26 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
       setError(null);
       try {
         if (submittedSearch.trim()) {
-          const data = await searchBoards(submittedSearch.trim(), 0, 100);
+          const data = await searchBoards(submittedSearch.trim(), page, PAGE_SIZE);
           if (cancelled) return;
+          const knowhowOnly = data.content.filter((b) => b.type === 'KNOWHOW');
           setPosts(
-            data.content
-              .filter((b) => b.type === 'KNOWHOW')
-              .map<KnowhowPost>((b) => ({
-                id: b.id,
-                title: b.title,
-                content: b.content,
-                authorId: b.userId,
-                authorNickname: `사용자 ${b.userId}`,
-                createdAt: b.createdAt,
-                views: 0,
-                likeCount: 0,
-              }))
+            knowhowOnly.map<KnowhowPost>((b) => ({
+              id: b.id,
+              title: b.title,
+              content: b.content,
+              authorId: b.userId,
+              authorNickname: `사용자 ${b.userId}`,
+              createdAt: b.createdAt,
+              views: 0,
+              likeCount: 0,
+              tags: [],
+            }))
           );
+          setTotalPages(data.totalPages);
+          setTotalElements(knowhowOnly.length);
         } else {
-          const data = await listBoards('KNOWHOW', 0, 100);
+          const data = await listBoards('KNOWHOW', page, PAGE_SIZE, tagFilter || null);
           if (cancelled) return;
           setPosts(
             data.content.map<KnowhowPost>((b: BoardResponse) => ({
@@ -88,8 +103,12 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
               createdAt: b.createdAt,
               views: b.views,
               likeCount: b.likeCount,
+              tags: b.tags ?? [],
+              thumbnail: b.imageUrls && b.imageUrls.length > 0 ? b.imageUrls[0] : undefined,
             }))
           );
+          setTotalPages(Math.max(1, data.totalPages));
+          setTotalElements(data.totalElements);
         }
       } catch (e) {
         if (!cancelled) setError((e as Error).message);
@@ -101,21 +120,14 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
     return () => {
       cancelled = true;
     };
-  }, [submittedSearch]);
+  }, [submittedSearch, page, tagFilter]);
 
-  const sorted = useMemo(() => {
-    const arr = [...posts];
-    if (activeSort === 'views') arr.sort((a, b) => b.views - a.views);
-    else arr.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-    return arr;
-  }, [posts, activeSort]);
-
-  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-  const pagedPosts = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const sorted =
+    activeSort === 'views' ? [...posts].sort((a, b) => b.views - a.views) : posts;
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setPage(1);
+    setPage(0);
     setSubmittedSearch(search);
   };
 
@@ -164,6 +176,84 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
         </button>
       </div>
 
+      {hotPosts.length > 0 && (
+        <div className="card" style={{ marginBottom: '20px', padding: '20px 24px' }}>
+          <div className="card-header-row" style={{ marginBottom: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Flame size={18} color="#f43f5e" />
+              <span className="card-title">HOT 노하우</span>
+            </div>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>최근 7일</span>
+          </div>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+              gap: '12px'
+            }}
+          >
+            {hotPosts.map((post, idx) => (
+              <button
+                key={post.id}
+                onClick={() => onSelectPost(post.id)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '10px',
+                  padding: '10px',
+                  borderRadius: '10px',
+                  border: '1px solid var(--border)',
+                  background: '#fafbfc',
+                  textAlign: 'left'
+                }}
+              >
+                <div
+                  style={{
+                    width: '26px',
+                    height: '26px',
+                    borderRadius: '8px',
+                    background: idx === 0 ? '#f43f5e' : idx === 1 ? '#fb923c' : '#fbbf24',
+                    color: 'white',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '12px',
+                    fontWeight: '800'
+                  }}
+                >
+                  {idx + 1}
+                </div>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div
+                    style={{
+                      fontSize: '13px',
+                      fontWeight: '700',
+                      color: 'var(--text-primary)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      marginBottom: '4px'
+                    }}
+                  >
+                    {post.title}
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                      <Heart size={11} />
+                      {post.likeCount}
+                    </span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                      <Eye size={11} />
+                      {post.views}
+                    </span>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="card" style={{ marginBottom: '24px', padding: '20px 24px' }}>
         <form
           onSubmit={handleSearchSubmit}
@@ -202,14 +292,51 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
               border: '1px solid var(--border)',
               padding: '8px 14px',
               borderRadius: '10px',
-              minWidth: '260px',
-              flex: '0 1 360px'
+              minWidth: '200px',
+              flex: '0 1 220px'
+            }}
+          >
+            <Hash size={14} color="var(--text-secondary)" />
+            <input
+              type="text"
+              placeholder="태그로 필터 (Enter)"
+              value={tagFilter}
+              onChange={(e) => setTagFilter(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  setPage(0);
+                }
+              }}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                outline: 'none',
+                fontSize: '13px',
+                width: '100%',
+                fontFamily: 'inherit',
+                color: 'var(--text-primary)'
+              }}
+            />
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: '#f8fafc',
+              border: '1px solid var(--border)',
+              padding: '8px 14px',
+              borderRadius: '10px',
+              minWidth: '220px',
+              flex: '0 1 280px'
             }}
           >
             <Search size={16} color="var(--text-secondary)" />
             <input
               type="text"
-              placeholder="제목, 내용으로 검색 (Enter)"
+              placeholder="제목·내용 검색 (Enter)"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               style={{
@@ -225,7 +352,7 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
           </div>
 
           <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500' }}>
-            전체 <strong style={{ color: 'var(--text-primary)' }}>{sorted.length}</strong>개 글
+            전체 <strong style={{ color: 'var(--text-primary)' }}>{totalElements}</strong>개
           </span>
         </form>
       </div>
@@ -251,7 +378,7 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
         <div className="card" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
           불러오는 중...
         </div>
-      ) : pagedPosts.length === 0 ? (
+      ) : sorted.length === 0 ? (
         <div className="card" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
           등록된 글이 없습니다.
         </div>
@@ -263,7 +390,7 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
             gap: '20px'
           }}
         >
-          {pagedPosts.map((post) => (
+          {sorted.map((post) => (
             <button
               key={post.id}
               onClick={() => onSelectPost(post.id)}
@@ -277,6 +404,17 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
                 cursor: 'pointer'
               }}
             >
+              {post.thumbnail && (
+                <div
+                  style={{
+                    width: '100%',
+                    height: '180px',
+                    backgroundImage: `url(${post.thumbnail})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center'
+                  }}
+                />
+              )}
               <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: 'auto' }}>
@@ -312,6 +450,26 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
                 >
                   {post.content}
                 </p>
+
+                {post.tags.length > 0 && (
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    {post.tags.map((t) => (
+                      <span
+                        key={t}
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: '600',
+                          color: 'var(--blue)',
+                          background: 'var(--blue-bg)',
+                          padding: '2px 8px',
+                          borderRadius: '10px'
+                        }}
+                      >
+                        #{t}
+                      </span>
+                    ))}
+                  </div>
+                )}
 
                 <div
                   style={{
@@ -385,9 +543,8 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
         }}
       >
         <button
-          onClick={() => setPage(Math.max(1, page - 1))}
-          disabled={page === 1}
-          className="dashboard-date-arrow"
+          onClick={() => setPage(Math.max(0, page - 1))}
+          disabled={page === 0}
           style={{
             width: '36px',
             height: '36px',
@@ -397,33 +554,17 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
             alignItems: 'center',
             justifyContent: 'center',
             background: 'white',
-            opacity: page === 1 ? 0.4 : 1
+            opacity: page === 0 ? 0.4 : 1
           }}
         >
           <ChevronLeft size={16} />
         </button>
-        {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-          <button
-            key={p}
-            onClick={() => setPage(p)}
-            style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '8px',
-              fontSize: '13px',
-              fontWeight: '700',
-              background: page === p ? 'var(--navy)' : 'white',
-              color: page === p ? 'white' : 'var(--text-secondary)',
-              border: page === p ? '1px solid var(--navy)' : '1px solid var(--border)'
-            }}
-          >
-            {p}
-          </button>
-        ))}
+        <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+          {page + 1} / {totalPages}
+        </span>
         <button
-          onClick={() => setPage(Math.min(totalPages, page + 1))}
-          disabled={page === totalPages}
-          className="dashboard-date-arrow"
+          onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
+          disabled={page + 1 >= totalPages}
           style={{
             width: '36px',
             height: '36px',
@@ -433,7 +574,7 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
             alignItems: 'center',
             justifyContent: 'center',
             background: 'white',
-            opacity: page === totalPages ? 0.4 : 1
+            opacity: page + 1 >= totalPages ? 0.4 : 1
           }}
         >
           <ChevronRight size={16} />

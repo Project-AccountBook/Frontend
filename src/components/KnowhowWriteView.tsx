@@ -8,7 +8,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import type { BoardCategory } from '../lib/boardApi';
-import { createBoard, listBoardCategories } from '../lib/boardApi';
+import { attachBoardImage, createBoard, listBoardCategories } from '../lib/boardApi';
 
 const TITLE_MAX = 60;
 const CONTENT_MAX = 3000;
@@ -23,8 +23,23 @@ export const KnowhowWriteView: React.FC<KnowhowWriteViewProps> = ({ onCancel, on
   const [content, setContent] = useState('');
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [categories, setCategories] = useState<BoardCategory[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleAddTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter' && e.key !== ',') return;
+    e.preventDefault();
+    const v = tagInput.trim().replace(/^#/, '');
+    if (!v || tags.includes(v) || tags.length >= 5) {
+      setTagInput('');
+      return;
+    }
+    setTags([...tags, v]);
+    setTagInput('');
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -50,12 +65,20 @@ export const KnowhowWriteView: React.FC<KnowhowWriteViewProps> = ({ onCancel, on
     setSubmitting(true);
     setError(null);
     try {
-      await createBoard({
+      const created = await createBoard({
         categoryId,
         title: title.trim(),
         content: content.trim(),
         type: 'KNOWHOW',
+        tags,
       });
+      if (imageUrl.trim()) {
+        try {
+          await attachBoardImage(created.id, imageUrl.trim());
+        } catch (e) {
+          console.warn('image attach failed', e);
+        }
+      }
       onSubmit();
     } catch (e) {
       setError((e as Error).message);
@@ -241,6 +264,108 @@ export const KnowhowWriteView: React.FC<KnowhowWriteViewProps> = ({ onCancel, on
           </div>
 
           <div className="card" style={{ padding: '28px' }}>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '13px',
+                fontWeight: '700',
+                color: 'var(--text-primary)',
+                marginBottom: '10px'
+              }}
+            >
+              태그 <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 500 }}>(최대 5개)</span>
+            </label>
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '8px',
+                padding: '10px 12px',
+                background: '#f8fafc',
+                border: '1px solid var(--border)',
+                borderRadius: '10px',
+                minHeight: '44px',
+                marginBottom: '16px',
+                alignItems: 'center'
+              }}
+            >
+              {tags.map((t) => (
+                <span
+                  key={t}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    color: 'var(--blue)',
+                    background: 'var(--blue-bg)',
+                    padding: '3px 10px',
+                    borderRadius: '14px'
+                  }}
+                >
+                  #{t}
+                  <button
+                    type="button"
+                    onClick={() => setTags(tags.filter((x) => x !== t))}
+                    style={{ marginLeft: '4px', color: 'var(--blue)' }}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              <input
+                type="text"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={handleAddTag}
+                placeholder={tags.length === 0 ? '태그 입력 후 Enter' : ''}
+                disabled={tags.length >= 5}
+                style={{
+                  flex: 1,
+                  minWidth: '120px',
+                  border: 'none',
+                  background: 'transparent',
+                  outline: 'none',
+                  fontSize: '13px',
+                  fontFamily: 'inherit'
+                }}
+              />
+            </div>
+
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '13px',
+                fontWeight: '700',
+                color: 'var(--text-primary)',
+                marginBottom: '10px'
+              }}
+            >
+              대표 이미지 URL <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 500 }}>(선택)</span>
+            </label>
+            <input
+              type="url"
+              value={imageUrl}
+              onChange={(e) => setImageUrl(e.target.value)}
+              placeholder="https://..."
+              style={{
+                width: '100%',
+                padding: '10px 14px',
+                background: '#f8fafc',
+                border: '1px solid var(--border)',
+                borderRadius: '10px',
+                fontSize: '13px',
+                fontFamily: 'inherit',
+                outline: 'none',
+                marginBottom: '16px'
+              }}
+            />
+
             <label
               style={{
                 display: 'flex',

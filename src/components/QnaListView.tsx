@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Search,
   PenSquare,
@@ -10,7 +10,8 @@ import {
   ChevronLeft,
   ChevronRight,
   ThumbsUp,
-  CheckCircle2
+  CheckCircle2,
+  Hash
 } from 'lucide-react';
 import type { BoardResponse } from '../lib/boardApi';
 import {
@@ -32,6 +33,7 @@ export interface QnaPost {
   likeCount: number;
   resolved: boolean;
   urgent: boolean;
+  tags: string[];
 }
 
 const PAGE_SIZE = 10;
@@ -50,7 +52,10 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
   const [activeSort, setActiveSort] = useState('latest');
   const [search, setSearch] = useState('');
   const [submittedSearch, setSubmittedSearch] = useState('');
-  const [page, setPage] = useState(1);
+  const [tagFilter, setTagFilter] = useState('');
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalElements, setTotalElements] = useState(0);
   const [posts, setPosts] = useState<QnaPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -62,11 +67,11 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
       setError(null);
       try {
         if (submittedSearch.trim()) {
-          const data = await searchBoards(submittedSearch.trim(), 0, 100);
+          const data = await searchBoards(submittedSearch.trim(), page, PAGE_SIZE);
           if (cancelled) return;
-          const filtered = data.content
-            .filter((b) => b.type === 'QNA')
-            .map<QnaPost>((b) => ({
+          const qnaOnly = data.content.filter((b) => b.type === 'QNA');
+          setPosts(
+            qnaOnly.map<QnaPost>((b) => ({
               id: b.id,
               title: b.title,
               content: b.content,
@@ -77,10 +82,13 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
               likeCount: 0,
               resolved: false,
               urgent: false,
-            }));
-          setPosts(filtered);
+              tags: [],
+            }))
+          );
+          setTotalPages(data.totalPages);
+          setTotalElements(qnaOnly.length);
         } else {
-          const data = await listBoards('QNA', 0, 100);
+          const data = await listBoards('QNA', page, PAGE_SIZE, tagFilter || null);
           if (cancelled) return;
           setPosts(
             data.content.map<QnaPost>((b: BoardResponse) => ({
@@ -94,8 +102,11 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
               likeCount: b.likeCount,
               resolved: b.resolved,
               urgent: b.urgent,
+              tags: b.tags ?? [],
             }))
           );
+          setTotalPages(Math.max(1, data.totalPages));
+          setTotalElements(data.totalElements);
         }
       } catch (e) {
         if (!cancelled) setError((e as Error).message);
@@ -107,27 +118,19 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
     return () => {
       cancelled = true;
     };
-  }, [submittedSearch]);
+  }, [submittedSearch, page, tagFilter]);
 
-  const sorted = useMemo(() => {
-    const arr = [...posts];
-    if (activeSort === 'views') arr.sort((a, b) => b.views - a.views);
-    else arr.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-    return arr;
-  }, [posts, activeSort]);
-
-  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-  const pagedPosts = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const sorted =
+    activeSort === 'views' ? [...posts].sort((a, b) => b.views - a.views) : posts;
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setPage(1);
+    setPage(0);
     setSubmittedSearch(search);
   };
 
   return (
     <div className="fade-in">
-      {/* Sub Header */}
       <div className="dashboard-view-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div
@@ -171,7 +174,6 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
         </button>
       </div>
 
-      {/* Filter Bar */}
       <div className="card" style={{ marginBottom: '24px', padding: '20px 24px' }}>
         <form
           onSubmit={handleSearchSubmit}
@@ -210,14 +212,51 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
               border: '1px solid var(--border)',
               padding: '8px 14px',
               borderRadius: '10px',
-              minWidth: '260px',
-              flex: '0 1 360px'
+              minWidth: '200px',
+              flex: '0 1 220px'
+            }}
+          >
+            <Hash size={14} color="var(--text-secondary)" />
+            <input
+              type="text"
+              placeholder="태그로 필터 (Enter)"
+              value={tagFilter}
+              onChange={(e) => setTagFilter(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  setPage(0);
+                }
+              }}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                outline: 'none',
+                fontSize: '13px',
+                width: '100%',
+                fontFamily: 'inherit',
+                color: 'var(--text-primary)'
+              }}
+            />
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: '#f8fafc',
+              border: '1px solid var(--border)',
+              padding: '8px 14px',
+              borderRadius: '10px',
+              minWidth: '220px',
+              flex: '0 1 280px'
             }}
           >
             <Search size={16} color="var(--text-secondary)" />
             <input
               type="text"
-              placeholder="질문 제목, 내용으로 검색 (Enter)"
+              placeholder="질문 제목·내용 검색 (Enter)"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               style={{
@@ -233,7 +272,7 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
           </div>
 
           <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500' }}>
-            전체 <strong style={{ color: 'var(--text-primary)' }}>{sorted.length}</strong>개 질문
+            전체 <strong style={{ color: 'var(--text-primary)' }}>{totalElements}</strong>개
           </span>
         </form>
       </div>
@@ -259,13 +298,13 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
         <div className="card" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
           불러오는 중...
         </div>
-      ) : pagedPosts.length === 0 ? (
+      ) : sorted.length === 0 ? (
         <div className="card" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
           등록된 질문이 없습니다.
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {pagedPosts.map((post) => (
+          {sorted.map((post) => (
             <button
               key={post.id}
               onClick={() => onSelectPost(post.id)}
@@ -280,7 +319,7 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
               }}
             >
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
                   {post.resolved && (
                     <span
                       style={{
@@ -350,6 +389,26 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
                   {post.content}
                 </p>
 
+                {post.tags.length > 0 && (
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                    {post.tags.map((t) => (
+                      <span
+                        key={t}
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: '600',
+                          color: 'var(--purple)',
+                          background: 'var(--purple-bg)',
+                          padding: '2px 8px',
+                          borderRadius: '10px'
+                        }}
+                      >
+                        #{t}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
                 <div
                   style={{
                     display: 'flex',
@@ -410,7 +469,6 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
         </div>
       )}
 
-      {/* Pagination */}
       <div
         style={{
           display: 'flex',
@@ -421,9 +479,8 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
         }}
       >
         <button
-          onClick={() => setPage(Math.max(1, page - 1))}
-          disabled={page === 1}
-          className="dashboard-date-arrow"
+          onClick={() => setPage(Math.max(0, page - 1))}
+          disabled={page === 0}
           style={{
             width: '36px',
             height: '36px',
@@ -433,33 +490,17 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
             alignItems: 'center',
             justifyContent: 'center',
             background: 'white',
-            opacity: page === 1 ? 0.4 : 1
+            opacity: page === 0 ? 0.4 : 1
           }}
         >
           <ChevronLeft size={16} />
         </button>
-        {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-          <button
-            key={p}
-            onClick={() => setPage(p)}
-            style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '8px',
-              fontSize: '13px',
-              fontWeight: '700',
-              background: page === p ? 'var(--navy)' : 'white',
-              color: page === p ? 'white' : 'var(--text-secondary)',
-              border: page === p ? '1px solid var(--navy)' : '1px solid var(--border)'
-            }}
-          >
-            {p}
-          </button>
-        ))}
+        <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+          {page + 1} / {totalPages}
+        </span>
         <button
-          onClick={() => setPage(Math.min(totalPages, page + 1))}
-          disabled={page === totalPages}
-          className="dashboard-date-arrow"
+          onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
+          disabled={page + 1 >= totalPages}
           style={{
             width: '36px',
             height: '36px',
@@ -469,7 +510,7 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
             alignItems: 'center',
             justifyContent: 'center',
             background: 'white',
-            opacity: page === totalPages ? 0.4 : 1
+            opacity: page + 1 >= totalPages ? 0.4 : 1
           }}
         >
           <ChevronRight size={16} />

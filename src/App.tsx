@@ -18,6 +18,7 @@ import { BudgetView } from './components/BudgetView';
 import { AssetView, type AssetActiveSection } from './components/AssetView';
 import { LoginView } from './components/LoginView';
 import { MyPageView } from './components/MyPageView';
+import { AdminView } from './components/AdminView';
 import { authApi, setAuthExpiredHandler, tokenStorage } from './api';
 import { clearMyUserIdCache } from './lib/boardApi';
 import { Construction } from 'lucide-react';
@@ -27,6 +28,7 @@ type BoardMode = 'list' | 'detail' | 'write';
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => tokenStorage.hasToken());
   const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [knowhowMode, setKnowhowMode] = useState<BoardMode>('list');
   const [knowhowPostId, setKnowhowPostId] = useState<number | null>(null);
   const [qnaMode, setQnaMode] = useState<BoardMode>('list');
@@ -46,6 +48,18 @@ function App() {
     });
     return () => setAuthExpiredHandler(null);
   }, []);
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    const token = localStorage.getItem('accessToken');
+    if (!token) return;
+    fetch('/api/v1/users/me', { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((r) => {
+        if (r?.success && r.data?.role === 'ROLE_ADMIN') setIsAdmin(true);
+      })
+      .catch(() => setIsAdmin(false));
+  }, [isLoggedIn]);
 
   useEffect(() => {
     if (window.location.pathname === '/oauth2/redirect') {
@@ -71,6 +85,7 @@ function App() {
     }
     tokenStorage.clear();
     clearMyUserIdCache();
+    setIsAdmin(false);
     setIsLoggedIn(false);
     setActiveTab('dashboard');
   };
@@ -182,6 +197,8 @@ function App() {
         );
       case 'settings':
         return <MyPageView />;
+      case 'admin':
+        return <AdminView />;
       default:
         return (
           <div
@@ -259,7 +276,7 @@ function App() {
   return (
     <div className="app-layout">
       {/* Sidebar Navigation */}
-      <Sidebar activeTab={activeTab} setActiveTab={handleTabChange} onLogout={handleLogout} />
+      <Sidebar activeTab={activeTab} setActiveTab={handleTabChange} onLogout={handleLogout} isAdmin={isAdmin} />
 
       {/* Main Container */}
       <div className="main-container">

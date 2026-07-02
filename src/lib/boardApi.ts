@@ -15,6 +15,8 @@ export interface BoardResponse {
   likeCount: number;
   liked: boolean;
   bookmarked: boolean;
+  tags: string[];
+  imageUrls: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -26,6 +28,16 @@ export interface BoardSearchResponse {
   title: string;
   content: string;
   type: string;
+  createdAt: string;
+}
+
+export interface BoardHotResponse {
+  id: number;
+  title: string;
+  type: BoardType;
+  views: number;
+  likeCount: number;
+  score: number;
   createdAt: string;
 }
 
@@ -56,6 +68,11 @@ export interface CommentResponse {
   updatedAt: string;
 }
 
+export interface CommentThreadResponse {
+  parent: CommentResponse;
+  replies: CommentResponse[];
+}
+
 export interface BoardCategory {
   id: number;
   name: string;
@@ -70,6 +87,36 @@ export interface LikeToggleResponse {
 
 export interface BookmarkToggleResponse {
   bookmarked: boolean;
+}
+
+export interface FollowToggleResponse {
+  following: boolean;
+  followerCount: number;
+}
+
+export interface UserStatsResponse {
+  userId: number;
+  nickname: string;
+  postCount: number;
+  followerCount: number;
+  followingCount: number;
+  following: boolean;
+}
+
+export interface FollowUserResponse {
+  userId: number;
+  nickname: string;
+}
+
+export interface TagResponse {
+  id: number;
+  name: string;
+}
+
+export interface ImageResponse {
+  id: number;
+  imageUrl: string;
+  sortOrder: number;
 }
 
 const authHeader = (): Record<string, string> => ({
@@ -93,10 +140,16 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 export async function listBoards(
   type: BoardType | null = null,
   page = 0,
-  size = 100
+  size = 10,
+  tag: string | null = null
 ): Promise<PageResponse<BoardResponse>> {
-  const typeParam = type ? `&type=${type}` : '';
-  return request(`/api/v1/boards?page=${page}&size=${size}&sort=createdAt,desc${typeParam}`);
+  const params = new URLSearchParams();
+  params.set('page', String(page));
+  params.set('size', String(size));
+  params.set('sort', 'createdAt,desc');
+  if (type) params.set('type', type);
+  if (tag) params.set('tag', tag);
+  return request(`/api/v1/boards?${params.toString()}`);
 }
 
 export async function searchBoards(
@@ -109,6 +162,14 @@ export async function searchBoards(
   );
 }
 
+export async function listHotBoards(
+  type: BoardType,
+  days = 7,
+  limit = 3
+): Promise<BoardHotResponse[]> {
+  return request(`/api/v1/boards/hot?type=${type}&days=${days}&limit=${limit}`);
+}
+
 export async function getBoard(id: number): Promise<BoardResponse> {
   return request(`/api/v1/boards/${id}`);
 }
@@ -118,6 +179,7 @@ export async function createBoard(req: {
   title: string;
   content: string;
   type: BoardType;
+  tags?: string[];
 }): Promise<{ id: number; title: string }> {
   return request('/api/v1/boards', {
     method: 'POST',
@@ -127,7 +189,7 @@ export async function createBoard(req: {
 
 export async function updateBoard(
   id: number,
-  req: { title: string; content: string; type: BoardType }
+  req: { title: string; content: string; type: BoardType; tags?: string[] }
 ): Promise<{ id: number; title: string }> {
   return request(`/api/v1/boards/${id}`, {
     method: 'PATCH',
@@ -165,11 +227,41 @@ export async function toggleBoardBookmark(id: number): Promise<BookmarkToggleRes
   return request(`/api/v1/boards/${id}/bookmark`, { method: 'POST' });
 }
 
+export async function attachBoardImage(
+  boardId: number,
+  imageUrl: string,
+  s3Key?: string
+): Promise<ImageResponse> {
+  return request(`/api/v1/boards/${boardId}/images`, {
+    method: 'POST',
+    body: JSON.stringify({ imageUrl, s3Key: s3Key ?? null }),
+  });
+}
+
+export async function listBoardImages(boardId: number): Promise<ImageResponse[]> {
+  return request(`/api/v1/boards/${boardId}/images`);
+}
+
+export async function deleteImage(imageId: number): Promise<number> {
+  return request(`/api/v1/images/${imageId}`, { method: 'DELETE' });
+}
+
 export async function listComments(
   postId: number,
   referenceType: ReferenceType
 ): Promise<CommentResponse[]> {
   return request(`/api/v1/comments/${postId}?referenceType=${referenceType}`);
+}
+
+export async function listCommentThreads(
+  postId: number,
+  referenceType: ReferenceType,
+  page = 0,
+  size = 20
+): Promise<PageResponse<CommentThreadResponse>> {
+  return request(
+    `/api/v1/comments/${postId}/threads?referenceType=${referenceType}&page=${page}&size=${size}`
+  );
 }
 
 export async function createComment(
@@ -212,6 +304,35 @@ export async function deleteComment(commentId: number): Promise<number> {
 
 export async function listBoardCategories(type: BoardType): Promise<BoardCategory[]> {
   return request(`/api/v1/board-categories?type=${type}`);
+}
+
+export async function listTags(): Promise<TagResponse[]> {
+  return request(`/api/v1/tags`);
+}
+
+export async function toggleFollow(targetUserId: number): Promise<FollowToggleResponse> {
+  return request(`/api/v1/users/${targetUserId}/follow`, { method: 'POST' });
+}
+
+export async function listFollowers(userId: number): Promise<FollowUserResponse[]> {
+  return request(`/api/v1/users/${userId}/followers`);
+}
+
+export async function listFollowing(userId: number): Promise<FollowUserResponse[]> {
+  return request(`/api/v1/users/${userId}/following`);
+}
+
+export async function getUserStats(userId: number): Promise<UserStatsResponse> {
+  return request(`/api/v1/users/${userId}/stats`);
+}
+
+// Admin
+export async function adminDeleteBoard(boardId: number): Promise<number> {
+  return request(`/api/v1/admin/boards/${boardId}`, { method: 'DELETE' });
+}
+
+export async function adminDeleteComment(commentId: number): Promise<number> {
+  return request(`/api/v1/admin/comments/${commentId}`, { method: 'DELETE' });
 }
 
 let cachedMyUserId: Promise<number> | null = null;

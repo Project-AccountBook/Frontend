@@ -11,9 +11,11 @@ import {
   ThumbsUp,
   Bookmark,
   CheckCircle2,
-  Award
+  Award,
+  UserPlus,
+  UserCheck
 } from 'lucide-react';
-import type { BoardResponse, CommentResponse } from '../lib/boardApi';
+import type { BoardResponse, CommentResponse, UserStatsResponse } from '../lib/boardApi';
 import {
   acceptComment,
   authorColorForUser,
@@ -24,6 +26,7 @@ import {
   formatRelativeKo,
   getBoard,
   getMyUserId,
+  getUserStats,
   listComments,
   replyComment,
   setBoardResolved,
@@ -31,6 +34,7 @@ import {
   toggleBoardBookmark,
   toggleBoardLike,
   toggleCommentLike,
+  toggleFollow,
   updateBoard,
   updateComment,
 } from '../lib/boardApi';
@@ -55,12 +59,28 @@ export const QnaDetailView: React.FC<QnaDetailViewProps> = ({ postId, onBack }) 
   const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
   const [editingCommentContent, setEditingCommentContent] = useState('');
   const [myUserId, setMyUserId] = useState<number | null>(null);
+  const [authorStats, setAuthorStats] = useState<UserStatsResponse | null>(null);
 
   useEffect(() => {
     getMyUserId().then(setMyUserId).catch(() => setMyUserId(null));
   }, []);
 
+  useEffect(() => {
+    if (!post) return;
+    getUserStats(post.userId).then(setAuthorStats).catch(() => setAuthorStats(null));
+  }, [post?.userId]);
+
   const isOwner = post !== null && myUserId !== null && post.userId === myUserId;
+
+  const handleToggleFollow = async () => {
+    if (!post || !authorStats) return;
+    try {
+      const r = await toggleFollow(post.userId);
+      setAuthorStats({ ...authorStats, following: r.following, followerCount: r.followerCount });
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
 
   const refreshComments = async () => {
     try {
@@ -592,6 +612,68 @@ export const QnaDetailView: React.FC<QnaDetailViewProps> = ({ postId, onBack }) 
             }}
           >
             {post.content}
+          </div>
+        )}
+
+        {post.tags && post.tags.length > 0 && !editing && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '20px' }}>
+            {post.tags.map((t) => (
+              <span
+                key={t}
+                style={{
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: 'var(--purple)',
+                  background: 'var(--purple-bg)',
+                  padding: '4px 10px',
+                  borderRadius: '14px'
+                }}
+              >
+                #{t}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {authorStats && !editing && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '14px 16px',
+              marginTop: '20px',
+              background: '#f8fafc',
+              borderRadius: '12px',
+              border: '1px solid var(--border)'
+            }}
+          >
+            <div style={{ flex: 1, display: 'flex', gap: '16px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+              <span>게시글 <strong style={{ color: 'var(--text-primary)' }}>{authorStats.postCount}</strong></span>
+              <span>팔로워 <strong style={{ color: 'var(--text-primary)' }}>{authorStats.followerCount}</strong></span>
+              <span>팔로잉 <strong style={{ color: 'var(--text-primary)' }}>{authorStats.followingCount}</strong></span>
+            </div>
+            <button
+              onClick={handleToggleFollow}
+              disabled={isOwner}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 14px',
+                borderRadius: '10px',
+                fontSize: '12px',
+                fontWeight: '700',
+                background: authorStats.following ? 'white' : 'var(--purple)',
+                color: authorStats.following ? 'var(--purple)' : 'white',
+                border: `1px solid ${authorStats.following ? 'var(--purple-border)' : 'var(--purple)'}`,
+                opacity: isOwner ? 0.4 : 1,
+                cursor: isOwner ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {authorStats.following ? <UserCheck size={12} /> : <UserPlus size={12} />}
+              {authorStats.following ? '팔로잉' : '팔로우'}
+            </button>
           </div>
         )}
 
