@@ -328,12 +328,82 @@ export async function getUserStats(userId: number): Promise<UserStatsResponse> {
 }
 
 // Admin
+export interface AdminBoardResponse {
+  id: number;
+  userId: number;
+  categoryId: number;
+  title: string;
+  content: string;
+  type: BoardType;
+  views: number;
+  adminDeleted: boolean;
+  userDeleted: boolean;
+  createdAt: string;
+  deletedAt: string | null;
+}
+
+export interface AdminCommentResponse {
+  id: number;
+  userId: number;
+  referenceId: number;
+  referenceType: ReferenceType;
+  parentId: number | null;
+  content: string;
+  adminDeleted: boolean;
+  userDeleted: boolean;
+  createdAt: string;
+  deletedAt: string | null;
+}
+
+export interface LikeReconcileReport {
+  scanned: number;
+  mismatched: number;
+  corrected: number;
+}
+
+export async function adminListBoards(
+  type: BoardType | null = null,
+  includeDeleted = false,
+  page = 0,
+  size = 20
+): Promise<PageResponse<AdminBoardResponse>> {
+  const params = new URLSearchParams();
+  params.set('page', String(page));
+  params.set('size', String(size));
+  params.set('includeDeleted', String(includeDeleted));
+  if (type) params.set('type', type);
+  return request(`/api/v1/admin/boards?${params.toString()}`);
+}
+
+export async function adminListComments(
+  referenceType: ReferenceType | null = null,
+  referenceId: number | null = null,
+  page = 0,
+  size = 20
+): Promise<PageResponse<AdminCommentResponse>> {
+  const params = new URLSearchParams();
+  params.set('page', String(page));
+  params.set('size', String(size));
+  params.set('sort', 'createdAt,desc');
+  if (referenceType) params.set('referenceType', referenceType);
+  if (referenceId !== null) params.set('referenceId', String(referenceId));
+  return request(`/api/v1/admin/comments?${params.toString()}`);
+}
+
 export async function adminDeleteBoard(boardId: number): Promise<number> {
   return request(`/api/v1/admin/boards/${boardId}`, { method: 'DELETE' });
 }
 
 export async function adminDeleteComment(commentId: number): Promise<number> {
   return request(`/api/v1/admin/comments/${commentId}`, { method: 'DELETE' });
+}
+
+export async function adminReconcileLikes(limit = 500): Promise<LikeReconcileReport> {
+  return request(`/api/v1/admin/likes/reconcile?limit=${limit}`, { method: 'POST' });
+}
+
+export async function adminReindexBoards(): Promise<number> {
+  return request(`/api/v1/admin/boards/reindex`, { method: 'POST' });
 }
 
 let cachedMyUserId: Promise<number> | null = null;
