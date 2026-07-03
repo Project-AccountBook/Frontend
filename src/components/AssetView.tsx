@@ -11,7 +11,6 @@ import {
   Search,
   X,
   Info,
-  ArrowRight,
   Sparkles,
   List,
   ChevronLeft,
@@ -26,53 +25,51 @@ import {
   deleteAccount,
   type AccountResponse
 } from '../api/accountApi';
+import {
+  getCategories,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+  type CategoryResponse,
+  type TransactionType
+} from '../api/categoryApi';
+import {
+  getTransactionsForAccounts,
+  createTransaction,
+  updateTransaction,
+  deleteTransaction,
+  exportTransactions,
+  type TransactionResponse
+} from '../api/transactionApi';
+import {
+  getFixedTransactions,
+  createFixedTransaction,
+  updateFixedTransaction,
+  toggleFixedTransactionActive,
+  deleteFixedTransaction,
+  type FixedTransactionResponse,
+  type FrequencyType
+} from '../api/fixedTransactionApi';
 
 // ──────────────────────────────────────────────
 // Enums & Types
 // ──────────────────────────────────────────────
 type ActiveSection = 'transactions' | 'fixed' | 'accounts' | 'categories';
-type TransactionType = 'INCOME' | 'EXPENSE' | 'TRANSFER';
-type FrequencyType = 'WEEKLY' | 'MONTHLY' | 'YEARLY';
 type ViewMode = 'calendar' | 'list';
 
 type Account = AccountResponse;
+type Category = CategoryResponse;
+type Transaction = TransactionResponse;
+type FixedTransaction = FixedTransactionResponse;
 
-interface Category {
-  id: number;
-  name: string;
-  type: TransactionType;
-  isCustom: boolean;
-}
-
-interface FixedTransaction {
-  id: number;
-  accountId: number;
-  accountName: string;
-  categoryId: number;
-  categoryName: string;
-  type: TransactionType;
-  amount: number;
-  frequency: FrequencyType;
-  repeatDay: number;
-  startDate: string;
-  endDate?: string;
-  description: string;
-  isActive: boolean;
-}
-
-interface Transaction {
-  id: number;
-  accountId: number;
-  accountName: string;
-  categoryId: number;
-  categoryName: string;
-  targetAccountId?: number;
-  targetAccountName?: string;
-  type: TransactionType;
-  amount: number;
-  transactionDate: string;
-  description: string;
-}
+const getMonthRange = (year: number, month: number) => {
+  const mm = String(month + 1).padStart(2, '0');
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  return {
+    start: `${year}-${mm}-01`,
+    end: `${year}-${mm}-${String(lastDay).padStart(2, '0')}`,
+  };
+};
 
 export const AssetView: React.FC = () => {
   const [activeSection, setActiveSection] = useState<ActiveSection>('transactions');
@@ -98,60 +95,30 @@ export const AssetView: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showMonthPicker]);
 
+  const initialMonthRange = getMonthRange(today.getFullYear(), today.getMonth());
+
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [accountsLoading, setAccountsLoading] = useState(true);
   const [accountsError, setAccountsError] = useState<string | null>(null);
-  const [accountSubmitting, setAccountSubmitting] = useState(false);
 
-  const fetchAccounts = useCallback(async () => {
-    setAccountsLoading(true);
-    setAccountsError(null);
-    try {
-      const data = await getAccounts();
-      setAccounts(data);
-    } catch (err) {
-      setAccountsError(err instanceof Error ? err.message : '계좌 목록을 불러오는 데 실패했습니다.');
-    } finally {
-      setAccountsLoading(false);
-    }
-  }, []);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchAccounts();
-  }, [fetchAccounts]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
+  const [transactionsError, setTransactionsError] = useState<string | null>(null);
 
-  const [categories, setCategories] = useState<Category[]>([
-    { id: 1, name: '월급/급여', type: 'INCOME', isCustom: false },
-    { id: 2, name: '부업/용돈', type: 'INCOME', isCustom: false },
-    { id: 3, name: '식비', type: 'EXPENSE', isCustom: false },
-    { id: 4, name: '교통비', type: 'EXPENSE', isCustom: false },
-    { id: 5, name: '쇼핑/생필품', type: 'EXPENSE', isCustom: false },
-    { id: 6, name: '경조사/기부', type: 'EXPENSE', isCustom: false },
-    { id: 7, name: '관리비/세금', type: 'EXPENSE', isCustom: false },
-    { id: 8, name: '계좌간 이체', type: 'TRANSFER', isCustom: false },
-    { id: 9, name: '배당금 수익', type: 'INCOME', isCustom: true },
-    { id: 10, name: '반려동물 용품', type: 'EXPENSE', isCustom: true }
-  ]);
+  const [fixedTransactions, setFixedTransactions] = useState<FixedTransaction[]>([]);
+  const [fixedLoading, setFixedLoading] = useState(true);
+  const [fixedError, setFixedError] = useState<string | null>(null);
 
-  const [transactions, setTransactions] = useState<Transaction[]>([
-    { id: 1, accountId: 1, accountName: '신한 주거래 우대통장', categoryId: 1, categoryName: '월급/급여', type: 'INCOME', amount: 3200000, transactionDate: '2026-06-21', description: '6월 월급' },
-    { id: 2, accountId: 1, accountName: '신한 주거래 우대통장', categoryId: 8, categoryName: '계좌간 이체', targetAccountId: 2, targetAccountName: '국민 생활비 통장', type: 'TRANSFER', amount: 1500000, transactionDate: '2026-06-22', description: '생활비 통장으로 이체' },
-    { id: 3, accountId: 2, accountName: '국민 생활비 통장', categoryId: 3, categoryName: '식비', type: 'EXPENSE', amount: 45000, transactionDate: '2026-06-23', description: '이마트 장보기' },
-    { id: 4, accountId: 2, accountName: '국민 생활비 통장', categoryId: 5, categoryName: '쇼핑/생필품', type: 'EXPENSE', amount: 28000, transactionDate: '2026-06-23', description: '올리브영 생필품' },
-    { id: 5, accountId: 1, accountName: '신한 주거래 우대통장', categoryId: 7, categoryName: '관리비/세금', type: 'EXPENSE', amount: 185000, transactionDate: '2026-06-20', description: '6월 아파트 관리비' },
-    { id: 6, accountId: 2, accountName: '국민 생활비 통장', categoryId: 4, categoryName: '교통비', type: 'EXPENSE', amount: 62000, transactionDate: '2026-06-18', description: '지하철/버스 카드대금' }
-  ]);
-
-  const [fixedTransactions, setFixedTransactions] = useState<FixedTransaction[]>([
-    { id: 1, accountId: 1, accountName: '신한 주거래 우대통장', categoryId: 1, categoryName: '월급/급여', type: 'INCOME', amount: 3200000, frequency: 'MONTHLY', repeatDay: 21, startDate: '2026-01-21', description: '정기 월급', isActive: true },
-    { id: 2, accountId: 1, accountName: '신한 주거래 우대통장', categoryId: 7, categoryName: '관리비/세금', type: 'EXPENSE', amount: 185000, frequency: 'MONTHLY', repeatDay: 20, startDate: '2026-01-20', description: '아파트 관리비 자동이체', isActive: true },
-    { id: 3, accountId: 2, accountName: '국민 생활비 통장', categoryId: 10, categoryName: '반려동물 용품', type: 'EXPENSE', amount: 49000, frequency: 'MONTHLY', repeatDay: 5, startDate: '2026-03-05', description: '사료 정기배송 구독', isActive: false }
-  ]);
+  const [submitting, setSubmitting] = useState(false);
 
   const [filterAccount, setFilterAccount] = useState<number | 'all'>('all');
   const [filterType, setFilterType] = useState<TransactionType | 'all'>('all');
-  const [startDate, setStartDate] = useState('2026-06-01');
-  const [endDate, setEndDate] = useState('2026-06-30');
+  const [startDate, setStartDate] = useState(initialMonthRange.start);
+  const [endDate, setEndDate] = useState(initialMonthRange.end);
   const [searchQuery, setSearchQuery] = useState('');
 
   const [showModal, setShowModal] = useState<boolean>(false);
@@ -177,10 +144,106 @@ export const AssetView: React.FC = () => {
   const [formCategoryName, setFormCategoryName] = useState<string>('');
   const [formCategoryType, setFormCategoryType] = useState<TransactionType>('EXPENSE');
 
+  const fetchAccounts = useCallback(async () => {
+    setAccountsLoading(true);
+    setAccountsError(null);
+    try {
+      const data = await getAccounts();
+      setAccounts(data);
+    } catch (err) {
+      setAccountsError(err instanceof Error ? err.message : '계좌 목록을 불러오는 데 실패했습니다.');
+    } finally {
+      setAccountsLoading(false);
+    }
+  }, []);
+
+  const fetchCategories = useCallback(async () => {
+    setCategoriesLoading(true);
+    setCategoriesError(null);
+    try {
+      const data = await getCategories();
+      setCategories(data);
+    } catch (err) {
+      setCategoriesError(err instanceof Error ? err.message : '카테고리 목록을 불러오는 데 실패했습니다.');
+    } finally {
+      setCategoriesLoading(false);
+    }
+  }, []);
+
+  const fetchFixedTransactions = useCallback(async () => {
+    setFixedLoading(true);
+    setFixedError(null);
+    try {
+      const data = await getFixedTransactions();
+      setFixedTransactions(data);
+    } catch (err) {
+      setFixedError(err instanceof Error ? err.message : '고정 수입/지출 목록을 불러오는 데 실패했습니다.');
+    } finally {
+      setFixedLoading(false);
+    }
+  }, []);
+
+  const fetchTransactions = useCallback(async () => {
+    if (accounts.length === 0) {
+      setTransactions([]);
+      return;
+    }
+
+    const range = viewMode === 'calendar'
+      ? getMonthRange(calendarYear, calendarMonth)
+      : { start: startDate, end: endDate };
+
+    const accountIds = filterAccount === 'all'
+      ? accounts.map((a) => a.id)
+      : [filterAccount];
+
+    setTransactionsLoading(true);
+    setTransactionsError(null);
+    try {
+      const data = await getTransactionsForAccounts(accountIds, range.start, range.end);
+      setTransactions(data);
+    } catch (err) {
+      setTransactionsError(err instanceof Error ? err.message : '거래 내역을 불러오는 데 실패했습니다.');
+    } finally {
+      setTransactionsLoading(false);
+    }
+  }, [accounts, viewMode, calendarYear, calendarMonth, startDate, endDate, filterAccount]);
+
+  useEffect(() => {
+    fetchAccounts();
+    fetchCategories();
+    fetchFixedTransactions();
+  }, [fetchAccounts, fetchCategories, fetchFixedTransactions]);
+
+  useEffect(() => {
+    if (!accountsLoading) {
+      fetchTransactions();
+    }
+  }, [fetchTransactions, accountsLoading]);
+
+  useEffect(() => {
+    if (!showModal || (activeSection !== 'transactions' && activeSection !== 'fixed')) return;
+    const matching = categories.filter((c) => c.type === formType);
+    if (matching.length === 0) return;
+    if (!matching.some((c) => c.id.toString() === formCategory)) {
+      setFormCategory(matching[0].id.toString());
+    }
+  }, [formType, categories, showModal, activeSection, formCategory]);
+
+  const findAccountIdByName = (name: string) =>
+    accounts.find((a) => a.accountName === name)?.id;
+
+  const findCategoryIdByName = (name: string, type: TransactionType) =>
+    categories.find((c) => c.name === name && c.type === type)?.id;
+
   const resetFormFields = () => {
-    setFormAccount('1');
-    setFormTargetAccount('2');
-    setFormCategory('3');
+    const defaultAccountId = accounts[0]?.id?.toString() ?? '';
+    const defaultTargetId = accounts[1]?.id?.toString() ?? accounts[0]?.id?.toString() ?? '';
+    const defaultCategoryId = categories.find((c) => c.type === 'EXPENSE')?.id?.toString() ?? '';
+
+    setFormAccount(defaultAccountId);
+    setFormTargetAccount(defaultTargetId);
+    setFormCategory(defaultCategoryId);
     setFormType('EXPENSE');
     setFormAmount('');
     setFormDate(new Date().toISOString().split('T')[0]);
@@ -216,25 +279,26 @@ export const AssetView: React.FC = () => {
       const tx = transactions.find(t => t.id === id);
       if (tx) {
         setFormAccount(tx.accountId.toString());
-        if (tx.targetAccountId) setFormTargetAccount(tx.targetAccountId.toString());
         setFormCategory(tx.categoryId.toString());
         setFormType(tx.type);
         setFormAmount(tx.amount.toString());
         setFormDate(tx.transactionDate);
-        setFormDescription(tx.description);
+        setFormDescription(tx.description ?? '');
       }
     } else if (activeSection === 'fixed') {
       const fx = fixedTransactions.find(f => f.id === id);
       if (fx) {
-        setFormAccount(fx.accountId.toString());
-        setFormCategory(fx.categoryId.toString());
+        const accountId = findAccountIdByName(fx.accountName);
+        const categoryId = findCategoryIdByName(fx.categoryName, fx.type);
+        if (accountId) setFormAccount(accountId.toString());
+        if (categoryId) setFormCategory(categoryId.toString());
         setFormType(fx.type);
         setFormAmount(fx.amount.toString());
         setFormFrequency(fx.frequency);
         setFormRepeatDay(fx.repeatDay.toString());
         setFormStartDate(fx.startDate);
         if (fx.endDate) setFormEndDate(fx.endDate);
-        setFormDescription(fx.description);
+        setFormDescription(fx.description ?? '');
       }
     } else if (activeSection === 'accounts') {
       const acc = accounts.find(a => a.id === id);
@@ -254,40 +318,41 @@ export const AssetView: React.FC = () => {
   const handleDeleteItem = async (id: number) => {
     if (!window.confirm('정말 삭제하시겠습니까?')) return;
 
-    if (activeSection === 'accounts') {
-      try {
+    try {
+      if (activeSection === 'accounts') {
         await deleteAccount(id);
         await fetchAccounts();
-      } catch (err) {
-        alert(err instanceof Error ? err.message : '계좌 삭제에 실패했습니다.');
+      } else if (activeSection === 'transactions') {
+        await deleteTransaction(id);
+        await fetchTransactions();
+        await fetchAccounts();
+      } else if (activeSection === 'fixed') {
+        await deleteFixedTransaction(id);
+        await fetchFixedTransactions();
+      } else if (activeSection === 'categories') {
+        await deleteCategory(id);
+        await fetchCategories();
       }
-      return;
-    }
-
-    if (activeSection === 'transactions') {
-      setTransactions(transactions.filter(t => t.id !== id));
-    } else if (activeSection === 'fixed') {
-      setFixedTransactions(fixedTransactions.filter(f => f.id !== id));
-    } else if (activeSection === 'categories') {
-      setCategories(categories.filter(c => c.id !== id));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '삭제에 실패했습니다.');
     }
   };
 
-  const handleToggleFixedActive = (id: number) => {
-    setFixedTransactions(fixedTransactions.map(f => {
-      if (f.id === id) {
-        return { ...f, isActive: !f.isActive };
-      }
-      return f;
-    }));
+  const handleToggleFixedActive = async (id: number) => {
+    try {
+      await toggleFixedTransactionActive(id);
+      await fetchFixedTransactions();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '활성 상태 변경에 실패했습니다.');
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitting(true);
 
-    if (activeSection === 'accounts') {
-      setAccountSubmitting(true);
-      try {
+    try {
+      if (activeSection === 'accounts') {
         if (modalMode === 'create') {
           await createAccount({
             accountName: formAccountName,
@@ -299,65 +364,31 @@ export const AssetView: React.FC = () => {
         await fetchAccounts();
         setShowModal(false);
         resetFormFields();
-      } catch (err) {
-        alert(err instanceof Error ? err.message : '계좌 저장에 실패했습니다.');
-      } finally {
-        setAccountSubmitting(false);
+        return;
       }
-      return;
-    }
 
-    if (activeSection === 'transactions') {
-      const accObj = accounts.find(a => a.id === parseInt(formAccount));
-      const catObj = categories.find(c => c.id === parseInt(formCategory));
-      const targetAccObj = accounts.find(a => a.id === parseInt(formTargetAccount));
-
-      if (modalMode === 'create') {
-        const newTx: Transaction = {
-          id: transactions.length ? Math.max(...transactions.map(t => t.id)) + 1 : 1,
-          accountId: accObj ? accObj.id : 1,
-          accountName: accObj ? accObj.accountName : '알 수 없음 계좌',
-          categoryId: catObj ? catObj.id : 3,
-          categoryName: catObj ? catObj.name : '기타',
+      if (activeSection === 'transactions') {
+        const request = {
+          accountId: parseInt(formAccount),
+          categoryId: parseInt(formCategory),
           type: formType,
           amount: parseFloat(formAmount) || 0,
           transactionDate: formDate,
           description: formDescription,
-          targetAccountId: formType === 'TRANSFER' && targetAccObj ? targetAccObj.id : undefined,
-          targetAccountName: formType === 'TRANSFER' && targetAccObj ? targetAccObj.accountName : undefined
+          ...(formType === 'TRANSFER' ? { targetAccountId: parseInt(formTargetAccount) } : {}),
         };
-        setTransactions([newTx, ...transactions]);
-      } else {
-        setTransactions(transactions.map(t => {
-          if (t.id === selectedId) {
-            return {
-              ...t,
-              accountId: accObj ? accObj.id : t.accountId,
-              accountName: accObj ? accObj.accountName : t.accountName,
-              categoryId: catObj ? catObj.id : t.categoryId,
-              categoryName: catObj ? catObj.name : t.categoryName,
-              type: formType,
-              amount: parseFloat(formAmount) || 0,
-              transactionDate: formDate,
-              description: formDescription,
-              targetAccountId: formType === 'TRANSFER' && targetAccObj ? targetAccObj.id : undefined,
-              targetAccountName: formType === 'TRANSFER' && targetAccObj ? targetAccObj.accountName : undefined
-            };
-          }
-          return t;
-        }));
-      }
-    } else if (activeSection === 'fixed') {
-      const accObj = accounts.find(a => a.id === parseInt(formAccount));
-      const catObj = categories.find(c => c.id === parseInt(formCategory));
 
-      if (modalMode === 'create') {
-        const newFx: FixedTransaction = {
-          id: fixedTransactions.length ? Math.max(...fixedTransactions.map(f => f.id)) + 1 : 1,
-          accountId: accObj ? accObj.id : 1,
-          accountName: accObj ? accObj.accountName : '알 수 없음 계좌',
-          categoryId: catObj ? catObj.id : 3,
-          categoryName: catObj ? catObj.name : '기타',
+        if (modalMode === 'create') {
+          await createTransaction(request);
+        } else if (selectedId !== null) {
+          await updateTransaction(selectedId, request);
+        }
+        await fetchTransactions();
+        await fetchAccounts();
+      } else if (activeSection === 'fixed') {
+        const request = {
+          accountId: parseInt(formAccount),
+          categoryId: parseInt(formCategory),
           type: formType,
           amount: parseFloat(formAmount) || 0,
           frequency: formFrequency,
@@ -365,68 +396,52 @@ export const AssetView: React.FC = () => {
           startDate: formStartDate,
           endDate: formEndDate || undefined,
           description: formDescription,
-          isActive: true
         };
-        setFixedTransactions([newFx, ...fixedTransactions]);
-      } else {
-        setFixedTransactions(fixedTransactions.map(f => {
-          if (f.id === selectedId) {
-            return {
-              ...f,
-              accountId: accObj ? accObj.id : f.accountId,
-              accountName: accObj ? accObj.accountName : f.accountName,
-              categoryId: catObj ? catObj.id : f.categoryId,
-              categoryName: catObj ? catObj.name : f.categoryName,
-              type: formType,
-              amount: parseFloat(formAmount) || 0,
-              frequency: formFrequency,
-              repeatDay: parseInt(formRepeatDay) || 1,
-              startDate: formStartDate,
-              endDate: formEndDate || undefined,
-              description: formDescription
-            };
-          }
-          return f;
-        }));
-      }
-    } else if (activeSection === 'categories') {
-      if (modalMode === 'create') {
-        const newCat: Category = {
-          id: categories.length ? Math.max(...categories.map(c => c.id)) + 1 : 1,
+
+        if (modalMode === 'create') {
+          await createFixedTransaction(request);
+        } else if (selectedId !== null) {
+          await updateFixedTransaction(selectedId, request);
+        }
+        await fetchFixedTransactions();
+      } else if (activeSection === 'categories') {
+        const request = {
           name: formCategoryName,
           type: formCategoryType,
-          isCustom: true
         };
-        setCategories([...categories, newCat]);
-      } else {
-        setCategories(categories.map(c => {
-          if (c.id === selectedId) {
-            return {
-              ...c,
-              name: formCategoryName,
-              type: formCategoryType
-            };
-          }
-          return c;
-        }));
-      }
-    }
 
-    setShowModal(false);
-    resetFormFields();
+        if (modalMode === 'create') {
+          await createCategory(request);
+        } else if (selectedId !== null) {
+          await updateCategory(selectedId, request);
+        }
+        await fetchCategories();
+      }
+
+      setShowModal(false);
+      resetFormFields();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '저장에 실패했습니다.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleExportCsv = () => {
-    alert(`[CSV Export] ${startDate} 부터 ${endDate} 까지의 거래 내역 파일 다운로드를 준비합니다.`);
+  const handleExportCsv = async () => {
+    try {
+      await exportTransactions(startDate, endDate);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '거래 내역 내보내기에 실패했습니다.');
+    }
   };
 
   const filteredTransactions = transactions.filter(tx => {
     if (filterAccount !== 'all' && tx.accountId !== filterAccount) return false;
     if (filterType !== 'all' && tx.type !== filterType) return false;
-    if (tx.transactionDate < startDate || tx.transactionDate > endDate) return false;
+    if (viewMode === 'list' && (tx.transactionDate < startDate || tx.transactionDate > endDate)) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      const matchDesc = tx.description.toLowerCase().includes(q);
+      const matchDesc = (tx.description ?? '').toLowerCase().includes(q);
       const matchCat = tx.categoryName.toLowerCase().includes(q);
       const matchAcc = tx.accountName.toLowerCase().includes(q);
       if (!matchDesc && !matchCat && !matchAcc) return false;
@@ -613,6 +628,23 @@ export const AssetView: React.FC = () => {
 
             {/* View Mode Toggle + List Filters */}
             <div className="tx-toolbar">
+              {transactionsLoading && (
+                <div className="table-empty-row" style={{ padding: '16px 0' }}>
+                  <Loader2 size={20} className="spin-animation" />
+                  <p>거래 내역을 불러오는 중...</p>
+                </div>
+              )}
+
+              {!transactionsLoading && transactionsError && (
+                <div className="table-empty-row" style={{ padding: '16px 0' }}>
+                  <AlertCircle size={20} />
+                  <p>{transactionsError}</p>
+                  <button className="btn-section-add" onClick={fetchTransactions} style={{ marginTop: '8px' }}>
+                    다시 시도
+                  </button>
+                </div>
+              )}
+
               <div className="tx-toolbar-top">
                 <div className="view-mode-toggle">
                   <button
@@ -861,9 +893,6 @@ export const AssetView: React.FC = () => {
                                 <span className="cal-detail-desc">{tx.description || '—'}</span>
                                 <span className="cal-detail-meta">
                                   {tx.accountName} · <span className="category-tag">{tx.categoryName}</span>
-                                  {tx.type === 'TRANSFER' && tx.targetAccountName && (
-                                    <> <ArrowRight size={11} /> {tx.targetAccountName}</>
-                                  )}
                                 </span>
                               </div>
                             </div>
@@ -933,11 +962,6 @@ export const AssetView: React.FC = () => {
                           <td>
                             <div className="tx-description-cell">
                               <span>{tx.description || '—'}</span>
-                              {tx.type === 'TRANSFER' && tx.targetAccountName && (
-                                <span className="transfer-target-desc">
-                                  <ArrowRight size={12} /> {tx.targetAccountName}
-                                </span>
-                              )}
                             </div>
                           </td>
                           <td className={`font-bold ${tx.type === 'INCOME' ? 'color-income' : tx.type === 'EXPENSE' ? 'color-expense' : 'color-transfer'}`}>
@@ -979,6 +1003,24 @@ export const AssetView: React.FC = () => {
             </div>
 
             <div className="table-responsive" style={{ marginTop: '20px' }}>
+              {fixedLoading && (
+                <div className="table-empty-row" style={{ padding: '40px 0' }}>
+                  <Loader2 size={24} className="spin-animation" />
+                  <p>고정 수입/지출 목록을 불러오는 중...</p>
+                </div>
+              )}
+
+              {!fixedLoading && fixedError && (
+                <div className="table-empty-row" style={{ padding: '40px 0' }}>
+                  <AlertCircle size={24} />
+                  <p>{fixedError}</p>
+                  <button className="btn-section-add" onClick={fetchFixedTransactions} style={{ marginTop: '12px' }}>
+                    다시 시도
+                  </button>
+                </div>
+              )}
+
+              {!fixedLoading && !fixedError && (
               <table className="asset-table">
                 <thead>
                   <tr>
@@ -1049,6 +1091,7 @@ export const AssetView: React.FC = () => {
                   )}
                 </tbody>
               </table>
+              )}
             </div>
           </div>
         )}
@@ -1122,6 +1165,24 @@ export const AssetView: React.FC = () => {
         {/* ─── SECTION 4: CATEGORIES ─── */}
         {activeSection === 'categories' && (
           <div className="section-content fade-in">
+            {categoriesLoading && (
+              <div className="table-empty-row" style={{ padding: '40px 0' }}>
+                <Loader2 size={24} className="spin-animation" />
+                <p>카테고리 목록을 불러오는 중...</p>
+              </div>
+            )}
+
+            {!categoriesLoading && categoriesError && (
+              <div className="table-empty-row" style={{ padding: '40px 0' }}>
+                <AlertCircle size={24} />
+                <p>{categoriesError}</p>
+                <button className="btn-section-add" onClick={fetchCategories} style={{ marginTop: '12px' }}>
+                  다시 시도
+                </button>
+              </div>
+            )}
+
+            {!categoriesLoading && !categoriesError && (
             <div className="categories-grid-columns">
 
               {/* Income Categories */}
@@ -1221,6 +1282,7 @@ export const AssetView: React.FC = () => {
               </div>
 
             </div>
+            )}
           </div>
         )}
 
@@ -1304,7 +1366,7 @@ export const AssetView: React.FC = () => {
                           <option key={cat.id} value={cat.id}>{cat.name}</option>
                         ))}
                         {categories.filter(c => c.type === formType).length === 0 && (
-                          <option value="8">기타</option>
+                          <option value="" disabled>카테고리를 먼저 등록하세요</option>
                         )}
                       </select>
                     </div>
@@ -1337,7 +1399,7 @@ export const AssetView: React.FC = () => {
                     <label className="form-label">메모/내용</label>
                     <input
                       type="text"
-                      placeholder="상세 내용을 적어주세요 (예: 이마트 홈플러스 구입 등)"
+                      placeholder="상세 내용을 적어주세요"
                       value={formDescription}
                       onChange={(e) => setFormDescription(e.target.value)}
                       className="modal-input"
@@ -1526,8 +1588,8 @@ export const AssetView: React.FC = () => {
                 <button type="button" className="btn-secondary" onClick={() => { setShowModal(false); resetFormFields(); }}>
                   취소
                 </button>
-                <button type="submit" className="btn-primary" disabled={accountSubmitting}>
-                  {accountSubmitting ? (
+                <button type="submit" className="btn-primary" disabled={submitting}>
+                  {submitting ? (
                     <>
                       <Loader2 size={14} className="spin-animation" />
                       저장 중...
