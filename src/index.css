@@ -1960,25 +1960,6 @@ a {
 
 .login-divider:not(:empty)::after {
   margin-left: 12px;
-}.login-btn-demo {
-  background: transparent;
-  color: var(--blue);
-  border: 1.5px dashed var(--blue-border);
-  height: 48px;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  transition: all var(--transition-fast);
-}
-
-.login-btn-demo:hover {
-  background: var(--blue-bg);
-  border-style: solid;
-  border-color: var(--blue);
 }
 
 /* Logout Button in Sidebar */
@@ -2541,6 +2522,46 @@ a {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
+.mypage-address-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mypage-address-search-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.mypage-address-search-row .mypage-input {
+  flex: 1;
+  cursor: default;
+}
+
+.mypage-btn-address-search {
+  flex-shrink: 0;
+  height: 44px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 10px;
+  background: var(--navy);
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--transition-fast);
+}
+
+.mypage-btn-address-search:hover {
+  background: var(--navy-light);
+}
+
+.mypage-address-detail {
+  margin-top: 0;
+}
+
 /* Password field */
 .mypage-pw-wrapper {
   position: relative;
@@ -2613,6 +2634,57 @@ a {
   margin-top: 28px;
   padding-top: 20px;
   border-top: 1px solid var(--border);
+}
+
+.mypage-form-password {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 20px;
+}
+
+.mypage-form-password .mypage-field.span-full {
+  width: 100%;
+}
+
+.mypage-pw-verify-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.mypage-pw-verify-row .mypage-pw-wrapper {
+  flex: 1;
+  min-width: 0;
+}
+
+.mypage-btn-verify-pw {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 10px;
+  background: var(--navy);
+  color: white;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+}
+
+.mypage-btn-verify-pw:hover:not(:disabled) {
+  background: var(--navy-light);
+  transform: translateY(-1px);
+}
+
+.mypage-btn-verify-pw:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .mypage-btn-edit {
@@ -3630,6 +3702,75 @@ a {
   flex-wrap: wrap;
 }
 
+.groupbuy-category-tabs {
+  flex: 1;
+  min-width: 0;
+}
+
+.groupbuy-category-tab-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--blue);
+  margin-left: 6px;
+  flex-shrink: 0;
+}
+
+.groupbuy-category-tabs .dashboard-tab-btn.subscribed {
+  display: inline-flex;
+  align-items: center;
+}
+
+.dashboard-tab-btn.active .groupbuy-category-tab-dot {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.groupbuy-category-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.groupbuy-category-bell-btn,
+.groupbuy-category-bell-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.groupbuy-category-bell-btn {
+  border: 1px solid var(--blue-border);
+  background: var(--blue-bg);
+  color: var(--blue);
+  transition: all var(--transition-fast);
+}
+
+.groupbuy-category-bell-status {
+  border: 1px solid var(--blue-border);
+  background: white;
+  color: var(--blue);
+}
+
+.groupbuy-category-bell-btn:hover:not(:disabled) {
+  background: var(--blue);
+  color: white;
+  border-color: var(--blue);
+}
+
+.groupbuy-category-bell-btn:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
 .groupbuy-right-filters {
   display: flex;
   align-items: center;
@@ -3685,6 +3826,101 @@ a {
 
 .groupbuy-action-btn:hover {
   background-color: var(--primary-dark);
+}
+
+.mypage-interest-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mypage-interest-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fafbfc;
+}
+
+.mypage-interest-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mypage-interest-item-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.mypage-interest-item-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.mypage-interest-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mypage-interest-add-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.mypage-interest-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: white;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.mypage-interest-add-btn:hover:not(:disabled) {
+  border-color: var(--blue);
+  color: var(--blue);
+  background: var(--blue-bg);
+}
+
+.mypage-interest-add-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.mypage-btn-icon-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid #fecaca;
+  background: #fff5f5;
+  color: var(--red);
+  transition: all var(--transition-fast);
+}
+
+.mypage-btn-icon-danger:hover:not(:disabled) {
+  background: #fee2e2;
+}
+
+.mypage-btn-icon-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Modals & Dialogs */
@@ -4010,6 +4246,14 @@ a {
 
 .form-input:focus, .form-textarea:focus, .form-select:focus {
   border-color: var(--blue);
+}
+
+.input-icon-wrapper .form-input,
+.input-icon-wrapper .form-input:focus {
+  border: none;
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .form-textarea {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShoppingBag, 
   MapPin, 
@@ -8,8 +8,17 @@ import {
   Plus,
   Send,
   X,
-  CheckCircle2
+  CheckCircle2,
+  Bell,
+  BellRing,
+  Loader2,
 } from 'lucide-react';
+import {
+  groupPurchaseCategoryApi,
+  interestCategoryApi,
+  type GroupPurchaseCategoryResponse,
+  type InterestCategoryResponse,
+} from '../api';
 
 const formatKRW = (value: number) => {
   return new Intl.NumberFormat('ko-KR').format(value);
@@ -47,6 +56,13 @@ interface Comment {
   text: string;
   date: string;
 }
+
+const FALLBACK_CATEGORIES: GroupPurchaseCategoryResponse[] = [
+  { id: 1, name: '식품', sortOrder: 1, createdAt: '', updatedAt: '' },
+  { id: 2, name: '생활용품', sortOrder: 2, createdAt: '', updatedAt: '' },
+  { id: 3, name: '육아용품', sortOrder: 3, createdAt: '', updatedAt: '' },
+  { id: 4, name: '가전', sortOrder: 4, createdAt: '', updatedAt: '' },
+];
 
 export const GroupBuyView: React.FC = () => {
   // Mock Data
@@ -152,7 +168,10 @@ export const GroupBuyView: React.FC = () => {
   const [userBudget, setUserBudget] = useState(3140894);
   const [userBookmarks, setUserBookmarks] = useState<number[]>([2]); // Default bookmark Item 2
   const [participatedItems, setParticipatedItems] = useState<number[]>([]);
-  const [activeCategory, setActiveCategory] = useState('전체');
+  const [categories, setCategories] = useState<GroupPurchaseCategoryResponse[]>(FALLBACK_CATEGORIES);
+  const [interestCategories, setInterestCategories] = useState<InterestCategoryResponse[]>([]);
+  const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
+  const [subscribingCategory, setSubscribingCategory] = useState(false);
   const [sortBy, setSortBy] = useState('latest');
   const [distanceLimit, setDistanceLimit] = useState('1.5km');
   const [showBookmarksOnly, setShowBookmarksOnly] = useState(false);
@@ -180,6 +199,51 @@ export const GroupBuyView: React.FC = () => {
     ]
   });
   const [newCommentText, setNewCommentText] = useState('');
+
+  useEffect(() => {
+    const loadCategories = async () => {
+      const [categoryResult, interestResult] = await Promise.all([
+        groupPurchaseCategoryApi.getAll(),
+        interestCategoryApi.getMyCategories(),
+      ]);
+
+      if (categoryResult.ok && categoryResult.data && categoryResult.data.length > 0) {
+        setCategories(categoryResult.data);
+      }
+      if (interestResult.ok && interestResult.data) {
+        setInterestCategories(interestResult.data);
+      }
+    };
+
+    loadCategories();
+  }, []);
+
+  const activeCategoryName = activeCategoryId
+    ? categories.find((c) => c.id === activeCategoryId)?.name ?? null
+    : null;
+
+  const subscribedInterest = activeCategoryId
+    ? interestCategories.find((ic) => ic.categoryId === activeCategoryId)
+    : null;
+
+  const handleSubscribeCategory = async () => {
+    if (!activeCategoryId || subscribedInterest || subscribingCategory) return;
+
+    setSubscribingCategory(true);
+    try {
+      const result = await interestCategoryApi.register(activeCategoryId);
+      if (result.ok && result.data) {
+        setInterestCategories((prev) => [...prev, result.data!]);
+        triggerToast(`"${result.data.categoryName}" 카테고리 알림을 등록했습니다.`);
+      } else {
+        triggerToast(result.error ?? '관심 카테고리 등록에 실패했습니다.');
+      }
+    } catch {
+      triggerToast('서버와 통신 중 오류가 발생했습니다.');
+    } finally {
+      setSubscribingCategory(false);
+    }
+  };
 
   // Trigger Toast Notification
   const triggerToast = (msg: string) => {
@@ -288,7 +352,7 @@ export const GroupBuyView: React.FC = () => {
   const filteredItems = items
     .filter(item => {
       // Category filter
-      if (activeCategory !== '전체' && item.category !== activeCategory) return false;
+      if (activeCategoryName && item.category !== activeCategoryName) return false;
       
       // Location certified radius filter
       const distanceVal = parseFloat(item.distance);
@@ -340,16 +404,55 @@ export const GroupBuyView: React.FC = () => {
 
       {/* 2. Filter & Sort Row */}
       <div className="groupbuy-filter-row">
-        <div className="dashboard-view-tabs" style={{ margin: 0 }}>
-          {['전체', '식품', '생활용품', '육아용품', '가전'].map(cat => (
+        <div className="groupbuy-category-row">
+          <div className="dashboard-view-tabs groupbuy-category-tabs" style={{ margin: 0 }}>
             <button
-              key={cat}
-              onClick={() => setActiveCategory(cat)}
-              className={`dashboard-tab-btn ${activeCategory === cat ? 'active' : ''}`}
+              onClick={() => setActiveCategoryId(null)}
+              className={`dashboard-tab-btn ${activeCategoryId === null ? 'active' : ''}`}
             >
-              {cat}
+              전체
             </button>
-          ))}
+            {categories.map((cat) => {
+              const isActive = activeCategoryId === cat.id;
+              const isSubscribed = interestCategories.some((ic) => ic.categoryId === cat.id);
+
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setActiveCategoryId(cat.id)}
+                  className={`dashboard-tab-btn ${isActive ? 'active' : ''} ${isSubscribed ? 'subscribed' : ''}`}
+                >
+                  {cat.name}
+                  {isSubscribed && <span className="groupbuy-category-tab-dot" title="알림 등록됨" />}
+                </button>
+              );
+            })}
+          </div>
+
+          {activeCategoryId !== null && activeCategoryName && (
+            subscribedInterest ? (
+              <span className="groupbuy-category-bell-status" title={`"${activeCategoryName}" 새 공구 알림 받는 중`}>
+                <BellRing size={14} />
+                <span>{activeCategoryName} · 알림 받는 중</span>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSubscribeCategory}
+                disabled={subscribingCategory}
+                className="groupbuy-category-bell-btn"
+                title={`"${activeCategoryName}" 새 공구 알림 받기`}
+              >
+                {subscribingCategory ? (
+                  <Loader2 size={14} className="spin-animation" />
+                ) : (
+                  <Bell size={14} />
+                )}
+                <span>{activeCategoryName} · 새 공구 알림</span>
+              </button>
+            )
+          )}
         </div>
 
         <div className="groupbuy-right-filters">
