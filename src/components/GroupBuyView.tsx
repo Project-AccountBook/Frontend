@@ -8,8 +8,17 @@ import {
   Plus,
   Send,
   X,
-  CheckCircle2
+  CheckCircle2,
+  Bell,
+  BellRing,
+  Loader2,
 } from 'lucide-react';
+import {
+  groupPurchaseCategoryApi,
+  interestCategoryApi,
+  type GroupPurchaseCategoryResponse,
+  type InterestCategoryResponse,
+} from '../api';
 
 const formatKRW = (value: number) => {
   return new Intl.NumberFormat('ko-KR').format(value);
@@ -175,7 +184,10 @@ export const GroupBuyView: React.FC = () => {
   const [userBudget, setUserBudget] = useState(3140894);
   const [userBookmarks, setUserBookmarks] = useState<number[]>([]);
   const [participatedItems, setParticipatedItems] = useState<number[]>([]);
-  const [activeCategory, setActiveCategory] = useState('전체');
+  const [categories, setCategories] = useState<GroupPurchaseCategoryResponse[]>(FALLBACK_CATEGORIES);
+  const [interestCategories, setInterestCategories] = useState<InterestCategoryResponse[]>([]);
+  const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
+  const [subscribingCategory, setSubscribingCategory] = useState(false);
   const [sortBy, setSortBy] = useState('latest');
   const [distanceLimit, setDistanceLimit] = useState('1.5km');
   const [showBookmarksOnly, setShowBookmarksOnly] = useState(false);
@@ -580,16 +592,55 @@ export const GroupBuyView: React.FC = () => {
 
       {/* 2. Filter & Sort Row */}
       <div className="groupbuy-filter-row">
-        <div className="dashboard-view-tabs" style={{ margin: 0 }}>
-          {['전체', '식품', '생활용품', '육아용품', '가전'].map(cat => (
+        <div className="groupbuy-category-row">
+          <div className="dashboard-view-tabs groupbuy-category-tabs" style={{ margin: 0 }}>
             <button
-              key={cat}
-              onClick={() => setActiveCategory(cat)}
-              className={`dashboard-tab-btn ${activeCategory === cat ? 'active' : ''}`}
+              onClick={() => setActiveCategoryId(null)}
+              className={`dashboard-tab-btn ${activeCategoryId === null ? 'active' : ''}`}
             >
-              {cat}
+              전체
             </button>
-          ))}
+            {categories.map((cat) => {
+              const isActive = activeCategoryId === cat.id;
+              const isSubscribed = interestCategories.some((ic) => ic.categoryId === cat.id);
+
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setActiveCategoryId(cat.id)}
+                  className={`dashboard-tab-btn ${isActive ? 'active' : ''} ${isSubscribed ? 'subscribed' : ''}`}
+                >
+                  {cat.name}
+                  {isSubscribed && <span className="groupbuy-category-tab-dot" title="알림 등록됨" />}
+                </button>
+              );
+            })}
+          </div>
+
+          {activeCategoryId !== null && activeCategoryName && (
+            subscribedInterest ? (
+              <span className="groupbuy-category-bell-status" title={`"${activeCategoryName}" 새 공구 알림 받는 중`}>
+                <BellRing size={14} />
+                <span>{activeCategoryName} · 알림 받는 중</span>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSubscribeCategory}
+                disabled={subscribingCategory}
+                className="groupbuy-category-bell-btn"
+                title={`"${activeCategoryName}" 새 공구 알림 받기`}
+              >
+                {subscribingCategory ? (
+                  <Loader2 size={14} className="spin-animation" />
+                ) : (
+                  <Bell size={14} />
+                )}
+                <span>{activeCategoryName} · 새 공구 알림</span>
+              </button>
+            )
+          )}
         </div>
 
         <div className="groupbuy-right-filters">
