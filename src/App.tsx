@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { DashboardView } from './components/DashboardView';
-import { AnalysisView } from './components/AnalysisView';
 import { ComparisonView } from './components/ComparisonView';
 import { LocationComparisonView } from './components/LocationComparisonView';
 import { GroupBuyView } from './components/GroupBuyView';
@@ -174,8 +173,6 @@ function App() {
         return <AssetView initialSection={assetInitialSection} />;
       case 'budget':
         return <BudgetView onGoToCategorySettings={goToCategorySettings} />;
-      case 'analysis':
-        return <AnalysisView />;
       case 'comparison':
         return <ComparisonView />;
       case 'locationComparison':
