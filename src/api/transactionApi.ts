@@ -1,3 +1,4 @@
+import { authFetch } from './client';
 import type { TransactionType } from './categoryApi';
 
 export interface TransactionResponse {
@@ -36,15 +37,7 @@ interface SpringPage<T> {
   number: number;
 }
 
-import { tokenStorage } from './tokenStorage';
-
-const authHeader = (json = true) => {
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${tokenStorage.getAccessToken() ?? ''}`,
-  };
-  if (json) headers['Content-Type'] = 'application/json';
-  return headers;
-};
+const jsonHeaders = { 'Content-Type': 'application/json' };
 
 /** GET /api/v1/transactions */
 export async function getTransactions(params: {
@@ -63,7 +56,7 @@ export async function getTransactions(params: {
     sort: 'transactionDate,desc',
   });
 
-  const res = await fetch(`/api/v1/transactions?${search}`, { headers: authHeader() });
+  const res = await authFetch(`/api/v1/transactions?${search}`);
   const data: ApiResponse<SpringPage<TransactionResponse>> = await res.json();
   if (!res.ok || !data.success) {
     throw new Error(data.error ?? '거래 내역을 불러오는 데 실패했습니다.');
@@ -73,9 +66,9 @@ export async function getTransactions(params: {
 
 /** POST /api/v1/transactions */
 export async function createTransaction(request: TransactionRequest): Promise<number> {
-  const res = await fetch('/api/v1/transactions', {
+  const res = await authFetch('/api/v1/transactions', {
     method: 'POST',
-    headers: authHeader(),
+    headers: jsonHeaders,
     body: JSON.stringify(request),
   });
   const data: ApiResponse<number> = await res.json();
@@ -87,9 +80,9 @@ export async function createTransaction(request: TransactionRequest): Promise<nu
 
 /** PATCH /api/v1/transactions/{id} */
 export async function updateTransaction(id: number, request: TransactionRequest): Promise<void> {
-  const res = await fetch(`/api/v1/transactions/${id}`, {
+  const res = await authFetch(`/api/v1/transactions/${id}`, {
     method: 'PATCH',
-    headers: authHeader(),
+    headers: jsonHeaders,
     body: JSON.stringify(request),
   });
   const data: ApiResponse<null> = await res.json();
@@ -100,9 +93,9 @@ export async function updateTransaction(id: number, request: TransactionRequest)
 
 /** DELETE /api/v1/transactions/{id} */
 export async function deleteTransaction(id: number): Promise<void> {
-  const res = await fetch(`/api/v1/transactions/${id}`, {
+  const res = await authFetch(`/api/v1/transactions/${id}`, {
     method: 'DELETE',
-    headers: authHeader(),
+    headers: jsonHeaders,
   });
   const data: ApiResponse<null> = await res.json();
   if (!res.ok || !data.success) {
@@ -113,9 +106,7 @@ export async function deleteTransaction(id: number): Promise<void> {
 /** GET /api/v1/transactions/export — 엑셀 파일 다운로드 */
 export async function exportTransactions(startDate: string, endDate: string): Promise<void> {
   const search = new URLSearchParams({ startDate, endDate });
-  const res = await fetch(`/api/v1/transactions/export?${search}`, {
-    headers: authHeader(false),
-  });
+  const res = await authFetch(`/api/v1/transactions/export?${search}`);
   if (!res.ok) {
     throw new Error('거래 내역 내보내기에 실패했습니다.');
   }

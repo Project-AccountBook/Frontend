@@ -1,3 +1,5 @@
+import { authFetch } from './client';
+
 export type TransactionType = 'INCOME' | 'EXPENSE' | 'TRANSFER';
 
 export interface CategoryResponse {
@@ -18,16 +20,11 @@ interface ApiResponse<T> {
   error: string | null;
 }
 
-import { tokenStorage } from './tokenStorage';
-
-const authHeader = () => ({
-  'Content-Type': 'application/json',
-  Authorization: `Bearer ${tokenStorage.getAccessToken() ?? ''}`,
-});
+const jsonHeaders = { 'Content-Type': 'application/json' };
 
 /** GET /api/v1/categories */
 export async function getCategories(): Promise<CategoryResponse[]> {
-  const res = await fetch('/api/v1/categories', { headers: authHeader() });
+  const res = await authFetch('/api/v1/categories');
   const data: ApiResponse<CategoryResponse[]> = await res.json();
   if (!res.ok || !data.success) {
     throw new Error(data.error ?? '카테고리 목록을 불러오는 데 실패했습니다.');
@@ -37,9 +34,9 @@ export async function getCategories(): Promise<CategoryResponse[]> {
 
 /** POST /api/v1/categories */
 export async function createCategory(request: CategoryRequest): Promise<CategoryResponse> {
-  const res = await fetch('/api/v1/categories', {
+  const res = await authFetch('/api/v1/categories', {
     method: 'POST',
-    headers: authHeader(),
+    headers: jsonHeaders,
     body: JSON.stringify(request),
   });
   const data: ApiResponse<CategoryResponse> = await res.json();
@@ -51,9 +48,9 @@ export async function createCategory(request: CategoryRequest): Promise<Category
 
 /** PATCH /api/v1/categories/{id} */
 export async function updateCategory(id: number, request: CategoryRequest): Promise<void> {
-  const res = await fetch(`/api/v1/categories/${id}`, {
+  const res = await authFetch(`/api/v1/categories/${id}`, {
     method: 'PATCH',
-    headers: authHeader(),
+    headers: jsonHeaders,
     body: JSON.stringify(request),
   });
   const data: ApiResponse<null> = await res.json();
@@ -64,9 +61,9 @@ export async function updateCategory(id: number, request: CategoryRequest): Prom
 
 /** DELETE /api/v1/categories/{id} */
 export async function deleteCategory(id: number): Promise<void> {
-  const res = await fetch(`/api/v1/categories/${id}`, {
+  const res = await authFetch(`/api/v1/categories/${id}`, {
     method: 'DELETE',
-    headers: authHeader(),
+    headers: jsonHeaders,
   });
   const data: ApiResponse<null> = await res.json();
   if (!res.ok || !data.success) {

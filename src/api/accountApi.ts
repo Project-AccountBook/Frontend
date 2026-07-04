@@ -1,3 +1,5 @@
+import { authFetch } from './client';
+
 export interface AccountResponse {
   id: number;
   accountName: string;
@@ -16,16 +18,11 @@ interface ApiResponse<T> {
   error: string | null;
 }
 
-import { tokenStorage } from './tokenStorage';
-
-const authHeader = () => ({
-  'Content-Type': 'application/json',
-  Authorization: `Bearer ${tokenStorage.getAccessToken() ?? ''}`,
-});
+const jsonHeaders = { 'Content-Type': 'application/json' };
 
 /** GET /api/v1/account — 목록은 ApiResponse 래퍼 없이 배열로 반환 */
 export async function getAccounts(): Promise<AccountResponse[]> {
-  const res = await fetch('/api/v1/account', { headers: authHeader() });
+  const res = await authFetch('/api/v1/account');
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error ?? '계좌 목록을 불러오는 데 실패했습니다.');
@@ -35,9 +32,9 @@ export async function getAccounts(): Promise<AccountResponse[]> {
 
 /** POST /api/v1/account */
 export async function createAccount(request: AccountRequest): Promise<number> {
-  const res = await fetch('/api/v1/account', {
+  const res = await authFetch('/api/v1/account', {
     method: 'POST',
-    headers: authHeader(),
+    headers: jsonHeaders,
     body: JSON.stringify(request),
   });
   const data: ApiResponse<number> = await res.json();
@@ -49,9 +46,9 @@ export async function createAccount(request: AccountRequest): Promise<number> {
 
 /** PATCH /api/v1/account/{accountId} */
 export async function updateAccount(accountId: number, request: AccountRequest): Promise<void> {
-  const res = await fetch(`/api/v1/account/${accountId}`, {
+  const res = await authFetch(`/api/v1/account/${accountId}`, {
     method: 'PATCH',
-    headers: authHeader(),
+    headers: jsonHeaders,
     body: JSON.stringify(request),
   });
   const data: ApiResponse<null> = await res.json();
@@ -62,9 +59,9 @@ export async function updateAccount(accountId: number, request: AccountRequest):
 
 /** DELETE /api/v1/account/{accountId} */
 export async function deleteAccount(accountId: number): Promise<void> {
-  const res = await fetch(`/api/v1/account/${accountId}`, {
+  const res = await authFetch(`/api/v1/account/${accountId}`, {
     method: 'DELETE',
-    headers: authHeader(),
+    headers: jsonHeaders,
   });
   const data: ApiResponse<null> = await res.json();
   if (!res.ok || !data.success) {

@@ -1,3 +1,4 @@
+import { authFetch } from './client';
 import type { TransactionType } from './categoryApi';
 
 export type FrequencyType = 'WEEKLY' | 'MONTHLY' | 'YEARLY';
@@ -34,16 +35,11 @@ interface ApiResponse<T> {
   error: string | null;
 }
 
-import { tokenStorage } from './tokenStorage';
-
-const authHeader = () => ({
-  'Content-Type': 'application/json',
-  Authorization: `Bearer ${tokenStorage.getAccessToken() ?? ''}`,
-});
+const jsonHeaders = { 'Content-Type': 'application/json' };
 
 /** GET /api/v1/fixed-transactions */
 export async function getFixedTransactions(): Promise<FixedTransactionResponse[]> {
-  const res = await fetch('/api/v1/fixed-transactions', { headers: authHeader() });
+  const res = await authFetch('/api/v1/fixed-transactions');
   const data: ApiResponse<FixedTransactionResponse[]> = await res.json();
   if (!res.ok || !data.success) {
     throw new Error(data.error ?? '고정 수입/지출 목록을 불러오는 데 실패했습니다.');
@@ -61,9 +57,9 @@ function normalizeFixedTransaction(fx: FixedTransactionResponse): FixedTransacti
 
 /** POST /api/v1/fixed-transactions */
 export async function createFixedTransaction(request: FixedTransactionRequest): Promise<number> {
-  const res = await fetch('/api/v1/fixed-transactions', {
+  const res = await authFetch('/api/v1/fixed-transactions', {
     method: 'POST',
-    headers: authHeader(),
+    headers: jsonHeaders,
     body: JSON.stringify(request),
   });
   const data: ApiResponse<number> = await res.json();
@@ -75,9 +71,9 @@ export async function createFixedTransaction(request: FixedTransactionRequest): 
 
 /** PUT /api/v1/fixed-transactions/{id} */
 export async function updateFixedTransaction(id: number, request: FixedTransactionRequest): Promise<void> {
-  const res = await fetch(`/api/v1/fixed-transactions/${id}`, {
+  const res = await authFetch(`/api/v1/fixed-transactions/${id}`, {
     method: 'PUT',
-    headers: authHeader(),
+    headers: jsonHeaders,
     body: JSON.stringify(request),
   });
   const data: ApiResponse<null> = await res.json();
@@ -88,9 +84,9 @@ export async function updateFixedTransaction(id: number, request: FixedTransacti
 
 /** PATCH /api/v1/fixed-transactions/{id}/toggle-active */
 export async function toggleFixedTransactionActive(id: number): Promise<void> {
-  const res = await fetch(`/api/v1/fixed-transactions/${id}/toggle-active`, {
+  const res = await authFetch(`/api/v1/fixed-transactions/${id}/toggle-active`, {
     method: 'PATCH',
-    headers: authHeader(),
+    headers: jsonHeaders,
   });
   const data: ApiResponse<null> = await res.json();
   if (!res.ok || !data.success) {
@@ -100,9 +96,9 @@ export async function toggleFixedTransactionActive(id: number): Promise<void> {
 
 /** DELETE /api/v1/fixed-transactions/{id} */
 export async function deleteFixedTransaction(id: number): Promise<void> {
-  const res = await fetch(`/api/v1/fixed-transactions/${id}`, {
+  const res = await authFetch(`/api/v1/fixed-transactions/${id}`, {
     method: 'DELETE',
-    headers: authHeader(),
+    headers: jsonHeaders,
   });
   const data: ApiResponse<null> = await res.json();
   if (!res.ok || !data.success) {
