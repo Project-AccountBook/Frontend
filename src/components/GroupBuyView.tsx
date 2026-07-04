@@ -10,7 +10,7 @@ import {
   X,
   CheckCircle2,
   Bell,
-  BellRing,
+  BellOff,
   Loader2,
 } from 'lucide-react';
 import {
@@ -224,17 +224,27 @@ export const GroupBuyView: React.FC = () => {
     ? interestCategories.find((ic) => ic.categoryId === activeCategoryId)
     : null;
 
-  const handleSubscribeCategory = async () => {
-    if (!activeCategoryId || subscribedInterest || subscribingCategory) return;
+  const handleToggleCategoryNotification = async () => {
+    if (!activeCategoryId || subscribingCategory) return;
 
     setSubscribingCategory(true);
     try {
-      const result = await interestCategoryApi.register(activeCategoryId);
-      if (result.ok && result.data) {
-        setInterestCategories((prev) => [...prev, result.data!]);
-        triggerToast(`"${result.data.categoryName}" 카테고리 알림을 등록했습니다.`);
+      if (subscribedInterest) {
+        const result = await interestCategoryApi.delete(subscribedInterest.id);
+        if (result.ok) {
+          setInterestCategories((prev) => prev.filter((ic) => ic.id !== subscribedInterest.id));
+          triggerToast(`"${subscribedInterest.categoryName}" 카테고리 알림을 취소했습니다.`);
+        } else {
+          triggerToast(result.error ?? '관심 카테고리 해제에 실패했습니다.');
+        }
       } else {
-        triggerToast(result.error ?? '관심 카테고리 등록에 실패했습니다.');
+        const result = await interestCategoryApi.register(activeCategoryId);
+        if (result.ok && result.data) {
+          setInterestCategories((prev) => [...prev, result.data!]);
+          triggerToast(`"${result.data.categoryName}" 카테고리 알림을 등록했습니다.`);
+        } else {
+          triggerToast(result.error ?? '관심 카테고리 등록에 실패했습니다.');
+        }
       }
     } catch {
       triggerToast('서버와 통신 중 오류가 발생했습니다.');
@@ -659,27 +669,28 @@ export const GroupBuyView: React.FC = () => {
           </div>
 
           {activeCategoryId !== null && activeCategoryName && (
-            subscribedInterest ? (
-              <span className="groupbuy-category-bell-status" title={`"${activeCategoryName}" 새 공구 알림 받는 중`}>
-                <BellRing size={14} />
-                <span>{activeCategoryName} · 알림 받는 중</span>
+            <button
+              type="button"
+              onClick={handleToggleCategoryNotification}
+              disabled={subscribingCategory}
+              className={`groupbuy-category-bell-btn${subscribedInterest ? ' subscribed' : ''}`}
+              title={
+                subscribedInterest
+                  ? `"${activeCategoryName}" 카테고리 알림 취소`
+                  : `"${activeCategoryName}" 새 공구 알림 받기`
+              }
+            >
+              {subscribingCategory ? (
+                <Loader2 size={14} className="spin-animation" />
+              ) : subscribedInterest ? (
+                <BellOff size={14} />
+              ) : (
+                <Bell size={14} />
+              )}
+              <span>
+                {activeCategoryName} · {subscribedInterest ? '알림 취소' : '새 공구 알림'}
               </span>
-            ) : (
-              <button
-                type="button"
-                onClick={handleSubscribeCategory}
-                disabled={subscribingCategory}
-                className="groupbuy-category-bell-btn"
-                title={`"${activeCategoryName}" 새 공구 알림 받기`}
-              >
-                {subscribingCategory ? (
-                  <Loader2 size={14} className="spin-animation" />
-                ) : (
-                  <Bell size={14} />
-                )}
-                <span>{activeCategoryName} · 새 공구 알림</span>
-              </button>
-            )
+            </button>
           )}
         </div>
 
