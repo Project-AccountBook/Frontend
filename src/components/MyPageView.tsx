@@ -3,6 +3,7 @@ import {
   User,
   Lock,
   Bell,
+  Tags,
   Trash2,
   Edit2,
   Save,
@@ -17,26 +18,23 @@ import {
   Mail,
   Shield,
   ChevronRight,
+  Plus,
 } from 'lucide-react';
+import {
+  authApi,
+  tokenStorage,
+  userApi,
+  interestCategoryApi,
+  groupPurchaseCategoryApi,
+  type UserProfileResponse,
+  type InterestCategoryResponse,
+  type GroupPurchaseCategoryResponse,
+} from '../api';
+import { openAddressSearch } from '../utils/daumPostcode';
 
-interface UserProfile {
-  email: string;
-  username: string;
-  birthDate: string | null;
-  address: string | null;
-  budgetAlertThreshold: number;
-  isPortfolioPublic: boolean;
-  isBudgetAlertEnabled: boolean;
-  isInterestCategoryEnabled: boolean;
-  isSystemAlertEnabled: boolean;
-}
+type UserProfile = UserProfileResponse;
 
-type MyPageTab = 'profile' | 'password' | 'notifications' | 'withdraw';
-
-const authHeader = () => ({
-  'Content-Type': 'application/json',
-  Authorization: `Bearer ${localStorage.getItem('accessToken') ?? ''}`,
-});
+type MyPageTab = 'profile' | 'password' | 'notifications' | 'interestCategories' | 'withdraw';
 
 export const MyPageView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<MyPageTab>('profile');
@@ -47,6 +45,8 @@ export const MyPageView: React.FC = () => {
   // Profile edit
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState<Partial<UserProfile>>({});
+  const [editBaseAddress, setEditBaseAddress] = useState('');
+  const [editDetailAddress, setEditDetailAddress] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
 
@@ -57,6 +57,7 @@ export const MyPageView: React.FC = () => {
   const [showCurrentPw, setShowCurrentPw] = useState(false);
   const [showNewPw, setShowNewPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
+  const [isCurrentPasswordVerified, setIsCurrentPasswordVerified] = useState(false);
   const [pwLoading, setPwLoading] = useState(false);
   const [pwError, setPwError] = useState<string | null>(null);
   const [pwSuccess, setPwSuccess] = useState<string | null>(null);
@@ -66,19 +67,27 @@ export const MyPageView: React.FC = () => {
   const [withdrawLoading, setWithdrawLoading] = useState(false);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
 
+  // Interest categories
+  const [interestCategories, setInterestCategories] = useState<InterestCategoryResponse[]>([]);
+  const [allCategories, setAllCategories] = useState<GroupPurchaseCategoryResponse[]>([]);
+  const [loadingInterestCategories, setLoadingInterestCategories] = useState(false);
+  const [interestCategoryError, setInterestCategoryError] = useState<string | null>(null);
+  const [interestCategorySuccess, setInterestCategorySuccess] = useState<string | null>(null);
+  const [interestActionId, setInterestActionId] = useState<number | null>(null);
+  const [addingCategoryId, setAddingCategoryId] = useState<number | null>(null);
+
   // 프로필 불러오기
   useEffect(() => {
     const fetchProfile = async () => {
       setLoadingProfile(true);
       setProfileError(null);
       try {
-        const res = await fetch('/api/v1/users/me', { headers: authHeader() });
-        const data = await res.json();
-        if (res.ok && data.success) {
-          setProfile(data.data);
-          setEditForm(data.data);
+        const result = await userApi.getMyProfile();
+        if (result.ok && result.data) {
+          setProfile(result.data);
+          setEditForm(result.data);
         } else {
-          setProfileError(data.error ?? '프로필을 불러오는 데 실패했습니다.');
+          setProfileError(result.error ?? '프로필을 불러오는 데 실패했습니다.');
         }
       } catch {
         setProfileError('서버와 통신 중 오류가 발생했습니다. 백엔드가 실행 중인지 확인해 주세요.');
@@ -89,35 +98,180 @@ export const MyPageView: React.FC = () => {
     fetchProfile();
   }, []);
 
+  useEffect(() => {
+    if (activeTab !== 'password') {
+      setIsCurrentPasswordVerified(false);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setPwError(null);
+      setPwSuccess(null);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== 'interestCategories') return;
+
+    const fetchInterestCategories = async () => {
+      setLoadingInterestCategories(true);
+      setInterestCategoryError(null);
+      try {
+        const [interestResult, categoryResult] = await Promise.all([
+          interestCategoryApi.getMyCategories(),
+          groupPurchaseCategoryApi.getAll(),
+        ]);
+
+        if (interestResult.ok && interestResult.data) {
+          setInterestCategories(interestResult.data);
+        } else {
+          setInterestCategoryError(interestResult.error ?? '관심 카테고리를 불러오지 못했습니다.');
+        }
+
+        if (categoryResult.ok && categoryResult.data) {
+          setAllCategories(categoryResult.data);
+        }
+      } catch {
+        setInterestCategoryError('서버와 통신 중 오류가 발생했습니다.');
+      } finally {
+        setLoadingInterestCategories(false);
+      }
+    };
+
+    fetchInterestCategories();
+  }, [activeTab]);
+
+  const unsubscribedCategories = allCategories.filter(
+    (cat) => !interestCategories.some((ic) => ic.categoryId === cat.id),
+  );
+
+  const handleToggleInterestAlarm = async (item: InterestCategoryResponse) => {
+    setInterestActionId(item.id);
+    setInterestCategoryError(null);
+    setInterestCategorySuccess(null);
+    try {
+      const nextEnabled = !item.isAlarmEnabled;
+      const result = await interestCategoryApi.updateAlarm(item.id, nextEnabled);
+      if (result.ok) {
+        setInterestCategories((prev) =>
+          prev.map((ic) => (ic.id === item.id ? { ...ic, isAlarmEnabled: nextEnabled } : ic)),
+        );
+        setInterestCategorySuccess(
+          nextEnabled
+            ? `"${item.categoryName}" 카테고리 알림을 켰습니다.`
+            : `"${item.categoryName}" 카테고리 알림을 껐습니다.`,
+        );
+        setTimeout(() => setInterestCategorySuccess(null), 3000);
+      } else {
+        setInterestCategoryError(result.error ?? '알림 설정 변경에 실패했습니다.');
+      }
+    } catch {
+      setInterestCategoryError('서버와 통신 중 오류가 발생했습니다.');
+    } finally {
+      setInterestActionId(null);
+    }
+  };
+
+  const handleDeleteInterestCategory = async (item: InterestCategoryResponse) => {
+    setInterestActionId(item.id);
+    setInterestCategoryError(null);
+    setInterestCategorySuccess(null);
+    try {
+      const result = await interestCategoryApi.delete(item.id);
+      if (result.ok) {
+        setInterestCategories((prev) => prev.filter((ic) => ic.id !== item.id));
+        setInterestCategorySuccess(`"${item.categoryName}" 관심 카테고리를 해제했습니다.`);
+        setTimeout(() => setInterestCategorySuccess(null), 3000);
+      } else {
+        setInterestCategoryError(result.error ?? '관심 카테고리 해제에 실패했습니다.');
+      }
+    } catch {
+      setInterestCategoryError('서버와 통신 중 오류가 발생했습니다.');
+    } finally {
+      setInterestActionId(null);
+    }
+  };
+
+  const handleAddInterestCategory = async (categoryId: number) => {
+    setAddingCategoryId(categoryId);
+    setInterestCategoryError(null);
+    setInterestCategorySuccess(null);
+    try {
+      const result = await interestCategoryApi.register(categoryId);
+      if (result.ok && result.data) {
+        setInterestCategories((prev) => [...prev, result.data!]);
+        setInterestCategorySuccess(`"${result.data.categoryName}" 관심 카테고리를 등록했습니다.`);
+        setTimeout(() => setInterestCategorySuccess(null), 3000);
+      } else {
+        setInterestCategoryError(result.error ?? '관심 카테고리 등록에 실패했습니다.');
+      }
+    } catch {
+      setInterestCategoryError('서버와 통신 중 오류가 발생했습니다.');
+    } finally {
+      setAddingCategoryId(null);
+    }
+  };
+
+  const resetPasswordFlow = () => {
+    setIsCurrentPasswordVerified(false);
+    setNewPassword('');
+    setConfirmPassword('');
+    setPwError(null);
+    setPwSuccess(null);
+  };
+
+  const startEditing = () => {
+    if (!profile) return;
+    setEditing(true);
+    setEditForm(profile);
+    setEditBaseAddress(profile.address ?? '');
+    setEditDetailAddress('');
+  };
+
+  const cancelEditing = () => {
+    setEditing(false);
+    setEditBaseAddress('');
+    setEditDetailAddress('');
+  };
+
+  const handleAddressSearch = async () => {
+    try {
+      await openAddressSearch((selectedAddress) => {
+        setEditBaseAddress(selectedAddress);
+        setEditDetailAddress('');
+      });
+    } catch (err) {
+      console.error(err);
+      setProfileError('주소 검색 창을 열 수 없습니다. 잠시 후 다시 시도해 주세요.');
+    }
+  };
+
   // 프로필 저장
   const handleSaveProfile = async () => {
     setSavingProfile(true);
     setProfileSuccess(null);
     setProfileError(null);
     try {
-      const body = {
-        username: editForm.username,
+      const fullAddress = [editBaseAddress, editDetailAddress.trim()].filter(Boolean).join(' ') || null;
+
+      const result = await userApi.updateMyProfile({
+        username: editForm.username ?? '',
         birthDate: editForm.birthDate ?? null,
-        address: editForm.address ?? null,
+        address: fullAddress,
         budgetAlertThreshold: editForm.budgetAlertThreshold ?? 80,
         isPortfolioPublic: editForm.isPortfolioPublic ?? false,
         isBudgetAlertEnabled: editForm.isBudgetAlertEnabled ?? true,
         isInterestCategoryEnabled: editForm.isInterestCategoryEnabled ?? true,
         isSystemAlertEnabled: editForm.isSystemAlertEnabled ?? true,
-      };
-      const res = await fetch('/api/v1/users/me', {
-        method: 'PATCH',
-        headers: authHeader(),
-        body: JSON.stringify(body),
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setProfile({ ...profile!, ...editForm } as UserProfile);
+      if (result.ok) {
+        setProfile({ ...profile!, ...editForm, address: fullAddress } as UserProfile);
         setEditing(false);
+        setEditBaseAddress('');
+        setEditDetailAddress('');
         setProfileSuccess('프로필이 성공적으로 저장되었습니다.');
         setTimeout(() => setProfileSuccess(null), 3000);
       } else {
-        setProfileError(data.error ?? '저장에 실패했습니다.');
+        setProfileError(result.error ?? '저장에 실패했습니다.');
       }
     } catch {
       setProfileError('서버와 통신 중 오류가 발생했습니다.');
@@ -133,7 +287,7 @@ export const MyPageView: React.FC = () => {
     setProfileSuccess(null);
     setProfileError(null);
     try {
-      const body = {
+      const result = await userApi.updateMyProfile({
         username: profile.username,
         birthDate: profile.birthDate ?? null,
         address: profile.address ?? null,
@@ -142,23 +296,50 @@ export const MyPageView: React.FC = () => {
         isBudgetAlertEnabled: profile.isBudgetAlertEnabled,
         isInterestCategoryEnabled: profile.isInterestCategoryEnabled,
         isSystemAlertEnabled: profile.isSystemAlertEnabled,
-      };
-      const res = await fetch('/api/v1/users/me', {
-        method: 'PATCH',
-        headers: authHeader(),
-        body: JSON.stringify(body),
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
+      if (result.ok) {
         setProfileSuccess('알림 설정이 저장되었습니다.');
         setTimeout(() => setProfileSuccess(null), 3000);
       } else {
-        setProfileError(data.error ?? '저장에 실패했습니다.');
+        setProfileError(result.error ?? '저장에 실패했습니다.');
       }
     } catch {
       setProfileError('서버와 통신 중 오류가 발생했습니다.');
     } finally {
       setSavingProfile(false);
+    }
+  };
+
+  // 현재 비밀번호 확인
+  const handleVerifyCurrentPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPwError(null);
+    setPwSuccess(null);
+
+    if (!currentPassword) {
+      setPwError('현재 비밀번호를 입력해 주세요.');
+      return;
+    }
+    if (!profile?.email) {
+      setPwError('프로필 정보를 불러온 후 다시 시도해 주세요.');
+      return;
+    }
+
+    setPwLoading(true);
+    try {
+      const result = await authApi.login({ email: profile.email, password: currentPassword });
+      if (result.ok && result.data) {
+        tokenStorage.setTokens(result.data.accessToken, result.data.refreshToken);
+        setIsCurrentPasswordVerified(true);
+        setPwSuccess('현재 비밀번호가 확인되었습니다. 새 비밀번호를 입력해 주세요.');
+        setTimeout(() => setPwSuccess(null), 3000);
+      } else {
+        setPwError(result.error ?? '현재 비밀번호가 일치하지 않습니다.');
+      }
+    } catch {
+      setPwError('서버와 통신 중 오류가 발생했습니다.');
+    } finally {
+      setPwLoading(false);
     }
   };
 
@@ -174,20 +355,29 @@ export const MyPageView: React.FC = () => {
     }
     if (newPassword !== confirmPassword) { setPwError('새 비밀번호가 일치하지 않습니다.'); return; }
 
+    const isSettingPassword = profile?.hasPassword === false;
+
     setPwLoading(true);
     try {
-      const res = await fetch('/api/v1/users/password', {
-        method: 'PATCH',
-        headers: authHeader(),
-        body: JSON.stringify({ currentPassword, newPassword }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setPwSuccess('비밀번호가 성공적으로 변경되었습니다.');
-        setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
+      const result = await userApi.updatePassword(
+        isSettingPassword
+          ? { newPassword }
+          : { currentPassword, newPassword },
+      );
+      if (result.ok) {
+        setPwSuccess(isSettingPassword
+          ? '비밀번호가 성공적으로 설정되었습니다. 이제 이메일·비밀번호로도 로그인할 수 있습니다.'
+          : '비밀번호가 성공적으로 변경되었습니다.');
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setIsCurrentPasswordVerified(false);
+        if (profile) {
+          setProfile({ ...profile, hasPassword: true });
+        }
         setTimeout(() => setPwSuccess(null), 3000);
       } else {
-        setPwError(data.error ?? '비밀번호 변경에 실패했습니다.');
+        setPwError(result.error ?? (isSettingPassword ? '비밀번호 설정에 실패했습니다.' : '비밀번호 변경에 실패했습니다.'));
       }
     } catch {
       setPwError('서버와 통신 중 오류가 발생했습니다.');
@@ -202,16 +392,12 @@ export const MyPageView: React.FC = () => {
     setWithdrawLoading(true);
     setWithdrawError(null);
     try {
-      const res = await fetch('/api/v1/users/withdraw', {
-        method: 'DELETE',
-        headers: authHeader(),
-      });
-      if (res.ok) {
-        localStorage.clear();
+      const result = await userApi.withdraw();
+      if (result.ok) {
+        tokenStorage.clear();
         window.location.reload();
       } else {
-        const data = await res.json();
-        setWithdrawError(data.error ?? '회원 탈퇴에 실패했습니다.');
+        setWithdrawError(result.error ?? '회원 탈퇴에 실패했습니다.');
       }
     } catch {
       setWithdrawError('서버와 통신 중 오류가 발생했습니다.');
@@ -220,10 +406,14 @@ export const MyPageView: React.FC = () => {
     }
   };
 
+  const needsPasswordSetup = profile?.hasPassword === false;
+  const passwordTabLabel = needsPasswordSetup ? '비밀번호 설정' : '비밀번호 변경';
+
   const tabs: { id: MyPageTab; label: string; icon: React.ElementType }[] = [
     { id: 'profile', label: '프로필 정보', icon: User },
-    { id: 'password', label: '비밀번호 변경', icon: Lock },
+    { id: 'password', label: passwordTabLabel, icon: Lock },
     { id: 'notifications', label: '알림 설정', icon: Bell },
+    { id: 'interestCategories', label: '관심 카테고리', icon: Tags },
     { id: 'withdraw', label: '회원 탈퇴', icon: Trash2 },
   ];
 
@@ -297,7 +487,7 @@ export const MyPageView: React.FC = () => {
                   <p className="mypage-section-desc">닉네임, 생년월일, 주소 등 기본 정보를 관리합니다</p>
                 </div>
                 {!editing && profile && (
-                  <button className="mypage-btn-edit" onClick={() => { setEditing(true); setEditForm(profile); }}>
+                  <button className="mypage-btn-edit" onClick={startEditing}>
                     <Edit2 size={15} />
                     <span>수정</span>
                   </button>
@@ -355,15 +545,34 @@ export const MyPageView: React.FC = () => {
                   </div>
 
                   {/* Address */}
-                  <div className="mypage-field">
+                  <div className="mypage-field span-full">
                     <label className="mypage-field-label"><MapPin size={14} /> 주소</label>
                     {editing ? (
-                      <input
-                        className="mypage-input"
-                        value={editForm.address ?? ''}
-                        onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
-                        placeholder="주소를 입력하세요"
-                      />
+                      <div className="mypage-address-edit">
+                        <div className="mypage-address-search-row">
+                          <input
+                            className="mypage-input"
+                            value={editBaseAddress}
+                            readOnly
+                            placeholder="주소 검색을 눌러 주소를 선택하세요"
+                          />
+                          <button
+                            type="button"
+                            className="mypage-btn-address-search"
+                            onClick={handleAddressSearch}
+                          >
+                            주소 검색
+                          </button>
+                        </div>
+                        {editBaseAddress && (
+                          <input
+                            className="mypage-input mypage-address-detail"
+                            value={editDetailAddress}
+                            onChange={(e) => setEditDetailAddress(e.target.value)}
+                            placeholder="동/호수 등 상세 주소를 입력하세요"
+                          />
+                        )}
+                      </div>
                     ) : (
                       <div className="mypage-field-value">
                         <span>{profile.address ?? '—'}</span>
@@ -398,7 +607,7 @@ export const MyPageView: React.FC = () => {
 
               {editing && (
                 <div className="mypage-action-row">
-                  <button className="mypage-btn-cancel" onClick={() => setEditing(false)}>
+                  <button className="mypage-btn-cancel" onClick={cancelEditing}>
                     <X size={15} /> 취소
                   </button>
                   <button className="mypage-btn-save" onClick={handleSaveProfile} disabled={savingProfile}>
@@ -415,70 +624,130 @@ export const MyPageView: React.FC = () => {
             <div>
               <div className="mypage-section-head">
                 <div>
-                  <h2 className="mypage-section-title">비밀번호 변경</h2>
-                  <p className="mypage-section-desc">현재 비밀번호를 확인한 후 새 비밀번호로 변경합니다</p>
+                  <h2 className="mypage-section-title">{passwordTabLabel}</h2>
+                  <p className="mypage-section-desc">
+                    {needsPasswordSetup
+                      ? '간편 로그인으로 가입한 계정입니다. 이메일·비밀번호 로그인을 사용하려면 비밀번호를 설정해 주세요.'
+                      : isCurrentPasswordVerified
+                        ? '새로운 비밀번호를 입력해 주세요'
+                        : '현재 비밀번호를 입력하여 본인 확인을 진행해 주세요'}
+                  </p>
                 </div>
               </div>
 
               {pwSuccess && <Feedback msg={pwSuccess} type="success" />}
               {pwError && <Feedback msg={pwError} type="error" />}
 
-              <form onSubmit={handleChangePassword} className="mypage-form">
-                <div className="mypage-field span-full">
-                  <label className="mypage-field-label">현재 비밀번호</label>
-                  <div className="mypage-pw-wrapper">
-                    <input
-                      type={showCurrentPw ? 'text' : 'password'}
-                      className="mypage-input"
-                      placeholder="현재 비밀번호를 입력하세요"
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                    />
-                    <button type="button" className="mypage-pw-toggle" onClick={() => setShowCurrentPw(!showCurrentPw)}>
-                      {showCurrentPw ? <EyeOff size={16} /> : <Eye size={16} />}
+              {needsPasswordSetup ? (
+                <form onSubmit={handleChangePassword} className="mypage-form mypage-form-password">
+                  <div className="mypage-field span-full">
+                    <label className="mypage-field-label">새 비밀번호 <span style={{ color: 'var(--red)', marginLeft: '2px' }}>*</span></label>
+                    <div className="mypage-pw-wrapper">
+                      <input
+                        type={showNewPw ? 'text' : 'password'}
+                        className="mypage-input"
+                        placeholder="8~16자 영문 대소문자, 숫자, 특수문자 조합"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                      />
+                      <button type="button" className="mypage-pw-toggle" onClick={() => setShowNewPw(!showNewPw)}>
+                        {showNewPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mypage-field span-full">
+                    <label className="mypage-field-label">새 비밀번호 확인 <span style={{ color: 'var(--red)', marginLeft: '2px' }}>*</span></label>
+                    <div className="mypage-pw-wrapper">
+                      <input
+                        type={showConfirmPw ? 'text' : 'password'}
+                        className="mypage-input"
+                        placeholder="동일한 비밀번호를 한번 더 입력하세요"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                      />
+                      <button type="button" className="mypage-pw-toggle" onClick={() => setShowConfirmPw(!showConfirmPw)}>
+                        {showConfirmPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mypage-action-row" style={{ marginTop: '32px' }}>
+                    <button type="submit" className="mypage-btn-save" disabled={pwLoading}>
+                      {pwLoading ? <Loader2 size={15} className="spin-animation" /> : <Save size={15} />}
+                      비밀번호 설정
                     </button>
                   </div>
-                </div>
+                </form>
+              ) : !isCurrentPasswordVerified ? (
+                <form onSubmit={handleVerifyCurrentPassword} className="mypage-form mypage-form-password">
+                  <div className="mypage-field span-full">
+                    <label className="mypage-field-label">현재 비밀번호</label>
+                    <div className="mypage-pw-verify-row">
+                      <div className="mypage-pw-wrapper">
+                        <input
+                          type={showCurrentPw ? 'text' : 'password'}
+                          className="mypage-input"
+                          placeholder="현재 비밀번호를 입력하세요"
+                          value={currentPassword}
+                          onChange={(e) => setCurrentPassword(e.target.value)}
+                        />
+                        <button type="button" className="mypage-pw-toggle" onClick={() => setShowCurrentPw(!showCurrentPw)}>
+                          {showCurrentPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                      <button type="submit" className="mypage-btn-verify-pw" disabled={pwLoading}>
+                        {pwLoading ? <Loader2 size={15} className="spin-animation" /> : <Lock size={15} />}
+                        현재 비밀번호 확인
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              ) : (
+                <form onSubmit={handleChangePassword} className="mypage-form mypage-form-password">
+                  <div className="mypage-field span-full">
+                    <label className="mypage-field-label">새 비밀번호 <span style={{ color: 'var(--red)', marginLeft: '2px' }}>*</span></label>
+                    <div className="mypage-pw-wrapper">
+                      <input
+                        type={showNewPw ? 'text' : 'password'}
+                        className="mypage-input"
+                        placeholder="8~16자 영문 대소문자, 숫자, 특수문자 조합"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                      />
+                      <button type="button" className="mypage-pw-toggle" onClick={() => setShowNewPw(!showNewPw)}>
+                        {showNewPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
 
-                <div className="mypage-field span-full">
-                  <label className="mypage-field-label">새 비밀번호 <span style={{ color: 'var(--red)', marginLeft: '2px' }}>*</span></label>
-                  <div className="mypage-pw-wrapper">
-                    <input
-                      type={showNewPw ? 'text' : 'password'}
-                      className="mypage-input"
-                      placeholder="8~16자 영문 대소문자, 숫자, 특수문자 조합"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                    />
-                    <button type="button" className="mypage-pw-toggle" onClick={() => setShowNewPw(!showNewPw)}>
-                      {showNewPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                  <div className="mypage-field span-full">
+                    <label className="mypage-field-label">새 비밀번호 확인 <span style={{ color: 'var(--red)', marginLeft: '2px' }}>*</span></label>
+                    <div className="mypage-pw-wrapper">
+                      <input
+                        type={showConfirmPw ? 'text' : 'password'}
+                        className="mypage-input"
+                        placeholder="동일한 비밀번호를 한번 더 입력하세요"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                      />
+                      <button type="button" className="mypage-pw-toggle" onClick={() => setShowConfirmPw(!showConfirmPw)}>
+                        {showConfirmPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mypage-action-row" style={{ marginTop: '32px' }}>
+                    <button type="button" className="mypage-btn-cancel" onClick={resetPasswordFlow}>
+                      <X size={15} /> 취소
+                    </button>
+                    <button type="submit" className="mypage-btn-save" disabled={pwLoading}>
+                      {pwLoading ? <Loader2 size={15} className="spin-animation" /> : <Save size={15} />}
+                      비밀번호 변경
                     </button>
                   </div>
-                </div>
-
-                <div className="mypage-field span-full">
-                  <label className="mypage-field-label">새 비밀번호 확인 <span style={{ color: 'var(--red)', marginLeft: '2px' }}>*</span></label>
-                  <div className="mypage-pw-wrapper">
-                    <input
-                      type={showConfirmPw ? 'text' : 'password'}
-                      className="mypage-input"
-                      placeholder="동일한 비밀번호를 한번 더 입력하세요"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                    />
-                    <button type="button" className="mypage-pw-toggle" onClick={() => setShowConfirmPw(!showConfirmPw)}>
-                      {showConfirmPw ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mypage-action-row">
-                  <button type="submit" className="mypage-btn-save" disabled={pwLoading}>
-                    {pwLoading ? <Loader2 size={15} className="spin-animation" /> : <Save size={15} />}
-                    비밀번호 변경
-                  </button>
-                </div>
-              </form>
+                </form>
+              )}
             </div>
           )}
 
@@ -541,6 +810,114 @@ export const MyPageView: React.FC = () => {
                   설정 저장
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* ── Interest Categories Tab ─────── */}
+          {activeTab === 'interestCategories' && (
+            <div>
+              <div className="mypage-section-head">
+                <div>
+                  <h2 className="mypage-section-title">관심 카테고리</h2>
+                  <p className="mypage-section-desc">
+                    구독 중인 공동구매 카테고리를 관리합니다. 새 공구가 올라오면 알림을 받을 수 있습니다.
+                  </p>
+                </div>
+              </div>
+
+              {interestCategorySuccess && <Feedback msg={interestCategorySuccess} type="success" />}
+              {interestCategoryError && <Feedback msg={interestCategoryError} type="error" />}
+
+              {loadingInterestCategories ? (
+                <div className="mypage-loading">
+                  <Loader2 size={24} className="spin-animation" />
+                  <span>관심 카테고리 불러오는 중...</span>
+                </div>
+              ) : (
+                <>
+                  {interestCategories.length === 0 ? (
+                    <div
+                      style={{
+                        padding: '32px 20px',
+                        textAlign: 'center',
+                        color: 'var(--text-secondary)',
+                        fontSize: '14px',
+                        border: '1px dashed var(--border)',
+                        borderRadius: '12px',
+                        marginBottom: '24px',
+                      }}
+                    >
+                      등록된 관심 카테고리가 없습니다.
+                      <br />
+                      아래에서 추가하거나, 공동구매 페이지에서 카테고리를 선택해 알림을 등록해 보세요.
+                    </div>
+                  ) : (
+                    <div className="mypage-interest-list" style={{ marginBottom: '32px' }}>
+                      {interestCategories.map((item) => (
+                        <div key={item.id} className="mypage-interest-item">
+                          <div className="mypage-interest-item-info">
+                            <span className="mypage-interest-item-name">{item.categoryName}</span>
+                            <span className="mypage-interest-item-desc">
+                              {item.isAlarmEnabled
+                                ? '새 공동구매 등록 시 알림을 받습니다'
+                                : '알림이 꺼져 있습니다 (구독은 유지됨)'}
+                            </span>
+                          </div>
+                          <div className="mypage-interest-item-actions">
+                            <ToggleSwitch
+                              checked={item.isAlarmEnabled}
+                              onChange={() => handleToggleInterestAlarm(item)}
+                              label=""
+                            />
+                            <button
+                              type="button"
+                              className="mypage-btn-icon-danger"
+                              onClick={() => handleDeleteInterestCategory(item)}
+                              disabled={interestActionId === item.id}
+                              title="관심 카테고리 해제"
+                            >
+                              {interestActionId === item.id ? (
+                                <Loader2 size={14} className="spin-animation" />
+                              ) : (
+                                <Trash2 size={14} />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {unsubscribedCategories.length > 0 && (
+                    <div>
+                      <h3 className="mypage-field-label" style={{ marginBottom: '4px' }}>
+                        카테고리 추가
+                      </h3>
+                      <p className="mypage-section-desc" style={{ marginBottom: '8px' }}>
+                        아직 등록하지 않은 카테고리를 선택해 관심 카테고리로 추가할 수 있습니다.
+                      </p>
+                      <div className="mypage-interest-add-grid">
+                        {unsubscribedCategories.map((cat) => (
+                          <button
+                            key={cat.id}
+                            type="button"
+                            className="mypage-interest-add-btn"
+                            onClick={() => handleAddInterestCategory(cat.id)}
+                            disabled={addingCategoryId === cat.id}
+                          >
+                            {addingCategoryId === cat.id ? (
+                              <Loader2 size={14} className="spin-animation" />
+                            ) : (
+                              <Plus size={14} />
+                            )}
+                            {cat.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
 

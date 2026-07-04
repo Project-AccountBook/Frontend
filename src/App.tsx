@@ -15,21 +15,23 @@ import { QnaWriteView } from './components/QnaWriteView';
 import { GroupBuyAdminView } from './components/GroupBuyAdminView';
 import { NotificationView, MOCK_NOTIFICATIONS } from './components/NotificationView';
 import { BudgetView } from './components/BudgetView';
-import { AssetView } from './components/AssetView';
+import { AssetView, type AssetActiveSection } from './components/AssetView';
 import { LoginView } from './components/LoginView';
 import { MyPageView } from './components/MyPageView';
+import { authApi, setAuthExpiredHandler, tokenStorage } from './api';
 import { Construction } from 'lucide-react';
 
 type BoardMode = 'list' | 'detail' | 'write';
 
 function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => !!localStorage.getItem('accessToken'));
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => tokenStorage.hasToken());
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [knowhowMode, setKnowhowMode] = useState<BoardMode>('list');
   const [knowhowPostId, setKnowhowPostId] = useState<number | null>(null);
   const [qnaMode, setQnaMode] = useState<BoardMode>('list');
   const [qnaPostId, setQnaPostId] = useState<number | null>(null);
   const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
+  const [assetInitialSection, setAssetInitialSection] = useState<AssetActiveSection | undefined>();
 
   const unreadNotificationCount = useMemo(
     () => notifications.filter((n) => !n.isRead).length,
@@ -37,14 +39,21 @@ function App() {
   );
 
   useEffect(() => {
+    setAuthExpiredHandler(() => {
+      setIsLoggedIn(false);
+      setActiveTab('dashboard');
+    });
+    return () => setAuthExpiredHandler(null);
+  }, []);
+
+  useEffect(() => {
     if (window.location.pathname === '/oauth2/redirect') {
       const params = new URLSearchParams(window.location.search);
       const accessToken = params.get('accessToken');
       const refreshToken = params.get('refreshToken');
       if (accessToken && refreshToken) {
-        localStorage.setItem('accessToken', accessToken);
-        localStorage.setItem('refreshToken', refreshToken);
-        localStorage.setItem('userEmail', 'social-login');
+        const rememberMe = tokenStorage.consumePendingRememberMe() ?? true;
+        tokenStorage.setTokens(accessToken, refreshToken, 'social-login', rememberMe);
         setIsLoggedIn(true);
       }
       window.history.replaceState({}, document.title, '/');
@@ -52,33 +61,30 @@ function App() {
   }, []);
 
   const handleLogout = async () => {
-    const token = localStorage.getItem('accessToken');
-    if (token) {
+    if (tokenStorage.hasToken()) {
       try {
-        await fetch('/api/v1/auth/logout', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
+        await authApi.logout();
       } catch (err) {
         console.error('Logout API error:', err);
       }
     }
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('userEmail');
+    tokenStorage.clear();
     setIsLoggedIn(false);
     setActiveTab('dashboard');
   };
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
+    setAssetInitialSection(undefined);
     setKnowhowMode('list');
     setKnowhowPostId(null);
     setQnaMode('list');
     setQnaPostId(null);
+  };
+
+  const goToCategorySettings = () => {
+    setAssetInitialSection('categories');
+    setActiveTab('history');
   };
 
   const renderKnowhow = () => {
@@ -148,17 +154,15 @@ function App() {
       case 'dashboard':
         return <DashboardView />;
       case 'history':
-        return <AssetView />;
+        return <AssetView initialSection={assetInitialSection} />;
       case 'budget':
-        return <BudgetView />;
+        return <BudgetView onGoToCategorySettings={goToCategorySettings} />;
       case 'analysis':
         return <AnalysisView />;
       case 'comparison':
         return <ComparisonView />;
       case 'locationComparison':
         return <LocationComparisonView />;
-      case 'budget':
-        return <BudgetView />;
       case 'groupbuy':
         return <GroupBuyView />;
       case 'knowhow':

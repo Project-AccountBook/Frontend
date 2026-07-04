@@ -36,9 +36,11 @@ interface SpringPage<T> {
   number: number;
 }
 
+import { tokenStorage } from './tokenStorage';
+
 const authHeader = (json = true) => {
   const headers: Record<string, string> = {
-    Authorization: `Bearer ${localStorage.getItem('accessToken') ?? ''}`,
+    Authorization: `Bearer ${tokenStorage.getAccessToken() ?? ''}`,
   };
   if (json) headers['Content-Type'] = 'application/json';
   return headers;

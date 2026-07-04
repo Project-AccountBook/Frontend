@@ -15,9 +15,11 @@ interface ApiResponse<T> {
   error: string | null;
 }
 
+import { tokenStorage } from './tokenStorage';
+
 const authHeader = () => ({
   'Content-Type': 'application/json',
-  Authorization: `Bearer ${localStorage.getItem('accessToken') ?? ''}`,
+  Authorization: `Bearer ${tokenStorage.getAccessToken() ?? ''}`,
 });
 
 /** GET /api/v1/account — 목록은 ApiResponse 래퍼 없이 배열로 반환 */
