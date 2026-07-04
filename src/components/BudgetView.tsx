@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   PiggyBank,
   Plus,
@@ -14,6 +14,8 @@ import {
   Calendar,
   ArrowRight
 } from 'lucide-react';
+import { budgetApi, categoryApi } from '../api';
+import type { BudgetResponse, BudgetSummaryResponse, CategoryResponse } from '../api';
 import { MonthYearNavigator } from './MonthYearNavigator';
 
 interface BudgetItem {
@@ -34,24 +36,7 @@ interface BudgetFormPayload {
   expectedExpense: number;
 }
 
-type BudgetsByMonth = Record<string, BudgetItem[]>;
-
-interface ExpenseCategory {
-  id: number;
-  name: string;
-  isCustom: boolean;
-}
-
-const EXPENSE_CATEGORIES: ExpenseCategory[] = [
-  { id: 1, name: '식비', isCustom: false },
-  { id: 2, name: '주거비', isCustom: false },
-  { id: 3, name: '육아용품', isCustom: false },
-  { id: 4, name: '교통/통신', isCustom: false },
-  { id: 5, name: '의료/건강', isCustom: false },
-  { id: 6, name: '기타/예비비', isCustom: false },
-  { id: 7, name: '아이간식', isCustom: true },
-  { id: 8, name: '학원비', isCustom: true }
-];
+type ExpenseCategory = Pick<CategoryResponse, 'id' | 'name' | 'isCustom'>;
 
 const CATEGORY_COLORS = [
   '#3b82f6',
@@ -69,149 +54,6 @@ const STATUS_TABS = [
   { id: 'normal', label: '정상' },
   { id: 'over', label: '초과' }
 ] as const;
-
-const JUNE_2026_BUDGETS: BudgetItem[] = [
-  {
-    id: 1,
-    categoryId: 1,
-    categoryName: '식비',
-    totalBudget: 2000000,
-    expectedExpense: 500000,
-    totalPlannedBudget: 2500000,
-    actualExpense: 1850000,
-    remainingBudget: 650000,
-    progress: 74
-  },
-  {
-    id: 2,
-    categoryId: 2,
-    categoryName: '주거비',
-    totalBudget: 1500000,
-    expectedExpense: 0,
-    totalPlannedBudget: 1500000,
-    actualExpense: 1500000,
-    remainingBudget: 0,
-    progress: 100
-  },
-  {
-    id: 3,
-    categoryId: 3,
-    categoryName: '육아용품',
-    totalBudget: 1000000,
-    expectedExpense: 200000,
-    totalPlannedBudget: 1200000,
-    actualExpense: 1300000,
-    remainingBudget: -100000,
-    progress: 108
-  },
-  {
-    id: 4,
-    categoryId: 4,
-    categoryName: '교통/통신',
-    totalBudget: 600000,
-    expectedExpense: 200000,
-    totalPlannedBudget: 800000,
-    actualExpense: 620000,
-    remainingBudget: 180000,
-    progress: 78
-  },
-  {
-    id: 7,
-    categoryId: 7,
-    categoryName: '아이간식',
-    totalBudget: 300000,
-    expectedExpense: 50000,
-    totalPlannedBudget: 350000,
-    actualExpense: 280000,
-    remainingBudget: 70000,
-    progress: 80
-  }
-];
-
-const INITIAL_BUDGETS_BY_MONTH: BudgetsByMonth = {
-  '2026-04': [
-    {
-      id: 101,
-      categoryId: 1,
-      categoryName: '식비',
-      totalBudget: 2200000,
-      expectedExpense: 300000,
-      totalPlannedBudget: 2500000,
-      actualExpense: 2100000,
-      remainingBudget: 400000,
-      progress: 84
-    },
-    {
-      id: 102,
-      categoryId: 2,
-      categoryName: '주거비',
-      totalBudget: 1500000,
-      expectedExpense: 0,
-      totalPlannedBudget: 1500000,
-      actualExpense: 1500000,
-      remainingBudget: 0,
-      progress: 100
-    },
-    {
-      id: 103,
-      categoryId: 3,
-      categoryName: '육아용품',
-      totalBudget: 900000,
-      expectedExpense: 100000,
-      totalPlannedBudget: 1000000,
-      actualExpense: 850000,
-      remainingBudget: 150000,
-      progress: 85
-    }
-  ],
-  '2026-05': [
-    {
-      id: 201,
-      categoryId: 1,
-      categoryName: '식비',
-      totalBudget: 2100000,
-      expectedExpense: 400000,
-      totalPlannedBudget: 2500000,
-      actualExpense: 1920000,
-      remainingBudget: 580000,
-      progress: 77
-    },
-    {
-      id: 202,
-      categoryId: 2,
-      categoryName: '주거비',
-      totalBudget: 1500000,
-      expectedExpense: 0,
-      totalPlannedBudget: 1500000,
-      actualExpense: 1500000,
-      remainingBudget: 0,
-      progress: 100
-    },
-    {
-      id: 203,
-      categoryId: 4,
-      categoryName: '교통/통신',
-      totalBudget: 550000,
-      expectedExpense: 150000,
-      totalPlannedBudget: 700000,
-      actualExpense: 510000,
-      remainingBudget: 190000,
-      progress: 73
-    },
-    {
-      id: 204,
-      categoryId: 8,
-      categoryName: '학원비',
-      totalBudget: 400000,
-      expectedExpense: 0,
-      totalPlannedBudget: 400000,
-      actualExpense: 400000,
-      remainingBudget: 0,
-      progress: 100
-    }
-  ],
-  '2026-06': JUNE_2026_BUDGETS
-};
 
 const formatKRW = (value: number) => new Intl.NumberFormat('ko-KR').format(value);
 
@@ -233,44 +75,21 @@ const parseYearMonthToDate = (yearMonth: string) => {
   return new Date(y, m - 1, 1);
 };
 
-const getCategoryById = (id: number) => EXPENSE_CATEGORIES.find((c) => c.id === id);
+const mapBudgetResponse = (item: BudgetResponse): BudgetItem => ({
+  id: item.id,
+  categoryId: item.categoryId,
+  categoryName: item.categoryName,
+  totalBudget: Number(item.totalBudget),
+  expectedExpense: Number(item.expectedExpense),
+  totalPlannedBudget: Number(item.totalPlannedBudget),
+  actualExpense: Number(item.actualExpense),
+  remainingBudget: Number(item.remainingBudget),
+  progress: Math.round(Number(item.progress)),
+});
 
-const getCategoryColor = (categoryId: number) => {
-  const idx = EXPENSE_CATEGORIES.findIndex((c) => c.id === categoryId);
+const getCategoryColor = (categoryId: number, categories: ExpenseCategory[]) => {
+  const idx = categories.findIndex((c) => c.id === categoryId);
   return CATEGORY_COLORS[idx >= 0 ? idx % CATEGORY_COLORS.length : 0];
-};
-
-const buildBudgetItem = (
-  id: number,
-  categoryId: number,
-  totalBudget: number,
-  expectedExpense: number,
-  actualExpense: number
-): BudgetItem => {
-  const category = getCategoryById(categoryId);
-  const totalPlannedBudget = totalBudget + expectedExpense;
-  const remainingBudget = totalPlannedBudget - actualExpense;
-  const progress =
-    totalPlannedBudget > 0 ? Math.round((actualExpense / totalPlannedBudget) * 100) : 0;
-
-  return {
-    id,
-    categoryId,
-    categoryName: category?.name ?? '기타',
-    totalBudget,
-    expectedExpense,
-    totalPlannedBudget,
-    actualExpense,
-    remainingBudget,
-    progress
-  };
-};
-
-const computeSummary = (budgets: BudgetItem[], yearMonth: string) => {
-  const totalPlannedBudgetSum = budgets.reduce((sum, b) => sum + b.totalPlannedBudget, 0);
-  const totalActualExpenseSum = budgets.reduce((sum, b) => sum + b.actualExpense, 0);
-  const totalRemainingBudget = totalPlannedBudgetSum - totalActualExpenseSum;
-  return { yearMonth, totalPlannedBudgetSum, totalActualExpenseSum, totalRemainingBudget };
 };
 
 const buildFilterTabs = (categoryNames: string[]) => ['전체', ...categoryNames];
@@ -375,19 +194,39 @@ const CompactStat: React.FC<{
   </div>
 );
 
-const CategoryProgressCard: React.FC<{ item: BudgetItem }> = ({ item }) => {
-  const color = getCategoryColor(item.categoryId);
+const CategoryProgressCard: React.FC<{
+  item: BudgetItem;
+  categories: ExpenseCategory[];
+  onClick?: () => void;
+}> = ({ item, categories, onClick }) => {
+  const color = getCategoryColor(item.categoryId, categories);
   const isOver = item.remainingBudget < 0;
   const isWarning = !isOver && item.progress >= 85;
 
   return (
     <div
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
+      title={onClick ? '클릭하여 예산 수정' : undefined}
       style={{
         padding: '16px',
         borderRadius: '12px',
         border: `1px solid ${isOver ? 'var(--red-border)' : 'var(--border)'}`,
         background: isOver ? '#fffafa' : '#fff',
-        boxShadow: '0 1px 2px rgba(15,23,42,0.04)'
+        boxShadow: '0 1px 2px rgba(15,23,42,0.04)',
+        cursor: onClick ? 'pointer' : undefined,
+        transition: onClick ? 'box-shadow 0.15s ease, border-color 0.15s ease' : undefined
       }}
     >
       <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
@@ -485,10 +324,12 @@ interface BudgetModalProps {
   modalDate: Date;
   onModalDateChange: (date: Date) => void;
   budgets: BudgetItem[];
+  expenseCategories: ExpenseCategory[];
   editItem?: BudgetItem | null;
   onClose: () => void;
   onSubmit: (yearMonth: string, payload: BudgetFormPayload, editId?: number) => void;
   onGoToCategorySettings?: () => void;
+  submitting?: boolean;
 }
 
 const BudgetModal: React.FC<BudgetModalProps> = ({
@@ -497,10 +338,12 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
   modalDate,
   onModalDateChange,
   budgets,
+  expenseCategories,
   editItem,
   onClose,
   onSubmit,
-  onGoToCategorySettings
+  onGoToCategorySettings,
+  submitting = false
 }) => {
   const isEdit = mode === 'edit';
   const yearMonth = formatYearMonth(modalDate);
@@ -512,8 +355,8 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
 
   const availableCategories =
     isEdit && editItem
-      ? EXPENSE_CATEGORIES.filter((c) => c.id === editItem.categoryId)
-      : EXPENSE_CATEGORIES.filter((c) => !usedCategoryIds.has(c.id));
+      ? expenseCategories.filter((c) => c.id === editItem.categoryId)
+      : expenseCategories.filter((c) => !usedCategoryIds.has(c.id));
 
   const [categoryId, setCategoryId] = useState(
     editItem?.categoryId ?? availableCategories[0]?.id ?? 1
@@ -532,18 +375,19 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
     );
     const available =
       isEdit && editItem
-        ? EXPENSE_CATEGORIES.filter((c) => c.id === editItem.categoryId)
-        : EXPENSE_CATEGORIES.filter((c) => !used.has(c.id));
+        ? expenseCategories.filter((c) => c.id === editItem.categoryId)
+        : expenseCategories.filter((c) => !used.has(c.id));
     setCategoryId(editItem?.categoryId ?? available[0]?.id ?? 1);
     setTotalBudget(editItem ? formatKRW(editItem.totalBudget) : '');
     setExpectedExpense(editItem ? formatKRW(editItem.expectedExpense) : '');
-  }, [open, editItem, budgets, isEdit, yearMonth]);
+  }, [open, editItem, budgets, isEdit, yearMonth, expenseCategories]);
 
   if (!open) return null;
 
   const totalBudgetNum = parseAmount(totalBudget);
   const expectedExpenseNum = parseAmount(expectedExpense);
   const canSubmit =
+    !submitting &&
     totalBudgetNum > 0 &&
     ((isEdit && editItem) || (!isEdit && availableCategories.length > 0));
 
@@ -750,7 +594,7 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
               {availableCategories.map((cat) => {
                 const selected = categoryId === cat.id;
-                const color = getCategoryColor(cat.id);
+                const color = getCategoryColor(cat.id, expenseCategories);
                 return (
                   <button
                     key={cat.id}
@@ -783,38 +627,44 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
               fontSize: '13px',
               fontWeight: '700',
               color: 'var(--text-primary)',
-              marginBottom: '8px',
+              marginBottom: '4px',
               display: 'block'
             }}
           >
-            총 예산 <span style={{ color: 'var(--red)' }}>*</span>
+            기본 예산 <span style={{ color: 'var(--red)' }}>*</span>
           </label>
+          <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '8px', lineHeight: 1.5 }}>
+            이 카테고리에 매월 책정하는 기본 한도 금액입니다.
+          </p>
           <input
             type="text"
             inputMode="numeric"
-            placeholder="예: 2,000,000"
+            placeholder="기본 예산 금액을 입력하세요"
             value={totalBudget}
             onChange={(e) => setTotalBudget(formatKRW(parseAmount(e.target.value)))}
             style={inputStyle}
           />
         </div>
 
-        <div style={{ marginBottom: '24px' }}>
+        <div style={{ marginBottom: '16px' }}>
           <label
             style={{
               fontSize: '13px',
               fontWeight: '700',
               color: 'var(--text-primary)',
-              marginBottom: '8px',
+              marginBottom: '4px',
               display: 'block'
             }}
           >
-            예상 지출
+            추가 예상 지출
           </label>
+          <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '8px', lineHeight: 1.5 }}>
+            기본 예산 외에, 이번 달 추가로 지출할 것으로 예상되는 금액입니다. 없으면 비워두세요.
+          </p>
           <input
             type="text"
             inputMode="numeric"
-            placeholder="예: 500,000"
+            placeholder="추가 예상 지출 금액을 입력하세요"
             value={expectedExpense}
             onChange={(e) =>
               setExpectedExpense(formatKRW(parseAmount(e.target.value)))
@@ -822,6 +672,28 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
             style={inputStyle}
           />
         </div>
+
+        {(totalBudgetNum > 0 || expectedExpenseNum > 0) && (
+          <div
+            style={{
+              marginBottom: '24px',
+              padding: '12px 14px',
+              borderRadius: '10px',
+              background: 'var(--blue-bg)',
+              border: '1px solid var(--blue-border)'
+            }}
+          >
+            <div style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+              이번 달 계획 합계
+            </div>
+            <div style={{ fontSize: '14px', fontWeight: '800', color: 'var(--blue)' }}>
+              {formatKRW(totalBudgetNum)}원 + {formatKRW(expectedExpenseNum)}원 ={' '}
+              {formatKRW(totalBudgetNum + expectedExpenseNum)}원
+            </div>
+          </div>
+        )}
+
+        {totalBudgetNum <= 0 && expectedExpenseNum <= 0 && <div style={{ marginBottom: '24px' }} />}
 
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
@@ -863,8 +735,18 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
 export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
   onGoToCategorySettings
 }) => {
-  const [budgetsByMonth, setBudgetsByMonth] = useState(INITIAL_BUDGETS_BY_MONTH);
-  const [currentDate, setCurrentDate] = useState(() => new Date(2026, 5, 1));
+  const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
+  const [budgets, setBudgets] = useState<BudgetItem[]>([]);
+  const [summary, setSummary] = useState<BudgetSummaryResponse | null>(null);
+  const [modalBudgets, setModalBudgets] = useState<BudgetItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [currentDate, setCurrentDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
   const [activeCategory, setActiveCategory] = useState('전체');
   const [activeStatus, setActiveStatus] = useState('all');
   const [search, setSearch] = useState('');
@@ -875,71 +757,153 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
   const [modalDate, setModalDate] = useState(currentDate);
 
   const yearMonth = formatYearMonth(currentDate);
-  const budgets = budgetsByMonth[yearMonth] ?? [];
 
-  const getBudgetsForMonth = (ym: string) => budgetsByMonth[ym] ?? [];
+  const fetchCategories = useCallback(async () => {
+    const result = await categoryApi.getAll();
+    if (result.ok && result.data) {
+      setExpenseCategories(
+        result.data
+          .filter((c) => c.type === 'EXPENSE')
+          .map((c) => ({ id: c.id, name: c.name, isCustom: c.isCustom }))
+      );
+    }
+  }, []);
 
-  const onBudgetsChange = (next: React.SetStateAction<BudgetItem[]>) => {
-    setBudgetsByMonth((prev) => ({
-      ...prev,
-      [yearMonth]: typeof next === 'function' ? next(prev[yearMonth] ?? []) : next
-    }));
-  };
+  const fetchMonthData = useCallback(async (ym: string) => {
+    const [statusResult, summaryResult] = await Promise.all([
+      budgetApi.getMonthlyStatus(ym),
+      budgetApi.getMonthlySummary(ym),
+    ]);
 
-  const handleSaveBudget = (
+    if (!statusResult.ok) {
+      throw new Error(statusResult.error ?? '예산 현황을 불러오지 못했습니다.');
+    }
+    if (!summaryResult.ok) {
+      throw new Error(summaryResult.error ?? '예산 요약을 불러오지 못했습니다.');
+    }
+
+    return {
+      budgets: (statusResult.data ?? []).map(mapBudgetResponse),
+      summary: summaryResult.data,
+    };
+  }, []);
+
+  const loadCurrentMonth = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchMonthData(yearMonth);
+      setBudgets(data.budgets);
+      setSummary(data.summary);
+    } catch (err) {
+      setBudgets([]);
+      setSummary(null);
+      setError(err instanceof Error ? err.message : '예산 데이터를 불러오지 못했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchMonthData, yearMonth]);
+
+  useEffect(() => {
+    void fetchCategories();
+  }, [fetchCategories]);
+
+  useEffect(() => {
+    void loadCurrentMonth();
+  }, [loadCurrentMonth]);
+
+  useEffect(() => {
+    if (!modalOpen) return;
+
+    let cancelled = false;
+    const loadModalBudgets = async () => {
+      try {
+        const data = await fetchMonthData(formatYearMonth(modalDate));
+        if (!cancelled) setModalBudgets(data.budgets);
+      } catch {
+        if (!cancelled) setModalBudgets([]);
+      }
+    };
+
+    void loadModalBudgets();
+    return () => {
+      cancelled = true;
+    };
+  }, [modalOpen, modalDate, fetchMonthData]);
+
+  const handleSaveBudget = async (
     targetYearMonth: string,
     payload: BudgetFormPayload,
     editId?: number
   ) => {
-    setBudgetsByMonth((prev) => {
-      const monthBudgets = prev[targetYearMonth] ?? [];
+    setSubmitting(true);
+    setActionError(null);
+
+    const request = {
+      categoryId: payload.categoryId,
+      yearMonth: targetYearMonth,
+      totalBudget: payload.totalBudget,
+      expectedExpense: payload.expectedExpense,
+    };
+
+    try {
       if (editId !== undefined) {
-        return {
-          ...prev,
-          [targetYearMonth]: monthBudgets.map((b) =>
-            b.id === editId
-              ? buildBudgetItem(
-                  b.id,
-                  payload.categoryId,
-                  payload.totalBudget,
-                  payload.expectedExpense,
-                  b.actualExpense
-                )
-              : b
-          )
-        };
+        const editTarget = budgets.find((b) => b.id === editId) ?? editItem;
+        const result = await budgetApi.update(editId, {
+          ...request,
+          categoryId: editTarget?.categoryId ?? payload.categoryId,
+          yearMonth: targetYearMonth,
+        });
+        if (!result.ok) {
+          throw new Error(result.error ?? '예산 수정에 실패했습니다.');
+        }
+      } else {
+        const result = await budgetApi.create(request);
+        if (!result.ok) {
+          throw new Error(result.error ?? '예산 등록에 실패했습니다.');
+        }
       }
-      const allIds = Object.values(prev).flat().map((b) => b.id);
-      const nextId = allIds.length > 0 ? Math.max(...allIds) + 1 : 1;
-      return {
-        ...prev,
-        [targetYearMonth]: [
-          ...monthBudgets,
-          buildBudgetItem(
-            nextId,
-            payload.categoryId,
-            payload.totalBudget,
-            payload.expectedExpense,
-            0
-          )
-        ]
-      };
-    });
+
+      setCurrentDate(parseYearMonthToDate(targetYearMonth));
+      setModalOpen(false);
+      setEditItem(null);
+      setModalMode('create');
+      await loadCurrentMonth();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : '요청 처리 중 오류가 발생했습니다.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const yearMonthLabel = formatYearMonthLabel(yearMonth);
-  const filterTabs = buildFilterTabs(EXPENSE_CATEGORIES.map((c) => c.name));
+  const filterTabs = buildFilterTabs(expenseCategories.map((c) => c.name));
 
   useEffect(() => {
     setActiveCategory('전체');
     setSearch('');
   }, [yearMonth]);
 
-  const summary = useMemo(() => computeSummary(budgets, yearMonth), [budgets, yearMonth]);
+  const summaryValues = useMemo(() => {
+    if (summary) {
+      return {
+        totalPlannedBudgetSum: Number(summary.totalPlannedBudgetSum),
+        totalActualExpenseSum: Number(summary.totalActualExpenseSum),
+        totalRemainingBudget: Number(summary.totalRemainingBudget),
+      };
+    }
+    return {
+      totalPlannedBudgetSum: 0,
+      totalActualExpenseSum: 0,
+      totalRemainingBudget: 0,
+    };
+  }, [summary]);
 
   const usagePercent =
-    summary.totalPlannedBudgetSum > 0
-      ? Math.round((summary.totalActualExpenseSum / summary.totalPlannedBudgetSum) * 100)
+    summaryValues.totalPlannedBudgetSum > 0
+      ? Math.round(
+          (summaryValues.totalActualExpenseSum / summaryValues.totalPlannedBudgetSum) * 100
+        )
       : 0;
 
   const overBudgetItems = budgets.filter((b) => b.remainingBudget < 0);
@@ -955,8 +919,6 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
     return matchCategory && matchSearch && matchStatus;
   });
 
-  const modalYearMonth = formatYearMonth(modalDate);
-  const modalBudgets = getBudgetsForMonth(modalYearMonth);
 
   const openCreateModal = () => {
     setEditItem(null);
@@ -977,17 +939,25 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
     payload: BudgetFormPayload,
     editId?: number
   ) => {
-    handleSaveBudget(targetYearMonth, payload, editId);
-    setCurrentDate(parseYearMonthToDate(targetYearMonth));
-    setModalOpen(false);
-    setEditItem(null);
-    setModalMode('create');
+    void handleSaveBudget(targetYearMonth, payload, editId);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deleteTarget) return;
-    onBudgetsChange((prev) => prev.filter((b) => b.id !== deleteTarget.id));
-    setDeleteTarget(null);
+    setSubmitting(true);
+    setActionError(null);
+    try {
+      const result = await budgetApi.delete(deleteTarget.id);
+      if (!result.ok) {
+        throw new Error(result.error ?? '예산 삭제에 실패했습니다.');
+      }
+      setDeleteTarget(null);
+      await loadCurrentMonth();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : '예산 삭제 중 오류가 발생했습니다.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleGoToCategorySettings = () => {
@@ -999,6 +969,23 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
 
   return (
     <div className="fade-in">
+      {(error || actionError) && (
+        <div
+          className="card"
+          style={{
+            marginBottom: '16px',
+            padding: '12px 16px',
+            borderColor: 'var(--red-border)',
+            background: 'var(--red-bg)',
+            color: 'var(--red)',
+            fontSize: '13px',
+            fontWeight: '600',
+          }}
+        >
+          {error ?? actionError}
+        </div>
+      )}
+
       <div className="dashboard-view-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div
@@ -1088,22 +1075,22 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
           }}
         >
           <CompactStat
-            label="총 예산"
-            value={`${formatKRW(summary.totalPlannedBudgetSum)}원`}
-            sub={`카테고리 ${budgets.length}개 설정`}
+            label="계획 합계"
+            value={`${formatKRW(summaryValues.totalPlannedBudgetSum)}원`}
+            sub={`기본 예산 + 추가 예상 · ${budgets.length}개 카테고리`}
             icon={<PiggyBank size={18} />}
           />
           <CompactStat
             label="실제 지출"
-            value={`${formatKRW(summary.totalActualExpenseSum)}원`}
+            value={`${formatKRW(summaryValues.totalActualExpenseSum)}원`}
             sub={`예산 대비 ${usagePercent}% 사용`}
             icon={<TrendingDown size={18} />}
           />
           <CompactStat
             label="잔액"
-            value={`${summary.totalRemainingBudget < 0 ? '-' : ''}${formatKRW(Math.abs(summary.totalRemainingBudget))}원`}
-            sub={summary.totalRemainingBudget >= 0 ? '남은 예산' : '예산 초과'}
-            valueColor={summary.totalRemainingBudget < 0 ? 'var(--red)' : undefined}
+            value={`${summaryValues.totalRemainingBudget < 0 ? '-' : ''}${formatKRW(Math.abs(summaryValues.totalRemainingBudget))}원`}
+            sub={summaryValues.totalRemainingBudget >= 0 ? '남은 예산' : '예산 초과'}
+            valueColor={summaryValues.totalRemainingBudget < 0 ? 'var(--red)' : undefined}
             icon={<Coins size={18} />}
           />
         </div>
@@ -1249,7 +1236,11 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
           )}
         </div>
 
-        {filtered.length > 0 ? (
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '40px 16px', color: 'var(--text-secondary)' }}>
+            예산 데이터를 불러오는 중...
+          </div>
+        ) : filtered.length > 0 ? (
           <div
             style={{
               display: 'grid',
@@ -1258,7 +1249,12 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
             }}
           >
             {filtered.map((item) => (
-              <CategoryProgressCard key={item.id} item={item} />
+              <CategoryProgressCard
+                key={item.id}
+                item={item}
+                categories={expenseCategories}
+                onClick={() => openEditModal(item)}
+              />
             ))}
           </div>
         ) : (
@@ -1282,14 +1278,17 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
         <div className="card">
           <div className="card-header-row">
             <span className="card-title">예산 설정 내역</span>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '500' }}>
+              행을 클릭하면 수정할 수 있습니다
+            </span>
           </div>
           <div className="custom-table-container">
             <table className="custom-table">
               <thead>
                 <tr>
                   <th>카테고리</th>
-                  <th>총 예산</th>
-                  <th>예상 지출</th>
+                  <th>기본 예산</th>
+                  <th>추가 예상</th>
                   <th>계획 합계</th>
                   <th>실제 지출</th>
                   <th>잔액</th>
@@ -1301,10 +1300,15 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
               <tbody>
                 {filtered.map((item) => {
                   const isOver = item.remainingBudget < 0;
-                  const color = getCategoryColor(item.categoryId);
+                  const color = getCategoryColor(item.categoryId, expenseCategories);
 
                   return (
-                    <tr key={item.id}>
+                    <tr
+                      key={item.id}
+                      onClick={() => openEditModal(item)}
+                      title="클릭하여 예산 수정"
+                      style={{ cursor: 'pointer' }}
+                    >
                       <td>
                         <span
                           className="group-buy-category"
@@ -1336,7 +1340,7 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
                           {isOver ? '초과' : '정상'}
                         </span>
                       </td>
-                      <td>
+                      <td onClick={(e) => e.stopPropagation()}>
                         <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
                           <button
                             onClick={() => openEditModal(item)}
@@ -1356,7 +1360,10 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
                             <Pencil size={13} />
                           </button>
                           <button
-                            onClick={() => setDeleteTarget(item)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteTarget(item);
+                            }}
                             aria-label="예산 삭제"
                             style={{
                               width: '30px',
@@ -1389,6 +1396,7 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
         modalDate={modalDate}
         onModalDateChange={setModalDate}
         budgets={modalBudgets}
+        expenseCategories={expenseCategories}
         editItem={editItem}
         onClose={() => {
           setModalOpen(false);
@@ -1397,6 +1405,7 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
         }}
         onSubmit={handleModalSubmit}
         onGoToCategorySettings={handleGoToCategorySettings}
+        submitting={submitting}
       />
 
       {deleteTarget && (
@@ -1441,18 +1450,20 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
                 취소
               </button>
               <button
-                onClick={handleDelete}
+                onClick={() => void handleDelete()}
+                disabled={submitting}
                 style={{
                   flex: 1,
                   padding: '11px',
                   borderRadius: '10px',
-                  background: 'var(--red)',
+                  background: submitting ? '#fca5a5' : 'var(--red)',
                   color: 'white',
                   fontWeight: '700',
-                  fontSize: '13px'
+                  fontSize: '13px',
+                  cursor: submitting ? 'not-allowed' : 'pointer'
                 }}
               >
-                삭제
+                {submitting ? '삭제 중...' : '삭제'}
               </button>
             </div>
           </div>

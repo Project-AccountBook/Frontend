@@ -101,3 +101,43 @@ export interface InterestCategoryResponse {
   categoryName: string;
   isAlarmEnabled: boolean;
 }
+
+export type TransactionType = 'INCOME' | 'EXPENSE' | 'TRANSFER';
+
+export interface CategoryResponse {
+  id: number;
+  name: string;
+  type: TransactionType;
+  isCustom: boolean;
+}
+
+export interface CategoryRequest {
+  name: string;
+  type: TransactionType;
+}
+
+export interface BudgetRequest {
+  categoryId: number;
+  yearMonth: string;
+  totalBudget: number;
+  expectedExpense: number;
+}
+
+export interface BudgetResponse {
+  id: number;
+  categoryId: number;
+  categoryName: string;
+  totalBudget: number;
+  expectedExpense: number;
+  totalPlannedBudget: number;
+  actualExpense: number;
+  remainingBudget: number;
+  progress: number;
+}
+
+export interface BudgetSummaryResponse {
+  yearMonth: string;
+  totalPlannedBudgetSum: number;
+  totalActualExpenseSum: number;
+  totalRemainingBudget: number;
+}
