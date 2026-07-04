@@ -1,6 +1,7 @@
 export interface AccountResponse {
   id: number;
   accountName: string;
+  initialBalance: number;
   currentBalance: number;
 }
 
@@ -46,12 +47,12 @@ export async function createAccount(request: AccountRequest): Promise<number> {
   return data.data;
 }
 
-/** PATCH /api/v1/account/{accountId} — 서버는 accountName만 반영 */
-export async function updateAccount(accountId: number, accountName: string): Promise<void> {
+/** PATCH /api/v1/account/{accountId} */
+export async function updateAccount(accountId: number, request: AccountRequest): Promise<void> {
   const res = await fetch(`/api/v1/account/${accountId}`, {
     method: 'PATCH',
     headers: authHeader(),
-    body: JSON.stringify({ accountName, initialBalance: 0 }),
+    body: JSON.stringify(request),
   });
   const data: ApiResponse<null> = await res.json();
   if (!res.ok || !data.success) {

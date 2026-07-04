@@ -72,6 +72,24 @@ const getMonthRange = (year: number, month: number) => {
   };
 };
 
+const ACCOUNT_COLOR_PALETTE = [
+  { dot: '#6366f1', bg: 'rgba(99, 102, 241, 0.14)' },
+  { dot: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.14)' },
+  { dot: '#10b981', bg: 'rgba(16, 185, 129, 0.14)' },
+  { dot: '#f59e0b', bg: 'rgba(245, 158, 11, 0.14)' },
+  { dot: '#ec4899', bg: 'rgba(236, 72, 153, 0.14)' },
+  { dot: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.14)' },
+];
+
+type DayAccountSummary = {
+  accountId: number;
+  accountName: string;
+  income: number;
+  expense: number;
+  transfer: number;
+  transferAmount: number;
+};
+
 interface AssetViewProps {
   initialSection?: AssetActiveSection;
 }
@@ -315,6 +333,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
       const acc = accounts.find(a => a.id === id);
       if (acc) {
         setFormAccountName(acc.accountName);
+        setFormInitialBalance(acc.initialBalance.toString());
       }
     } else if (activeSection === 'categories') {
       const cat = categories.find(c => c.id === id);
@@ -326,8 +345,8 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
     setShowModal(true);
   };
 
-  const handleDeleteItem = async (id: number) => {
-    if (!window.confirm('정말 삭제하시겠습니까?')) return;
+  const handleDeleteItem = async (id: number): Promise<boolean> => {
+    if (!window.confirm('정말 삭제하시겠습니까?')) return false;
 
     try {
       if (activeSection === 'accounts') {
@@ -344,9 +363,25 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
         await deleteCategory(id);
         await fetchCategories();
       }
+      return true;
     } catch (err) {
       alert(err instanceof Error ? err.message : '삭제에 실패했습니다.');
+      return false;
     }
+  };
+
+  const handleModalDelete = async () => {
+    if (selectedId === null) return;
+    const deleted = await handleDeleteItem(selectedId);
+    if (deleted) {
+      setShowModal(false);
+      resetFormFields();
+    }
+  };
+
+  const handleCloseModal = () => {
+    setShowModal(false);
+    resetFormFields();
   };
 
   const handleToggleFixedActive = async (id: number) => {
@@ -370,7 +405,10 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
             initialBalance: parseFloat(formInitialBalance) || 0,
           });
         } else if (selectedId !== null) {
-          await updateAccount(selectedId, formAccountName);
+          await updateAccount(selectedId, {
+            accountName: formAccountName,
+            initialBalance: parseFloat(formInitialBalance) || 0,
+          });
         }
         await fetchAccounts();
         setShowModal(false);
@@ -493,6 +531,14 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
 
   const formatCalAmt = (val: number) => val.toLocaleString('ko-KR');
 
+  const getAccountColor = (accountId: number) => {
+    const idx = accounts.findIndex((a) => a.id === accountId);
+    return ACCOUNT_COLOR_PALETTE[(idx >= 0 ? idx : 0) % ACCOUNT_COLOR_PALETTE.length];
+  };
+
+  const getAccountShortName = (name: string, maxLen = 4) =>
+    name.length <= maxLen ? name : `${name.slice(0, maxLen)}…`;
+
   const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
   const MONTHS = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
 
@@ -549,12 +595,42 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
     return acc;
   }, {});
 
+  const getDayAccountSummaries = (dateStr: string): DayAccountSummary[] => {
+    const txs = txByDate[dateStr] || [];
+    const byAccount = new Map<number, DayAccountSummary>();
+
+    for (const tx of txs) {
+      let entry = byAccount.get(tx.accountId);
+      if (!entry) {
+        entry = {
+          accountId: tx.accountId,
+          accountName: tx.accountName,
+          income: 0,
+          expense: 0,
+          transfer: 0,
+          transferAmount: 0,
+        };
+        byAccount.set(tx.accountId, entry);
+      }
+      if (tx.type === 'INCOME') entry.income += tx.amount;
+      else if (tx.type === 'EXPENSE') entry.expense += tx.amount;
+      else if (tx.type === 'TRANSFER') {
+        entry.transfer += 1;
+        entry.transferAmount += tx.amount;
+      }
+    }
+
+    return Array.from(byAccount.values());
+  };
+
   const getDaySummary = (dateStr: string) => {
     const txs = txByDate[dateStr] || [];
     const income = txs.filter(t => t.type === 'INCOME').reduce((s, t) => s + t.amount, 0);
     const expense = txs.filter(t => t.type === 'EXPENSE').reduce((s, t) => s + t.amount, 0);
-    const transfer = txs.filter(t => t.type === 'TRANSFER').length;
-    return { txs, income, expense, transfer };
+    const transferTxs = txs.filter(t => t.type === 'TRANSFER');
+    const transfer = transferTxs.length;
+    const transferAmount = transferTxs.reduce((s, t) => s + t.amount, 0);
+    return { txs, income, expense, transfer, transferAmount };
   };
 
   const selectedDayTxs = selectedCalendarDay ? (txByDate[selectedCalendarDay] || []) : [];
@@ -764,6 +840,38 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
             {/* ── CALENDAR VIEW ── */}
             {viewMode === 'calendar' && (
               <div className="calendar-wrapper fade-in">
+                {/* 달력 필터: 계좌 칩 */}
+                {accounts.length > 0 && (
+                  <div className="cal-account-filter-bar">
+                    <span className="cal-filter-label">계좌</span>
+                    <div className="cal-account-chips">
+                      <button
+                        type="button"
+                        className={`cal-account-chip-btn${filterAccount === 'all' ? ' active' : ''}`}
+                        onClick={() => setFilterAccount('all')}
+                      >
+                        전체
+                      </button>
+                      {accounts.map((acc) => {
+                        const color = getAccountColor(acc.id);
+                        const isActive = filterAccount === acc.id;
+                        return (
+                          <button
+                            key={acc.id}
+                            type="button"
+                            className={`cal-account-chip-btn${isActive ? ' active' : ''}`}
+                            onClick={() => setFilterAccount(acc.id)}
+                            style={isActive ? { borderColor: color.dot, background: color.bg, color: color.dot } : undefined}
+                          >
+                            <span className="cal-account-dot" style={{ background: color.dot }} />
+                            {acc.accountName}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {/* 달력 헤더: 월 이동 */}
                 <div className="calendar-header">
                   <button className="cal-nav-btn" onClick={prevCalendarMonth}>
@@ -820,7 +928,10 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                       return <div key={`empty-${idx}`} className="cal-day-cell empty" />;
                     }
                     const dateStr = getDateString(day);
-                    const { txs, income, expense, transfer } = getDaySummary(dateStr);
+                    const { txs, income, expense, transferAmount } = getDaySummary(dateStr);
+                    const accountSummaries = filterAccount === 'all' ? getDayAccountSummaries(dateStr) : [];
+                    const visibleSummaries = accountSummaries.slice(0, 2);
+                    const hiddenSummaryCount = Math.max(0, accountSummaries.length - visibleSummaries.length);
                     const isToday = dateStr === todayStr;
                     const isSelected = dateStr === selectedCalendarDay;
                     const isSunday = (idx % 7 === 0);
@@ -844,14 +955,41 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                           {day}
                         </span>
                         <div className="cal-tx-summary">
-                          {income > 0 && (
-                            <span className="cal-income-dot">+{formatCalAmt(income)}</span>
-                          )}
-                          {expense > 0 && (
-                            <span className="cal-expense-dot">-{formatCalAmt(expense)}</span>
-                          )}
-                          {transfer > 0 && (
-                            <span className="cal-transfer-dot">이체</span>
+                          {filterAccount === 'all' && accountSummaries.length > 0 ? (
+                            <>
+                              {visibleSummaries.map((summary) => {
+                                const color = getAccountColor(summary.accountId);
+                                return (
+                                  <span
+                                    key={summary.accountId}
+                                    className="cal-account-chip"
+                                    style={{ background: color.bg, color: color.dot }}
+                                    title={summary.accountName}
+                                  >
+                                    <span className="cal-account-dot" style={{ background: color.dot }} />
+                                    {getAccountShortName(summary.accountName)}
+                                    {summary.income > 0 && ` +${formatCalAmt(summary.income)}`}
+                                    {summary.expense > 0 && ` -${formatCalAmt(summary.expense)}`}
+                                    {summary.transferAmount > 0 && ` ↔${formatCalAmt(summary.transferAmount)}`}
+                                  </span>
+                                );
+                              })}
+                              {hiddenSummaryCount > 0 && (
+                                <span className="cal-more-chip">+{hiddenSummaryCount}</span>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              {income > 0 && (
+                                <span className="cal-income-dot">+{formatCalAmt(income)}</span>
+                              )}
+                              {expense > 0 && (
+                                <span className="cal-expense-dot">-{formatCalAmt(expense)}</span>
+                              )}
+                              {transferAmount > 0 && (
+                                <span className="cal-transfer-dot">↔{formatCalAmt(transferAmount)}</span>
+                              )}
+                            </>
                           )}
                         </div>
                       </div>
@@ -894,8 +1032,22 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                       </div>
                     ) : (
                       <div className="cal-detail-list">
-                        {selectedDayTxs.map(tx => (
-                          <div key={tx.id} className="cal-detail-item">
+                        {selectedDayTxs.map(tx => {
+                          const accountColor = getAccountColor(tx.accountId);
+                          return (
+                          <div
+                            key={tx.id}
+                            className="cal-detail-item cal-detail-item-clickable"
+                            onClick={() => handleOpenEditModal(tx.id)}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                handleOpenEditModal(tx.id);
+                              }
+                            }}
+                          >
                             <div className="cal-detail-left">
                               <span className={`type-badge ${getTxTypeBadgeClass(tx.type)}`}>
                                 {getTxTypeLabel(tx.type)}
@@ -903,33 +1055,43 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                               <div className="cal-detail-info">
                                 <span className="cal-detail-desc">{tx.description || '—'}</span>
                                 <span className="cal-detail-meta">
-                                  {tx.accountName} · <span className="category-tag">{tx.categoryName}</span>
+                                  <span
+                                    className="cal-account-badge"
+                                    style={{ background: accountColor.bg, color: accountColor.dot }}
+                                  >
+                                    <span className="cal-account-dot" style={{ background: accountColor.dot }} />
+                                    {tx.accountName}
+                                  </span>
+                                  · <span className="category-tag">{tx.categoryName}</span>
                                 </span>
                               </div>
                             </div>
                             <div className="cal-detail-right">
                               <span className={`cal-detail-amount ${tx.type === 'INCOME' ? 'color-income' : tx.type === 'EXPENSE' ? 'color-expense' : 'color-transfer'}`}>
-                                {tx.type === 'INCOME' ? '+' : tx.type === 'EXPENSE' ? '-' : ''}
+                                {tx.type === 'INCOME' ? '+' : tx.type === 'EXPENSE' ? '-' : '↔'}
                                 {formatCurrency(tx.amount)}
                               </span>
-                              <div className="table-actions">
-                                <button className="btn-action-icon edit" onClick={() => handleOpenEditModal(tx.id)} title="수정">
-                                  <Edit2 size={13} />
-                                </button>
-                                <button className="btn-action-icon delete" onClick={() => handleDeleteItem(tx.id)} title="삭제">
+                              <div className="table-actions" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  type="button"
+                                  className="btn-action-icon delete"
+                                  onClick={() => handleDeleteItem(tx.id)}
+                                  title="삭제"
+                                >
                                   <Trash2 size={13} />
                                 </button>
                               </div>
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
                 )}
 
                 {!selectedCalendarDay && (
-                  <p className="cal-select-hint">날짜를 클릭하면 해당 날짜의 거래를 확인하고 등록할 수 있습니다.</p>
+                  <p className="cal-select-hint">날짜를 클릭해 거래를 확인하고, 항목을 클릭하면 수정·삭제할 수 있습니다.</p>
                 )}
               </div>
             )}
@@ -942,7 +1104,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                     <tr>
                       <th>날짜</th>
                       <th>계좌</th>
-                      <th>분류</th>
+                      <th>카테고리</th>
                       <th>유형</th>
                       <th>내용</th>
                       <th>금액</th>
@@ -959,7 +1121,11 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                       </tr>
                     ) : (
                       filteredTransactions.map(tx => (
-                        <tr key={tx.id} className="hover-row">
+                        <tr
+                          key={tx.id}
+                          className="hover-row tx-row-clickable"
+                          onClick={() => handleOpenEditModal(tx.id)}
+                        >
                           <td>{tx.transactionDate}</td>
                           <td className="font-semibold text-primary-dark">{tx.accountName}</td>
                           <td>
@@ -976,15 +1142,17 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                             </div>
                           </td>
                           <td className={`font-bold ${tx.type === 'INCOME' ? 'color-income' : tx.type === 'EXPENSE' ? 'color-expense' : 'color-transfer'}`}>
-                            {tx.type === 'INCOME' ? '+' : tx.type === 'EXPENSE' ? '-' : ''}
+                            {tx.type === 'INCOME' ? '+' : tx.type === 'EXPENSE' ? '-' : '↔'}
                             {formatCurrency(tx.amount)}
                           </td>
-                          <td>
+                          <td onClick={(e) => e.stopPropagation()}>
                             <div className="table-actions">
-                              <button className="btn-action-icon edit" onClick={() => handleOpenEditModal(tx.id)} title="수정">
-                                <Edit2 size={14} />
-                              </button>
-                              <button className="btn-action-icon delete" onClick={() => handleDeleteItem(tx.id)} title="삭제">
+                              <button
+                                type="button"
+                                className="btn-action-icon delete"
+                                onClick={() => handleDeleteItem(tx.id)}
+                                title="삭제"
+                              >
                                 <Trash2 size={14} />
                               </button>
                             </div>
@@ -1037,7 +1205,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                   <tr>
                     <th>예약 상태</th>
                     <th>계좌</th>
-                    <th>분류</th>
+                    <th>카테고리</th>
                     <th>유형</th>
                     <th>반복 주기</th>
                     <th>반복일</th>
@@ -1161,6 +1329,10 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                     </div>
                     <div className="account-card-body">
                       <h3 className="account-title">{acc.accountName}</h3>
+                      <div className="balance-info-row">
+                        <span className="balance-label">초기 잔고</span>
+                        <span className="balance-value balance-value-muted">{formatCurrency(acc.initialBalance)}</span>
+                      </div>
                       <div className="balance-info-row">
                         <span className="balance-label">현재 잔고</span>
                         <span className="balance-value">{formatCurrency(acc.currentBalance)}</span>
@@ -1303,8 +1475,16 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
          MODAL DIALOG (CRUD form)
       ────────────────────────────────────────────── */}
       {showModal && (
-        <div className="asset-modal-overlay">
-          <div className="asset-modal-content fade-in">
+        <div className="asset-modal-overlay" onClick={handleCloseModal}>
+          <div className="asset-modal-content fade-in" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="modal-close-btn"
+              onClick={handleCloseModal}
+              aria-label="닫기"
+            >
+              <X size={18} />
+            </button>
             <div className="modal-header">
               <h3>
                 {modalMode === 'create' ? '새로운 ' : '선택한 '}
@@ -1314,9 +1494,6 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                 {activeSection === 'categories' && '카테고리 정보'}
                 {modalMode === 'edit' && ' 수정'}
               </h3>
-              <button className="modal-close-btn" onClick={() => { setShowModal(false); resetFormFields(); }}>
-                <X size={18} />
-              </button>
             </div>
 
             <form onSubmit={handleSubmit} className="modal-form">
@@ -1548,19 +1725,32 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                     />
                   </div>
 
-                  {modalMode === 'create' && (
+                  {modalMode === 'edit' && selectedId !== null && (
                     <div className="form-item">
-                      <label className="form-label">초기 설정 잔고 (원)</label>
-                      <input
-                        type="number"
-                        required
-                        placeholder="초기 가입/등록 잔액 입력"
-                        value={formInitialBalance}
-                        onChange={(e) => setFormInitialBalance(e.target.value)}
-                        className="modal-input"
-                      />
+                      <label className="form-label">현재 잔고</label>
+                      <div className="modal-readonly-value">
+                        {formatCurrency(accounts.find((a) => a.id === selectedId)?.currentBalance ?? 0)}
+                      </div>
+                      <p className="form-hint">거래 내역에 따라 자동 계산됩니다. 직접 수정할 수 없습니다.</p>
                     </div>
                   )}
+
+                  <div className="form-item">
+                    <label className="form-label">초기 설정 잔고 (원)</label>
+                    <input
+                      type="number"
+                      required
+                      placeholder="초기 가입/등록 잔액 입력"
+                      value={formInitialBalance}
+                      onChange={(e) => setFormInitialBalance(e.target.value)}
+                      className="modal-input"
+                    />
+                    {modalMode === 'edit' && (
+                      <p className="form-hint">
+                        초기 잔고만 수정할 수 있으며, 변경 시 현재 잔고도 같은 금액만큼 함께 조정됩니다.
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -1596,19 +1786,34 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
 
               {/* Footer Actions */}
               <div className="modal-footer">
-                <button type="button" className="btn-secondary" onClick={() => { setShowModal(false); resetFormFields(); }}>
-                  취소
-                </button>
-                <button type="submit" className="btn-primary" disabled={submitting}>
-                  {submitting ? (
-                    <>
-                      <Loader2 size={14} className="spin-animation" />
-                      저장 중...
-                    </>
-                  ) : (
-                    '등록/저장 완료'
-                  )}
-                </button>
+                {modalMode === 'edit' && selectedId !== null ? (
+                  <button
+                    type="button"
+                    className="btn-modal-delete"
+                    onClick={handleModalDelete}
+                    disabled={submitting}
+                  >
+                    <Trash2 size={14} />
+                    삭제
+                  </button>
+                ) : (
+                  <span />
+                )}
+                <div className="modal-footer-actions">
+                  <button type="button" className="btn-secondary" onClick={handleCloseModal}>
+                    취소
+                  </button>
+                  <button type="submit" className="btn-primary" disabled={submitting}>
+                    {submitting ? (
+                      <>
+                        <Loader2 size={14} className="spin-animation" />
+                        저장 중...
+                      </>
+                    ) : (
+                      modalMode === 'edit' ? '저장' : '등록'
+                    )}
+                  </button>
+                </div>
               </div>
 
             </form>
