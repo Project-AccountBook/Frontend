@@ -6,7 +6,19 @@ async function parseResponse<T>(res: Response): Promise<RequestResult<T>> {
   let body: ApiResponse<T> | null = null;
 
   try {
-    body = await res.json();
+    const text = await res.text();
+    if (!text) {
+      if (res.ok) {
+        return { ok: true, status: res.status, data: null, error: null };
+      }
+      return {
+        ok: false,
+        status: res.status,
+        data: null,
+        error: `요청에 실패했습니다. (${res.status})`,
+      };
+    }
+    body = JSON.parse(text) as ApiResponse<T>;
   } catch {
     return {
       ok: false,
@@ -54,8 +66,10 @@ async function tryReissue(): Promise<boolean> {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
       });
-      const body: ApiResponse<TokenResponse> = await res.json();
-      if (res.ok && body.success) {
+      const text = await res.text();
+      if (!text) return false;
+      const body = JSON.parse(text) as ApiResponse<TokenResponse>;
+      if (res.ok && body.success && body.data?.accessToken && body.data?.refreshToken) {
         tokenStorage.setTokens(body.data.accessToken, body.data.refreshToken);
         return true;
       }
@@ -92,11 +106,14 @@ async function executeWithReissue(
 ): Promise<Response> {
   let res = await fetch(requestUrl, { ...init, headers });
 
-  if ((res.status === 401 || res.status === 403) && tokenStorage.getAccessToken()) {
+  if ((res.status === 401 || res.status === 403) && tokenStorage.getRefreshToken()) {
     const renewed = await tryReissue();
     if (renewed) {
       headers.set('Authorization', `Bearer ${tokenStorage.getAccessToken()}`);
       res = await fetch(requestUrl, { ...init, headers });
+      if (res.status === 401) {
+        handleAuthExpired();
+      }
     } else {
       handleAuthExpired();
     }
