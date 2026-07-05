@@ -751,7 +751,7 @@ a {
   align-items: center;
   gap: 16px;
   margin-left: auto;
-  margin-right: 60px;
+  margin-right: 130px;
 }
 
 .header-icon-btn {
@@ -1512,6 +1512,10 @@ a {
   background: rgba(246, 248, 251, 0.6);
 }
 
+.tx-row-clickable {
+  cursor: pointer;
+}
+
 .table-empty-row {
   text-align: center;
   padding: 60px 16px !important;
@@ -1773,6 +1777,18 @@ a {
   font-size: 15px;
   font-weight: 700;
   color: var(--text-primary);
+}
+
+.balance-value-muted {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.balance-auto-note {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 
 .balance-info-row.secondary .balance-value {
@@ -2867,6 +2883,123 @@ a {
   gap: 20px;
 }
 
+.cal-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+}
+
+.cal-account-filter-bar {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg-app);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+}
+
+.cal-filter-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  padding-top: 7px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.cal-account-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+}
+
+.cal-account-chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1.5px solid var(--border);
+  background: var(--bg-card);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  max-width: 100%;
+}
+
+.cal-account-chip-btn:hover {
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+  background: var(--bg-card);
+}
+
+.cal-account-chip-btn.active {
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+.cal-account-chip-btn.active:not([style*="border-color"]) {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.cal-account-chip-btn.active:not([style*="border-color"]) .cal-account-dot {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5);
+}
+
+.cal-account-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.cal-account-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 1px 5px;
+  width: fit-content;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cal-more-chip {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  padding: 1px 4px;
+}
+
+.cal-account-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.form-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
 .calendar-header {
   display: flex;
   align-items: center;
@@ -3272,6 +3405,14 @@ a {
   background: var(--bg-card);
 }
 
+.cal-detail-item-clickable {
+  cursor: pointer;
+}
+
+.cal-detail-item-clickable:active {
+  transform: scale(0.998);
+}
+
 .cal-detail-left {
   display: flex;
   align-items: center;
@@ -3334,14 +3475,53 @@ a {
 }
 
 .asset-modal-content {
+  position: relative;
   background: var(--bg-card);
   width: 100%;
   max-width: 580px;
   border-radius: 20px;
-  padding: 28px;
+  padding: 24px 28px 28px;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
   max-height: 90vh;
   overflow-y: auto;
+}
+
+.asset-modal-content .modal-header {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  padding-right: 36px;
+}
+
+.asset-modal-content .modal-header h3 {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.asset-modal-content .modal-close-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 2;
+  width: 34px;
+  height: 34px;
+  background: var(--bg-app);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  color: var(--text-secondary);
+  border-radius: 10px;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.asset-modal-content .modal-close-btn:hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-color: var(--border-hover);
 }
 
 .modal-header {
@@ -3424,11 +3604,52 @@ a {
 
 .modal-footer {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
   gap: 10px;
   margin-top: 32px;
   border-top: 1px solid var(--border);
   padding-top: 20px;
+}
+
+.modal-footer-actions {
+  display: flex;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.btn-modal-delete {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: transparent;
+  border: 1px solid var(--red);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--red);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-modal-delete:hover:not(:disabled) {
+  background: var(--red-bg);
+}
+
+.btn-modal-delete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.modal-readonly-value {
+  padding: 10px 14px;
+  background: var(--bg-app);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
 .btn-secondary {
@@ -3844,6 +4065,17 @@ a {
   background: var(--blue);
   color: white;
   border-color: var(--blue);
+}
+
+.groupbuy-category-bell-btn.subscribed {
+  background: white;
+  color: var(--blue);
+}
+
+.groupbuy-category-bell-btn.subscribed:hover:not(:disabled) {
+  background: var(--red-bg);
+  color: var(--red);
+  border-color: var(--red-border, #fecaca);
 }
 
 .groupbuy-category-bell-btn:disabled {

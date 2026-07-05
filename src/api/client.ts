@@ -85,6 +85,40 @@ export async function publicRequest<T>(
   return parseResponse<T>(res);
 }
 
+async function executeWithReissue(
+  requestUrl: string,
+  init: RequestInit,
+  headers: Headers,
+): Promise<Response> {
+  let res = await fetch(requestUrl, { ...init, headers });
+
+  if ((res.status === 401 || res.status === 403) && tokenStorage.getAccessToken()) {
+    const renewed = await tryReissue();
+    if (renewed) {
+      headers.set('Authorization', `Bearer ${tokenStorage.getAccessToken()}`);
+      res = await fetch(requestUrl, { ...init, headers });
+    } else {
+      handleAuthExpired();
+    }
+  }
+
+  return res;
+}
+
+/** ApiResponse 래퍼 없이 raw Response가 필요한 API용 */
+export async function authFetch(
+  url: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const headers = new Headers(init.headers);
+  const accessToken = tokenStorage.getAccessToken();
+  if (accessToken) {
+    headers.set('Authorization', `Bearer ${accessToken}`);
+  }
+
+  return executeWithReissue(resolveApiUrl(url), init, headers);
+}
+
 export async function authRequest<T>(
   url: string,
   init: RequestInit = {}
@@ -98,17 +132,7 @@ export async function authRequest<T>(
   }
 
   const requestUrl = resolveApiUrl(url);
-  let res = await fetch(requestUrl, { ...init, headers });
-
-  if (res.status === 401) {
-    const renewed = await tryReissue();
-    if (renewed) {
-      headers.set('Authorization', `Bearer ${tokenStorage.getAccessToken()}`);
-      res = await fetch(requestUrl, { ...init, headers });
-    } else {
-      handleAuthExpired();
-    }
-  }
+  const res = await executeWithReissue(requestUrl, init, headers);
 
   return parseResponse<T>(res);
 }

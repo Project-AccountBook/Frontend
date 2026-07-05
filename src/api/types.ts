@@ -102,6 +102,31 @@ export interface InterestCategoryResponse {
   isAlarmEnabled: boolean;
 }
 
+/** Spring Data Page<T> */
+export interface PageResponse<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+  first: boolean;
+  last: boolean;
+  empty: boolean;
+}
+
+export type NotificationType = 'BUDGET' | 'INTEREST_CATEGORY' | 'SYSTEM';
+
+export interface NotificationResponse {
+  id: number;
+  title: string;
+  message: string;
+  redirectUrl: string | null;
+  referenceId: number | null;
+  type: NotificationType;
+  isRead: boolean;
+  createdAt: string;
+}
+
 export type TransactionType = 'INCOME' | 'EXPENSE' | 'TRANSFER';
 
 export interface CategoryResponse {
