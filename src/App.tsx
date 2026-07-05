@@ -23,9 +23,35 @@ import { Construction } from 'lucide-react';
 
 type BoardMode = 'list' | 'detail' | 'write';
 
+const APP_TABS = new Set([
+  'dashboard',
+  'history',
+  'budget',
+  'analysis',
+  'comparison',
+  'locationComparison',
+  'groupbuy',
+  'knowhow',
+  'qa',
+  'groupbuyAdmin',
+  'notifications',
+  'settings',
+]);
+
+function readTabFromUrl(): string {
+  const hash = window.location.hash.replace(/^#\/?/, '');
+  return APP_TABS.has(hash) ? hash : 'dashboard';
+}
+
+function writeTabToUrl(tab: string) {
+  const base = `${window.location.pathname}${window.location.search}`;
+  const url = tab === 'dashboard' ? base : `${base}#${tab}`;
+  window.history.replaceState({}, document.title, url);
+}
+
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => tokenStorage.hasToken());
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [activeTab, setActiveTab] = useState<string>(readTabFromUrl);
   const [knowhowMode, setKnowhowMode] = useState<BoardMode>('list');
   const [knowhowPostId, setKnowhowPostId] = useState<number | null>(null);
   const [qnaMode, setQnaMode] = useState<BoardMode>('list');
@@ -42,8 +68,17 @@ function App() {
     setAuthExpiredHandler(() => {
       setIsLoggedIn(false);
       setActiveTab('dashboard');
+      writeTabToUrl('dashboard');
     });
     return () => setAuthExpiredHandler(null);
+  }, []);
+
+  useEffect(() => {
+    const syncTabFromUrl = () => {
+      setActiveTab(readTabFromUrl());
+    };
+    window.addEventListener('hashchange', syncTabFromUrl);
+    return () => window.removeEventListener('hashchange', syncTabFromUrl);
   }, []);
 
   useEffect(() => {
@@ -71,10 +106,12 @@ function App() {
     tokenStorage.clear();
     setIsLoggedIn(false);
     setActiveTab('dashboard');
+    writeTabToUrl('dashboard');
   };
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
+    writeTabToUrl(tab);
     setAssetInitialSection(undefined);
     setKnowhowMode('list');
     setKnowhowPostId(null);
@@ -83,8 +120,13 @@ function App() {
   };
 
   const goToCategorySettings = () => {
+    setKnowhowMode('list');
+    setKnowhowPostId(null);
+    setQnaMode('list');
+    setQnaPostId(null);
     setAssetInitialSection('categories');
     setActiveTab('history');
+    writeTabToUrl('history');
   };
 
   const renderKnowhow = () => {
@@ -232,7 +274,7 @@ function App() {
               </p>
             </div>
             <button
-              onClick={() => setActiveTab('dashboard')}
+              onClick={() => handleTabChange('dashboard')}
               style={{
                 background: 'var(--navy)',
                 color: 'white',
