@@ -97,6 +97,34 @@ export interface GroupPurchaseCategoryResponse {
   updatedAt: string;
 }
 
+export type GroupPurchaseStatus =
+  | 'RECRUITING'
+  | 'SUCCESS'
+  | 'FAILED'
+  | 'CLOSED'
+  | 'BLIND';
+
+export interface GroupPurchaseResponse {
+  id: number;
+  creatorId: number;
+  creatorNickname: string;
+  categoryId: number;
+  title: string;
+  content: string;
+  price: number;
+  minParticipants: number;
+  maxParticipants: number;
+  currentParticipants: number;
+  status: GroupPurchaseStatus;
+  deadline: string;
+  pickupLocation: string;
+  viewCount: number;
+  imageUrl: string | null;
+  achievementRate: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface InterestCategoryResponse {
   id: number;
   categoryId: number;

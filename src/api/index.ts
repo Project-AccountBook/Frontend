@@ -3,6 +3,7 @@ export { authApi } from './authApi';
 export { userApi } from './userApi';
 export { interestCategoryApi } from './interestCategoryApi';
 export { groupPurchaseCategoryApi } from './groupPurchaseCategoryApi';
+export { groupPurchaseApi } from './groupPurchaseApi';
 export { budgetApi } from './budgetApi';
 export { categoryApi } from './categoryApi';
 export { dashboardApi } from './dashboardApi';

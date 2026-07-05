@@ -222,7 +222,7 @@ function App() {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <DashboardView />;
+        return <DashboardView onViewAllGroupBuys={() => handleTabChange('groupbuy')} />;
       case 'history':
         return <AssetView initialSection={assetInitialSection} />;
       case 'budget':

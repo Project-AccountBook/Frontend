@@ -327,6 +327,11 @@ a {
   background-color: #fafbfc;
 }
 
+.dashboard-monthly-table th,
+.dashboard-monthly-table td {
+  white-space: nowrap;
+}
+
 /* Progress bar */
 .progress-bar-container {
   width: 100%;
@@ -1015,6 +1020,13 @@ a {
   max-width: 60px;
   height: 100%;
   justify-content: flex-end;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background-color 0.15s ease;
+}
+
+.svg-bar-group.is-hovered {
+  background-color: #f8fafc;
 }
 
 .svg-bar-bars {
@@ -1073,8 +1085,122 @@ a {
 
 /* Trend Line Chart Container */
 .trend-line-container {
+  position: relative;
   height: 180px;
   margin-top: 16px;
+}
+
+.trend-line-svg {
+  display: block;
+}
+
+.trend-hover-zone {
+  cursor: crosshair;
+}
+
+.trend-line-legend {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 12px;
+}
+
+.trend-line-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+}
+
+.trend-line-legend-line {
+  display: inline-block;
+  width: 24px;
+  height: 0;
+  border-top-width: 2px;
+  border-top-style: solid;
+}
+
+.trend-line-legend-line.income {
+  border-top-color: #3b82f6;
+}
+
+.trend-line-legend-line.savings,
+.trend-line-legend-line.expense {
+  border-top-style: dashed;
+}
+
+.trend-line-legend-line.savings {
+  border-top-color: #10b981;
+}
+
+.trend-line-legend-line.expense {
+  border-top-color: #f43f5e;
+}
+
+.trend-line-hint {
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.trend-summary-card {
+  margin-top: 16px;
+  border: 1px solid var(--border);
+  background: #fafbfc;
+  padding: 14px 16px;
+  border-radius: 10px;
+}
+
+.chart-hover-tooltip {
+  position: absolute;
+  z-index: 20;
+  min-width: 168px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.96);
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 10px));
+}
+
+.chart-hover-tooltip-title {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chart-hover-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.chart-hover-tooltip-row + .chart-hover-tooltip-row {
+  margin-top: 4px;
+}
+
+.chart-hover-tooltip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.chart-hover-tooltip-label {
+  flex: 1;
+  color: #cbd5e1;
+}
+
+.chart-hover-tooltip-value {
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .trend-info-grid {
@@ -1104,11 +1230,50 @@ a {
 }
 
 /* Asset summary metrics */
+.asset-summary-total {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #fafbfc;
+  border: 1px solid var(--border);
+}
+
+.asset-summary-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.asset-summary-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.asset-summary-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.asset-summary-sub {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
 .asset-progress-list {
   display: flex;
   flex-direction: column;
   gap: 16px;
   margin-top: 20px;
+}
+
+.asset-breakdown-list {
+  margin-top: 0;
 }
 
 .asset-progress-item {
