@@ -10,12 +10,12 @@ import {
   X,
   CheckCircle2,
   Bell,
-  BellRing,
+  BellOff,
   Loader2,
 } from 'lucide-react';
 import {
-  groupPurchaseCategoryApi,
   interestCategoryApi,
+  tokenStorage,
   type GroupPurchaseCategoryResponse,
   type InterestCategoryResponse,
 } from '../api';
@@ -155,10 +155,17 @@ const MOCK_ITEMS: GroupBuyItem[] = [
   }
 ];
 
+const FALLBACK_CATEGORIES: GroupPurchaseCategoryResponse[] = [
+  { id: 1, name: '식품', sortOrder: 1, createdAt: '', updatedAt: '' },
+  { id: 2, name: '생활용품', sortOrder: 2, createdAt: '', updatedAt: '' },
+  { id: 3, name: '육아용품', sortOrder: 3, createdAt: '', updatedAt: '' },
+  { id: 4, name: '가전', sortOrder: 4, createdAt: '', updatedAt: '' },
+];
+
 export const GroupBuyView: React.FC = () => {
   // API Call Helper
   const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
-    const token = localStorage.getItem('accessToken');
+    const token = tokenStorage.getAccessToken();
     const headers = {
       'Content-Type': 'application/json',
       ...options.headers,
@@ -179,12 +186,12 @@ export const GroupBuyView: React.FC = () => {
 
   // States
   const [items, setItems] = useState<GroupBuyItem[]>(MOCK_ITEMS);
-  const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
+
+  const [categories, setCategories] = useState<GroupPurchaseCategoryResponse[]>(FALLBACK_CATEGORIES);
   const [userLocationText, setUserLocationText] = useState('서울시 마포구 서교동');
   const [userBudget, setUserBudget] = useState(3140894);
   const [userBookmarks, setUserBookmarks] = useState<number[]>([]);
   const [participatedItems, setParticipatedItems] = useState<number[]>([]);
-  const [categories, setCategories] = useState<GroupPurchaseCategoryResponse[]>(FALLBACK_CATEGORIES);
   const [interestCategories, setInterestCategories] = useState<InterestCategoryResponse[]>([]);
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
   const [subscribingCategory, setSubscribingCategory] = useState(false);
@@ -209,6 +216,42 @@ export const GroupBuyView: React.FC = () => {
   const [comments, setComments] = useState<Record<number, Comment[]>>({});
   const [newCommentText, setNewCommentText] = useState('');
 
+  const activeCategoryName = activeCategoryId
+    ? categories.find((c) => c.id === activeCategoryId)?.name ?? null
+    : null;
+
+  const subscribedInterest = activeCategoryId
+    ? interestCategories.find((ic) => ic.categoryId === activeCategoryId)
+    : null;
+
+  const handleToggleCategoryNotification = async () => {
+    if (!activeCategoryId || subscribingCategory) return;
+
+    setSubscribingCategory(true);
+    try {
+      if (subscribedInterest) {
+        const result = await interestCategoryApi.delete(subscribedInterest.id);
+        if (result.ok) {
+          setInterestCategories((prev) => prev.filter((ic) => ic.id !== subscribedInterest.id));
+          triggerToast(`"${subscribedInterest.categoryName}" 카테고리 알림을 취소했습니다.`);
+        } else {
+          triggerToast(result.error ?? '관심 카테고리 해제에 실패했습니다.');
+        }
+      } else {
+        const result = await interestCategoryApi.register(activeCategoryId);
+        if (result.ok && result.data) {
+          setInterestCategories((prev) => [...prev, result.data!]);
+          triggerToast(`"${result.data.categoryName}" 카테고리 알림을 등록했습니다.`);
+        } else {
+          triggerToast(result.error ?? '관심 카테고리 등록에 실패했습니다.');
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load budget:", err);
+    }
+  };
+
+
   // Load initial data
   useEffect(() => {
     const loadInitialData = async () => {
@@ -219,6 +262,15 @@ export const GroupBuyView: React.FC = () => {
         }
       } catch (err) {
         console.error("Failed to load categories:", err);
+      }
+
+      try {
+        const interestRes = await fetchWithAuth('/api/v1/interest-categories');
+        if (interestRes.success && interestRes.data) {
+          setInterestCategories(interestRes.data);
+        }
+      } catch (err) {
+        console.error("Failed to load interest categories:", err);
       }
 
       try {
@@ -335,11 +387,8 @@ export const GroupBuyView: React.FC = () => {
       let url = '/api/v1/group-purchases';
       const params = new URLSearchParams();
       
-      if (activeCategory !== '전체') {
-        const catId = categories.find(c => c.name === activeCategory)?.id;
-        if (catId) {
-          params.append('categoryId', String(catId));
-        }
+      if (activeCategoryId !== null) {
+        params.append('categoryId', String(activeCategoryId));
       }
 
       if (distanceLimit !== '전체') {
@@ -366,7 +415,7 @@ export const GroupBuyView: React.FC = () => {
     if (categories.length > 0) {
       fetchGroupPurchases();
     }
-  }, [activeCategory, sortBy, distanceLimit, categories]);
+  }, [activeCategoryId, sortBy, distanceLimit, categories]);
 
   const handleItemClick = async (item: GroupBuyItem) => {
     try {
@@ -551,7 +600,7 @@ export const GroupBuyView: React.FC = () => {
   // Filter logic
   const filteredItems = items
     .filter(item => {
-      if (activeCategory !== '전체' && item.category !== activeCategory) return false;
+      if (activeCategoryName && item.category !== activeCategoryName) return false;
       if (showBookmarksOnly && !userBookmarks.includes(item.id)) return false;
       if (showParticipatedOnly && !participatedItems.includes(item.id)) return false;
       return true;
@@ -619,27 +668,28 @@ export const GroupBuyView: React.FC = () => {
           </div>
 
           {activeCategoryId !== null && activeCategoryName && (
-            subscribedInterest ? (
-              <span className="groupbuy-category-bell-status" title={`"${activeCategoryName}" 새 공구 알림 받는 중`}>
-                <BellRing size={14} />
-                <span>{activeCategoryName} · 알림 받는 중</span>
+            <button
+              type="button"
+              onClick={handleToggleCategoryNotification}
+              disabled={subscribingCategory}
+              className={`groupbuy-category-bell-btn${subscribedInterest ? ' subscribed' : ''}`}
+              title={
+                subscribedInterest
+                  ? `"${activeCategoryName}" 카테고리 알림 취소`
+                  : `"${activeCategoryName}" 새 공구 알림 받기`
+              }
+            >
+              {subscribingCategory ? (
+                <Loader2 size={14} className="spin-animation" />
+              ) : subscribedInterest ? (
+                <BellOff size={14} />
+              ) : (
+                <Bell size={14} />
+              )}
+              <span>
+                {activeCategoryName} · {subscribedInterest ? '알림 취소' : '새 공구 알림'}
               </span>
-            ) : (
-              <button
-                type="button"
-                onClick={handleSubscribeCategory}
-                disabled={subscribingCategory}
-                className="groupbuy-category-bell-btn"
-                title={`"${activeCategoryName}" 새 공구 알림 받기`}
-              >
-                {subscribingCategory ? (
-                  <Loader2 size={14} className="spin-animation" />
-                ) : (
-                  <Bell size={14} />
-                )}
-                <span>{activeCategoryName} · 새 공구 알림</span>
-              </button>
-            )
+            </button>
           )}
         </div>
 

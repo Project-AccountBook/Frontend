@@ -1,72 +1,38 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   Eye,
   MessageSquare,
-  Heart,
-  Share2,
-  Bookmark,
-  MoreHorizontal,
   Send,
-  CornerDownRight,
-  ThumbsUp
+  Trash2,
+  Pencil,
+  Lightbulb,
+  AlertCircle,
+  Heart,
+  Bookmark,
+  UserPlus,
+  UserCheck
 } from 'lucide-react';
-import { KNOWHOW_POSTS } from './KnowhowListView';
-
-interface Comment {
-  id: number;
-  author: string;
-  authorInitial: string;
-  authorColor: string;
-  content: string;
-  createdAt: string;
-  likes: number;
-  replies?: Comment[];
-}
-
-const MOCK_COMMENTS: Comment[] = [
-  {
-    id: 1,
-    author: '세아이맘',
-    authorInitial: '세',
-    authorColor: '#10b981',
-    content:
-      '저도 비슷한 고민이었는데 큰 도움이 됐어요! 특히 일요일 식단 짜기는 바로 실천해봐야겠어요. 좋은 글 감사합니다.',
-    createdAt: '1시간 전',
-    likes: 12,
-    replies: [
-      {
-        id: 11,
-        author: '미니맘',
-        authorInitial: '미',
-        authorColor: '#3b82f6',
-        content: '도움이 되셨다니 다행이에요! 일요일 30분이면 충분하니까 꼭 시도해보세요 :)',
-        createdAt: '45분 전',
-        likes: 3
-      }
-    ]
-  },
-  {
-    id: 2,
-    author: '쌍둥이맘',
-    authorInitial: '쌍',
-    authorColor: '#f43f5e',
-    content:
-      '대형마트 vs 동네마트 비교 자료 더 자세히 볼 수 있을까요? 카테고리별로 가격 차이가 궁금하네요.',
-    createdAt: '2시간 전',
-    likes: 8
-  },
-  {
-    id: 3,
-    author: '알뜰살뜰',
-    authorInitial: '알',
-    authorColor: '#8b5cf6',
-    content:
-      '저는 여기에 추가로 냉장고 파먹기 챌린지 하고 있어요. 일주일에 한 번 마트 안 가는 날 정해두니까 식비가 또 줄더라구요!',
-    createdAt: '3시간 전',
-    likes: 24
-  }
-];
+import type { BoardResponse, CommentResponse, UserStatsResponse } from '../lib/boardApi';
+import {
+  authorColorForUser,
+  authorInitialForUser,
+  createComment,
+  deleteBoard,
+  deleteComment,
+  formatRelativeKo,
+  getBoard,
+  getMyUserId,
+  getUserStats,
+  listComments,
+  replyComment,
+  toggleBoardBookmark,
+  toggleBoardLike,
+  toggleCommentLike,
+  toggleFollow,
+  updateBoard,
+  updateComment,
+} from '../lib/boardApi';
 
 interface KnowhowDetailViewProps {
   postId: number;
@@ -74,18 +40,230 @@ interface KnowhowDetailViewProps {
 }
 
 export const KnowhowDetailView: React.FC<KnowhowDetailViewProps> = ({ postId, onBack }) => {
-  const post = KNOWHOW_POSTS.find((p) => p.id === postId) ?? KNOWHOW_POSTS[0];
-  const [liked, setLiked] = useState(false);
-  const [bookmarked, setBookmarked] = useState(false);
+  const [post, setPost] = useState<BoardResponse | null>(null);
+  const [comments, setComments] = useState<CommentResponse[]>([]);
   const [comment, setComment] = useState('');
+  const [replyTarget, setReplyTarget] = useState<number | null>(null);
+  const [replyContent, setReplyContent] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editContent, setEditContent] = useState('');
+  const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
+  const [editingCommentContent, setEditingCommentContent] = useState('');
+  const [authorStats, setAuthorStats] = useState<UserStatsResponse | null>(null);
+  const [myUserId, setMyUserId] = useState<number | null>(null);
 
-  const relatedPosts = KNOWHOW_POSTS.filter(
-    (p) => p.id !== post.id && p.category === post.category
-  ).slice(0, 3);
+  useEffect(() => {
+    getMyUserId().then(setMyUserId).catch(() => setMyUserId(null));
+  }, []);
+
+  useEffect(() => {
+    if (!post) return;
+    getUserStats(post.userId).then(setAuthorStats).catch(() => setAuthorStats(null));
+  }, [post?.userId]);
+
+  const handleToggleFollow = async () => {
+    if (!post || !authorStats) return;
+    try {
+      const r = await toggleFollow(post.userId);
+      setAuthorStats({ ...authorStats, following: r.following, followerCount: r.followerCount });
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const refreshComments = async () => {
+    try {
+      const data = await listComments(postId, 'KNOWHOW');
+      setComments(data);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [b, c] = await Promise.all([getBoard(postId), listComments(postId, 'KNOWHOW')]);
+        if (cancelled) return;
+        setPost(b);
+        setComments(c);
+      } catch (e) {
+        if (!cancelled) setError((e as Error).message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [postId]);
+
+  const topLevel = useMemo(() => comments.filter((c) => c.parentId === null), [comments]);
+  const repliesByParent = useMemo(() => {
+    const m: Record<number, CommentResponse[]> = {};
+    comments.forEach((c) => {
+      if (c.parentId !== null) {
+        m[c.parentId] = m[c.parentId] ?? [];
+        m[c.parentId].push(c);
+      }
+    });
+    return m;
+  }, [comments]);
+
+  const handleSubmitComment = async () => {
+    if (!comment.trim()) return;
+    setSubmitting(true);
+    try {
+      await createComment(postId, comment.trim(), 'KNOWHOW');
+      setComment('');
+      await refreshComments();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSubmitReply = async (parentId: number) => {
+    if (!replyContent.trim()) return;
+    setSubmitting(true);
+    try {
+      await replyComment(postId, parentId, replyContent.trim(), 'KNOWHOW');
+      setReplyContent('');
+      setReplyTarget(null);
+      await refreshComments();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: number) => {
+    if (!window.confirm('댓글을 삭제하시겠습니까?')) return;
+    try {
+      await deleteComment(commentId);
+      await refreshComments();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const handleDeletePost = async () => {
+    if (!window.confirm('게시물을 삭제하시겠습니까?')) return;
+    try {
+      await deleteBoard(postId);
+      onBack();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const startEditPost = () => {
+    if (!post) return;
+    setEditTitle(post.title);
+    setEditContent(post.content);
+    setEditing(true);
+  };
+
+  const handleUpdatePost = async () => {
+    if (!editTitle.trim() || !editContent.trim()) return;
+    setSubmitting(true);
+    try {
+      await updateBoard(postId, {
+        title: editTitle.trim(),
+        content: editContent.trim(),
+        type: 'KNOWHOW',
+      });
+      const refreshed = await getBoard(postId);
+      setPost(refreshed);
+      setEditing(false);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const startEditComment = (c: CommentResponse) => {
+    setEditingCommentId(c.id);
+    setEditingCommentContent(c.content);
+  };
+
+  const handleUpdateComment = async (commentId: number) => {
+    if (!editingCommentContent.trim()) return;
+    setSubmitting(true);
+    try {
+      await updateComment(commentId, editingCommentContent.trim());
+      setEditingCommentId(null);
+      setEditingCommentContent('');
+      await refreshComments();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleToggleLike = async () => {
+    if (!post) return;
+    try {
+      const r = await toggleBoardLike(postId);
+      setPost({ ...post, liked: r.liked, likeCount: r.likeCount });
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const handleToggleBookmark = async () => {
+    if (!post) return;
+    try {
+      const r = await toggleBoardBookmark(postId);
+      setPost({ ...post, bookmarked: r.bookmarked });
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const handleToggleCommentLike = async (commentId: number) => {
+    try {
+      const r = await toggleCommentLike(commentId);
+      setComments((prev) =>
+        prev.map((c) => (c.id === commentId ? { ...c, liked: r.liked, likeCount: r.likeCount } : c))
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="card" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+        불러오는 중...
+      </div>
+    );
+  }
+
+  if (error && !post) {
+    return (
+      <div className="card" style={{ padding: '40px', textAlign: 'center', color: 'var(--red)' }}>
+        <AlertCircle size={18} style={{ verticalAlign: 'middle', marginRight: 8 }} />
+        {error}
+      </div>
+    );
+  }
+
+  if (!post) return null;
 
   return (
     <div className="fade-in">
-      {/* Back button */}
       <button
         onClick={onBack}
         style={{
@@ -106,651 +284,795 @@ export const KnowhowDetailView: React.FC<KnowhowDetailViewProps> = ({ postId, on
         목록으로
       </button>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1fr) 320px',
-          gap: '24px'
-        }}
-      >
-        {/* Main column */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', minWidth: 0 }}>
-          {/* Post body card */}
-          <div className="card" style={{ padding: '32px' }}>
-            {/* Category + title */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
-              <span
-                style={{
-                  fontSize: '12px',
-                  fontWeight: '700',
-                  background: 'var(--blue-bg)',
-                  color: 'var(--blue)',
-                  padding: '4px 10px',
-                  borderRadius: '6px',
-                  border: '1px solid var(--blue-border)'
-                }}
-              >
-                {post.category}
-              </span>
-              {post.isHot && (
-                <span
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: '800',
-                    background: 'var(--red)',
-                    color: 'white',
-                    padding: '4px 8px',
-                    borderRadius: '6px'
-                  }}
-                >
-                  HOT
-                </span>
-              )}
-            </div>
+      {error && (
+        <div
+          className="card"
+          style={{
+            padding: '12px 16px',
+            marginBottom: '16px',
+            border: '1px solid var(--red-border)',
+            background: 'var(--red-bg)',
+            color: 'var(--red)',
+            fontSize: '13px'
+          }}
+        >
+          {error}
+        </div>
+      )}
 
-            <h1
-              style={{
-                fontSize: '26px',
-                fontWeight: '800',
-                color: 'var(--text-primary)',
-                lineHeight: '1.35',
-                letterSpacing: '-0.5px',
-                marginBottom: '20px'
-              }}
-            >
-              {post.title}
-            </h1>
-
-            {/* Author/meta row */}
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                paddingBottom: '20px',
-                borderBottom: '1px solid var(--border)'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div
-                  style={{
-                    width: '40px',
-                    height: '40px',
-                    borderRadius: '50%',
-                    background: post.authorColor,
-                    color: 'white',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '14px',
-                    fontWeight: '700'
-                  }}
-                >
-                  {post.authorInitial}
-                </div>
-                <div>
-                  <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)' }}>
-                    {post.author}
-                  </div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                    {post.createdAt}
-                  </div>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  display: 'flex',
-                  gap: '16px',
-                  fontSize: '12px',
-                  color: 'var(--text-secondary)',
-                  fontWeight: '500'
-                }}
-              >
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <Eye size={14} />
-                  {post.views.toLocaleString()}
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <MessageSquare size={14} />
-                  {post.comments}
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <Heart size={14} />
-                  {post.likes}
-                </span>
-                <button
-                  style={{
-                    color: 'var(--text-muted)',
-                    display: 'flex',
-                    alignItems: 'center'
-                  }}
-                  aria-label="더보기"
-                >
-                  <MoreHorizontal size={16} />
-                </button>
-              </div>
-            </div>
-
-            {/* Thumbnail */}
-            {post.thumbnail && (
-              <div
-                style={{
-                  width: '100%',
-                  height: '320px',
-                  backgroundImage: `url(${post.thumbnail})`,
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center',
-                  borderRadius: '12px',
-                  margin: '24px 0'
-                }}
-              />
-            )}
-
-            {/* Content */}
-            <div
-              style={{
-                fontSize: '15px',
-                lineHeight: '1.8',
-                color: 'var(--text-primary)',
-                marginTop: post.thumbnail ? '0' : '24px'
-              }}
-            >
-              <p style={{ marginBottom: '20px' }}>{post.content}</p>
-
-              <p style={{ marginBottom: '20px' }}>
-                안녕하세요, 여섯 살 첫째와 두 살 둘째를 키우는 워킹맘입니다. 작년 이맘때만 해도
-                저희집 월 식비가 평균 110만원 정도였는데요, 너무 부담스러워서 가계부를 다시 쓰기
-                시작했어요. 그러면서 매주 일요일 30분만 투자해서 식단을 짜고 장을 보는 루틴을
-                만들었더니, 지난달 식비가 <strong>59만원</strong>까지 줄었습니다.
-              </p>
-
-              <h3
-                style={{
-                  fontSize: '18px',
-                  fontWeight: '700',
-                  margin: '32px 0 12px',
-                  color: 'var(--text-primary)'
-                }}
-              >
-                1. 일요일 30분, 일주일 식단표 만들기
-              </h3>
-              <p style={{ marginBottom: '20px' }}>
-                일요일 오전에 가족 일정과 외식 계획을 체크하고, 평일 저녁 메뉴 5개를 미리 정해요.
-                메뉴를 정하고 나면 필요한 재료가 자동으로 나오기 때문에 충동구매가 사라집니다.
-              </p>
-
-              <h3
-                style={{
-                  fontSize: '18px',
-                  fontWeight: '700',
-                  margin: '32px 0 12px',
-                  color: 'var(--text-primary)'
-                }}
-              >
-                2. 동네 마트 + 대형 마트 분리 전략
-              </h3>
-              <p style={{ marginBottom: '20px' }}>
-                채소·과일은 동네 시장이 평균 22% 저렴했어요. 반대로 우유·계란·세제 같은 공산품은
-                대형마트 + 공동구매가 훨씬 쌉니다. 카테고리별로 어디서 살지 정해두면 발품 줄이고
-                돈도 아낄 수 있어요.
-              </p>
-
-              <h3
-                style={{
-                  fontSize: '18px',
-                  fontWeight: '700',
-                  margin: '32px 0 12px',
-                  color: 'var(--text-primary)'
-                }}
-              >
-                3. 냉장고 정리부터 시작하기
-              </h3>
-              <p style={{ marginBottom: '20px' }}>
-                장 보기 전에 냉장고를 먼저 확인해요. 이미 있는 재료를 모르고 또 사는 일이 줄어들고,
-                유통기한이 임박한 재료를 활용한 메뉴를 자연스럽게 식단에 넣게 됩니다.
-              </p>
-
-              <p style={{ marginBottom: '20px' }}>
-                작은 변화지만 한 달, 두 달 쌓이니까 가족 외식 한 번 더 할 수 있을 만큼의 여유가
-                생겼어요. 다들 화이팅입니다! 궁금한 점 있으시면 댓글로 남겨주세요 :)
-              </p>
-            </div>
-
-            {/* Tags */}
-            <div
-              style={{
-                display: 'flex',
-                gap: '8px',
-                flexWrap: 'wrap',
-                marginTop: '32px',
-                paddingTop: '24px',
-                borderTop: '1px solid var(--border)'
-              }}
-            >
-              {['#식비절약', '#장보기루틴', '#식단표', '#워킹맘'].map((tag) => (
-                <span
-                  key={tag}
-                  style={{
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    color: 'var(--text-secondary)',
-                    background: '#f1f5f9',
-                    padding: '6px 12px',
-                    borderRadius: '20px'
-                  }}
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
-
-            {/* Action bar */}
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'center',
-                gap: '12px',
-                marginTop: '32px'
-              }}
-            >
-              <button
-                onClick={() => setLiked(!liked)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '12px 24px',
-                  borderRadius: '12px',
-                  fontSize: '14px',
-                  fontWeight: '700',
-                  background: liked ? 'var(--red-bg)' : 'white',
-                  color: liked ? 'var(--red)' : 'var(--text-secondary)',
-                  border: `1px solid ${liked ? 'var(--red-border)' : 'var(--border)'}`,
-                  transition: 'all 0.15s'
-                }}
-              >
-                <Heart size={16} fill={liked ? 'var(--red)' : 'none'} />
-                <span>좋아요 {post.likes + (liked ? 1 : 0)}</span>
-              </button>
-
-              <button
-                onClick={() => setBookmarked(!bookmarked)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '12px 24px',
-                  borderRadius: '12px',
-                  fontSize: '14px',
-                  fontWeight: '700',
-                  background: bookmarked ? 'var(--blue-bg)' : 'white',
-                  color: bookmarked ? 'var(--blue)' : 'var(--text-secondary)',
-                  border: `1px solid ${bookmarked ? 'var(--blue-border)' : 'var(--border)'}`,
-                  transition: 'all 0.15s'
-                }}
-              >
-                <Bookmark size={16} fill={bookmarked ? 'var(--blue)' : 'none'} />
-                <span>{bookmarked ? '저장됨' : '저장'}</span>
-              </button>
-
-              <button
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '12px 24px',
-                  borderRadius: '12px',
-                  fontSize: '14px',
-                  fontWeight: '700',
-                  background: 'white',
-                  color: 'var(--text-secondary)',
-                  border: '1px solid var(--border)'
-                }}
-              >
-                <Share2 size={16} />
-                <span>공유</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Comments card */}
-          <div className="card" style={{ padding: '28px' }}>
-            <div className="card-header-row">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <MessageSquare size={18} color="var(--text-primary)" />
-                <span className="card-title">
-                  댓글 <span style={{ color: 'var(--blue)' }}>{post.comments}</span>
-                </span>
-              </div>
-              <div className="sub-tabs-container" style={{ marginBottom: 0 }}>
-                <button className="sub-tab-btn active">최신순</button>
-                <button className="sub-tab-btn">인기순</button>
-              </div>
-            </div>
-
-            {/* Comment input */}
-            <div
-              style={{
-                display: 'flex',
-                gap: '12px',
-                padding: '16px',
-                background: '#f8fafc',
-                borderRadius: '12px',
-                marginBottom: '24px',
-                border: '1px solid var(--border)'
-              }}
-            >
-              <div
-                style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '50%',
-                  background: 'var(--purple-bg)',
-                  color: 'var(--purple)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '13px',
-                  fontWeight: '700',
-                  flexShrink: 0
-                }}
-              >
-                나
-              </div>
-              <textarea
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder="따뜻한 댓글을 남겨주세요"
-                rows={2}
-                style={{
-                  flex: 1,
-                  border: 'none',
-                  background: 'transparent',
-                  outline: 'none',
-                  fontSize: '14px',
-                  fontFamily: 'inherit',
-                  resize: 'none',
-                  color: 'var(--text-primary)',
-                  lineHeight: '1.5'
-                }}
-              />
-              <button
-                disabled={!comment.trim()}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: comment.trim() ? 'var(--navy)' : '#cbd5e1',
-                  color: 'white',
-                  padding: '0 18px',
-                  borderRadius: '8px',
-                  fontSize: '13px',
-                  fontWeight: '700',
-                  alignSelf: 'flex-end',
-                  height: '36px',
-                  cursor: comment.trim() ? 'pointer' : 'not-allowed'
-                }}
-              >
-                <Send size={13} />
-                등록
-              </button>
-            </div>
-
-            {/* Comments list */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {MOCK_COMMENTS.map((c) => (
-                <CommentItem key={c.id} comment={c} />
-              ))}
-            </div>
-          </div>
+      <div className="card" style={{ padding: '32px', marginBottom: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              fontSize: '12px',
+              fontWeight: '700',
+              background: 'var(--blue-bg)',
+              color: 'var(--blue)',
+              padding: '4px 10px',
+              borderRadius: '6px',
+              border: '1px solid var(--blue-border)'
+            }}
+          >
+            <Lightbulb size={12} />
+            노하우
+          </span>
         </div>
 
-        {/* Side column */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {/* Author profile */}
-          <div className="card" style={{ padding: '24px', textAlign: 'center' }}>
+        {editing ? (
+          <input
+            type="text"
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '12px 16px',
+              background: '#f8fafc',
+              border: '1px solid var(--border)',
+              borderRadius: '10px',
+              fontSize: '20px',
+              fontWeight: '700',
+              fontFamily: 'inherit',
+              color: 'var(--text-primary)',
+              outline: 'none',
+              marginBottom: '20px'
+            }}
+          />
+        ) : (
+          <h1
+            style={{
+              fontSize: '26px',
+              fontWeight: '800',
+              color: 'var(--text-primary)',
+              lineHeight: '1.35',
+              letterSpacing: '-0.5px',
+              marginBottom: '20px'
+            }}
+          >
+            {post.title}
+          </h1>
+        )}
+
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            paddingBottom: '20px',
+            borderBottom: '1px solid var(--border)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div
               style={{
-                width: '64px',
-                height: '64px',
+                width: '40px',
+                height: '40px',
                 borderRadius: '50%',
-                background: post.authorColor,
+                background: authorColorForUser(post.userId),
                 color: 'white',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '22px',
-                fontWeight: '800',
-                margin: '0 auto 12px'
-              }}
-            >
-              {post.authorInitial}
-            </div>
-            <div
-              style={{
-                fontSize: '15px',
-                fontWeight: '700',
-                color: 'var(--text-primary)',
-                marginBottom: '4px'
-              }}
-            >
-              {post.author}
-            </div>
-            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-              알뜰살림 6년차 워킹맘
-            </div>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: '8px',
-                paddingTop: '16px',
-                borderTop: '1px solid var(--border)'
-              }}
-            >
-              {[
-                { lbl: '게시글', val: '28' },
-                { lbl: '팔로워', val: '142' },
-                { lbl: '좋아요', val: '1.2K' }
-              ].map((s) => (
-                <div key={s.lbl}>
-                  <div style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)' }}>
-                    {s.val}
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                    {s.lbl}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <button
-              style={{
-                width: '100%',
-                marginTop: '16px',
-                background: 'var(--blue)',
-                color: 'white',
-                padding: '10px',
-                borderRadius: '10px',
-                fontSize: '13px',
+                fontSize: '14px',
                 fontWeight: '700'
               }}
             >
-              + 팔로우
-            </button>
-          </div>
-
-          {/* Related posts */}
-          {relatedPosts.length > 0 && (
-            <div className="card" style={{ padding: '24px' }}>
-              <div className="card-header-row" style={{ marginBottom: '16px' }}>
-                <span className="card-title" style={{ fontSize: '14px' }}>
-                  관련 노하우
-                </span>
+              {authorInitialForUser(post.userId)}
+            </div>
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)' }}>
+                {post.authorNickname}
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {relatedPosts.map((p) => (
-                  <button
-                    key={p.id}
-                    style={{
-                      textAlign: 'left',
-                      padding: '12px',
-                      borderRadius: '10px',
-                      background: '#fafbfc',
-                      border: '1px solid var(--border)',
-                      transition: 'all 0.15s'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = '#fff';
-                      e.currentTarget.style.borderColor = 'var(--border-hover)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = '#fafbfc';
-                      e.currentTarget.style.borderColor = 'var(--border)';
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: '13px',
-                        fontWeight: '700',
-                        color: 'var(--text-primary)',
-                        lineHeight: '1.4',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
-                        marginBottom: '8px'
-                      }}
-                    >
-                      {p.title}
-                    </div>
-                    <div
-                      style={{
-                        display: 'flex',
-                        gap: '10px',
-                        fontSize: '11px',
-                        color: 'var(--text-secondary)'
-                      }}
-                    >
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                        <Eye size={11} />
-                        {p.views.toLocaleString()}
-                      </span>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                        <Heart size={11} />
-                        {p.likes}
-                      </span>
-                    </div>
-                  </button>
-                ))}
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                {formatRelativeKo(post.createdAt)}
               </div>
             </div>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              gap: '16px',
+              alignItems: 'center',
+              fontSize: '12px',
+              color: 'var(--text-secondary)',
+              fontWeight: '500'
+            }}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <Eye size={14} />
+              {post.views.toLocaleString()}
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <MessageSquare size={14} />
+              {comments.length}
+            </span>
+            {!editing && (
+              <button
+                onClick={startEditPost}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  color: 'var(--blue)',
+                  fontWeight: '600'
+                }}
+                aria-label="수정"
+              >
+                <Pencil size={14} />
+                수정
+              </button>
+            )}
+            <button
+              onClick={handleDeletePost}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                color: 'var(--red)',
+                fontWeight: '600'
+              }}
+              aria-label="삭제"
+            >
+              <Trash2 size={14} />
+              삭제
+            </button>
+          </div>
+        </div>
+
+        {post.imageUrls && post.imageUrls.length > 0 && !editing && (
+          <div
+            style={{
+              display: 'flex',
+              gap: '12px',
+              flexWrap: 'wrap',
+              margin: '24px 0'
+            }}
+          >
+            {post.imageUrls.map((url, i) => (
+              <img
+                key={i}
+                src={url}
+                alt=""
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '400px',
+                  borderRadius: '12px'
+                }}
+              />
+            ))}
+          </div>
+        )}
+
+        {post.tags && post.tags.length > 0 && !editing && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '20px' }}>
+            {post.tags.map((t) => (
+              <span
+                key={t}
+                style={{
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: 'var(--blue)',
+                  background: 'var(--blue-bg)',
+                  padding: '4px 10px',
+                  borderRadius: '14px'
+                }}
+              >
+                #{t}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {authorStats && !editing && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '14px 16px',
+              marginTop: '20px',
+              background: '#f8fafc',
+              borderRadius: '12px',
+              border: '1px solid var(--border)'
+            }}
+          >
+            <div style={{ flex: 1, display: 'flex', gap: '16px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+              <span>게시글 <strong style={{ color: 'var(--text-primary)' }}>{authorStats.postCount}</strong></span>
+              <span>팔로워 <strong style={{ color: 'var(--text-primary)' }}>{authorStats.followerCount}</strong></span>
+              <span>팔로잉 <strong style={{ color: 'var(--text-primary)' }}>{authorStats.followingCount}</strong></span>
+            </div>
+            <button
+              onClick={handleToggleFollow}
+              disabled={myUserId === post.userId}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 14px',
+                borderRadius: '10px',
+                fontSize: '12px',
+                fontWeight: '700',
+                background: authorStats.following ? 'white' : 'var(--blue)',
+                color: authorStats.following ? 'var(--blue)' : 'white',
+                border: `1px solid ${authorStats.following ? 'var(--blue-border)' : 'var(--blue)'}`,
+                opacity: myUserId === post.userId ? 0.4 : 1,
+                cursor: myUserId === post.userId ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {authorStats.following ? <UserCheck size={12} /> : <UserPlus size={12} />}
+              {authorStats.following ? '팔로잉' : '팔로우'}
+            </button>
+          </div>
+        )}
+
+        {editing ? (
+          <>
+            <textarea
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              rows={14}
+              style={{
+                width: '100%',
+                padding: '16px',
+                background: '#f8fafc',
+                border: '1px solid var(--border)',
+                borderRadius: '10px',
+                fontSize: '14px',
+                fontFamily: 'inherit',
+                color: 'var(--text-primary)',
+                outline: 'none',
+                resize: 'vertical',
+                lineHeight: '1.7',
+                margin: '24px 0'
+              }}
+            />
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setEditing(false)}
+                style={{
+                  padding: '10px 18px',
+                  borderRadius: '10px',
+                  background: 'white',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-secondary)',
+                  fontSize: '13px',
+                  fontWeight: '700'
+                }}
+              >
+                취소
+              </button>
+              <button
+                onClick={handleUpdatePost}
+                disabled={submitting || !editTitle.trim() || !editContent.trim()}
+                style={{
+                  padding: '10px 18px',
+                  borderRadius: '10px',
+                  background: 'var(--blue)',
+                  color: 'white',
+                  fontSize: '13px',
+                  fontWeight: '700'
+                }}
+              >
+                저장
+              </button>
+            </div>
+          </>
+        ) : (
+          <div
+            style={{
+              fontSize: '15px',
+              lineHeight: '1.8',
+              color: 'var(--text-primary)',
+              margin: '24px 0',
+              whiteSpace: 'pre-wrap'
+            }}
+          >
+            {post.content}
+          </div>
+        )}
+
+        {!editing && (
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '12px',
+              marginTop: '24px',
+              paddingTop: '24px',
+              borderTop: '1px solid var(--border)'
+            }}
+          >
+            <button
+              onClick={handleToggleLike}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 22px',
+                borderRadius: '12px',
+                fontSize: '13px',
+                fontWeight: '700',
+                background: post.liked ? 'var(--red-bg)' : 'white',
+                color: post.liked ? 'var(--red)' : 'var(--text-secondary)',
+                border: `1px solid ${post.liked ? 'var(--red-border)' : 'var(--border)'}`
+              }}
+            >
+              <Heart size={14} fill={post.liked ? 'var(--red)' : 'none'} />
+              좋아요 {post.likeCount}
+            </button>
+            <button
+              onClick={handleToggleBookmark}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 22px',
+                borderRadius: '12px',
+                fontSize: '13px',
+                fontWeight: '700',
+                background: post.bookmarked ? 'var(--blue-bg)' : 'white',
+                color: post.bookmarked ? 'var(--blue)' : 'var(--text-secondary)',
+                border: `1px solid ${post.bookmarked ? 'var(--blue-border)' : 'var(--border)'}`
+              }}
+            >
+              <Bookmark size={14} fill={post.bookmarked ? 'var(--blue)' : 'none'} />
+              {post.bookmarked ? '저장됨' : '저장'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="card" style={{ padding: '28px' }}>
+        <div className="card-header-row">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <MessageSquare size={18} color="var(--text-primary)" />
+            <span className="card-title">
+              댓글 <span style={{ color: 'var(--blue)' }}>{comments.length}</span>
+            </span>
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: 'flex',
+            gap: '12px',
+            padding: '16px',
+            background: '#f8fafc',
+            borderRadius: '12px',
+            margin: '16px 0 24px',
+            border: '1px solid var(--border)'
+          }}
+        >
+          <textarea
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder="따뜻한 댓글을 남겨주세요"
+            rows={2}
+            style={{
+              flex: 1,
+              border: 'none',
+              background: 'transparent',
+              outline: 'none',
+              fontSize: '14px',
+              fontFamily: 'inherit',
+              resize: 'none',
+              color: 'var(--text-primary)',
+              lineHeight: '1.5'
+            }}
+          />
+          <button
+            onClick={handleSubmitComment}
+            disabled={!comment.trim() || submitting}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: comment.trim() ? 'var(--navy)' : '#cbd5e1',
+              color: 'white',
+              padding: '0 18px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              fontWeight: '700',
+              alignSelf: 'flex-end',
+              height: '36px',
+              cursor: comment.trim() && !submitting ? 'pointer' : 'not-allowed'
+            }}
+          >
+            <Send size={13} />
+            등록
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {topLevel.length === 0 && (
+            <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>
+              아직 댓글이 없습니다.
+            </div>
           )}
+          {topLevel.map((c) => (
+            <CommentItem
+              key={c.id}
+              comment={c}
+              replies={repliesByParent[c.id] ?? []}
+              onReply={() => {
+                setReplyTarget(replyTarget === c.id ? null : c.id);
+                setReplyContent('');
+              }}
+              onDelete={() => handleDeleteComment(c.id)}
+              replyOpen={replyTarget === c.id}
+              replyContent={replyContent}
+              setReplyContent={setReplyContent}
+              onSubmitReply={() => handleSubmitReply(c.id)}
+              onDeleteReply={handleDeleteComment}
+              submitting={submitting}
+              editingCommentId={editingCommentId}
+              editingCommentContent={editingCommentContent}
+              onStartEdit={startEditComment}
+              onEditChange={setEditingCommentContent}
+              onSubmitEdit={handleUpdateComment}
+              onCancelEdit={() => {
+                setEditingCommentId(null);
+                setEditingCommentContent('');
+              }}
+              onToggleLike={() => handleToggleCommentLike(c.id)}
+            />
+          ))}
         </div>
       </div>
     </div>
   );
 };
 
-const CommentItem: React.FC<{ comment: Comment; isReply?: boolean }> = ({
-  comment,
-  isReply
-}) => {
-  const [liked, setLiked] = useState(false);
+interface CommentItemProps {
+  comment: CommentResponse;
+  replies: CommentResponse[];
+  onReply: () => void;
+  onDelete: () => void;
+  replyOpen: boolean;
+  replyContent: string;
+  setReplyContent: (v: string) => void;
+  onSubmitReply: () => void;
+  onDeleteReply: (id: number) => void;
+  submitting: boolean;
+  editingCommentId: number | null;
+  editingCommentContent: string;
+  onStartEdit: (c: CommentResponse) => void;
+  onEditChange: (v: string) => void;
+  onSubmitEdit: (id: number) => void;
+  onCancelEdit: () => void;
+  onToggleLike: () => void;
+}
 
+const CommentItem: React.FC<CommentItemProps> = ({
+  comment,
+  replies,
+  onReply,
+  onDelete,
+  replyOpen,
+  replyContent,
+  setReplyContent,
+  onSubmitReply,
+  onDeleteReply,
+  submitting,
+  editingCommentId,
+  editingCommentContent,
+  onStartEdit,
+  onEditChange,
+  onSubmitEdit,
+  onCancelEdit,
+  onToggleLike,
+}) => {
+  const isEditing = editingCommentId === comment.id;
   return (
     <div
       style={{
-        display: 'flex',
-        gap: '12px',
-        padding: '16px 0',
-        borderBottom: isReply ? 'none' : '1px solid var(--border)',
-        marginLeft: isReply ? '24px' : 0
+        padding: '20px',
+        borderRadius: '12px',
+        border: '1px solid var(--border)',
+        background: 'white'
       }}
     >
-      {isReply && (
-        <CornerDownRight
-          size={16}
-          color="var(--text-muted)"
-          style={{ marginTop: '12px', flexShrink: 0 }}
-        />
-      )}
-      <div
-        style={{
-          width: '36px',
-          height: '36px',
-          borderRadius: '50%',
-          background: comment.authorColor,
-          color: 'white',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '13px',
-          fontWeight: '700',
-          flexShrink: 0
-        }}
-      >
-        {comment.authorInitial}
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ display: 'flex', gap: '12px' }}>
         <div
           style={{
+            width: '36px',
+            height: '36px',
+            borderRadius: '50%',
+            background: authorColorForUser(comment.userId),
+            color: 'white',
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
-            marginBottom: '6px'
+            justifyContent: 'center',
+            fontSize: '13px',
+            fontWeight: '700',
+            flexShrink: 0
           }}
         >
-          <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>
-            {comment.author}
-          </span>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{comment.createdAt}</span>
+          {authorInitialForUser(comment.userId)}
         </div>
-        <p
-          style={{
-            fontSize: '14px',
-            color: 'var(--text-primary)',
-            lineHeight: '1.6',
-            marginBottom: '10px'
-          }}
-        >
-          {comment.content}
-        </p>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <button
-            onClick={() => setLiked(!liked)}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '4px',
-              fontSize: '12px',
-              fontWeight: '600',
-              color: liked ? 'var(--blue)' : 'var(--text-secondary)'
+              gap: '8px',
+              marginBottom: '6px'
             }}
           >
-            <ThumbsUp size={12} fill={liked ? 'var(--blue)' : 'none'} />
-            {comment.likes + (liked ? 1 : 0)}
-          </button>
-          {!isReply && (
+            <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>
+              {comment.authorNickname}
+            </span>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              {formatRelativeKo(comment.createdAt)}
+            </span>
+          </div>
+          {isEditing ? (
+            <div style={{ marginBottom: '10px' }}>
+              <textarea
+                value={editingCommentContent}
+                onChange={(e) => onEditChange(e.target.value)}
+                rows={3}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid var(--border)',
+                  borderRadius: '8px',
+                  fontFamily: 'inherit',
+                  fontSize: '13px',
+                  color: 'var(--text-primary)',
+                  outline: 'none',
+                  resize: 'vertical'
+                }}
+              />
+              <div style={{ display: 'flex', gap: '6px', marginTop: '8px', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={onCancelEdit}
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    color: 'var(--text-secondary)',
+                    padding: '6px 12px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    background: 'white'
+                  }}
+                >
+                  취소
+                </button>
+                <button
+                  onClick={() => onSubmitEdit(comment.id)}
+                  disabled={submitting || !editingCommentContent.trim()}
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: '700',
+                    color: 'white',
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    background: 'var(--blue)'
+                  }}
+                >
+                  저장
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p
+              style={{
+                fontSize: '14px',
+                color: comment.deleted ? 'var(--text-muted)' : 'var(--text-primary)',
+                lineHeight: '1.6',
+                marginBottom: '10px',
+                whiteSpace: 'pre-wrap',
+                fontStyle: comment.deleted ? 'italic' : 'normal'
+              }}
+            >
+              {comment.content}
+            </p>
+          )}
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+            {!comment.deleted && (
+              <button
+                onClick={onToggleLike}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: comment.liked ? 'var(--blue)' : 'var(--text-secondary)'
+                }}
+              >
+                <Heart size={12} fill={comment.liked ? 'var(--blue)' : 'none'} />
+                {comment.likeCount}
+              </button>
+            )}
             <button
+              onClick={onReply}
               style={{
                 fontSize: '12px',
                 fontWeight: '600',
                 color: 'var(--text-secondary)'
               }}
             >
-              답글
+              {replyOpen ? '취소' : '답글'}
             </button>
+            {!comment.deleted && !isEditing && (
+              <>
+                <button
+                  onClick={() => onStartEdit(comment)}
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    color: 'var(--blue)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <Pencil size={11} />
+                  수정
+                </button>
+                <button
+                  onClick={onDelete}
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    color: 'var(--red)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <Trash2 size={11} />
+                  삭제
+                </button>
+              </>
+            )}
+          </div>
+
+          {replyOpen && (
+            <div
+              style={{
+                display: 'flex',
+                gap: '8px',
+                marginTop: '12px',
+                padding: '12px',
+                background: '#f8fafc',
+                borderRadius: '8px',
+                border: '1px solid var(--border)'
+              }}
+            >
+              <textarea
+                value={replyContent}
+                onChange={(e) => setReplyContent(e.target.value)}
+                placeholder="답글을 남겨주세요"
+                rows={2}
+                style={{
+                  flex: 1,
+                  border: 'none',
+                  background: 'transparent',
+                  outline: 'none',
+                  fontSize: '13px',
+                  fontFamily: 'inherit',
+                  resize: 'none',
+                  color: 'var(--text-primary)'
+                }}
+              />
+              <button
+                onClick={onSubmitReply}
+                disabled={!replyContent.trim() || submitting}
+                style={{
+                  background: replyContent.trim() ? 'var(--navy)' : '#cbd5e1',
+                  color: 'white',
+                  padding: '0 14px',
+                  borderRadius: '8px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  alignSelf: 'flex-end',
+                  height: '32px',
+                  cursor: replyContent.trim() && !submitting ? 'pointer' : 'not-allowed'
+                }}
+              >
+                등록
+              </button>
+            </div>
+          )}
+
+          {replies.length > 0 && (
+            <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {replies.map((r) => (
+                <div
+                  key={r.id}
+                  style={{
+                    padding: '12px',
+                    background: '#fafbfc',
+                    borderRadius: '10px',
+                    border: '1px solid var(--border)',
+                    marginLeft: '16px'
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      marginBottom: '6px'
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '50%',
+                        background: authorColorForUser(r.userId),
+                        color: 'white',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '11px',
+                        fontWeight: '700'
+                      }}
+                    >
+                      {authorInitialForUser(r.userId)}
+                    </div>
+                    <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>
+                      {r.authorNickname}
+                    </span>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      {formatRelativeKo(r.createdAt)}
+                    </span>
+                    {!r.deleted && (
+                      <button
+                        onClick={() => onDeleteReply(r.id)}
+                        style={{
+                          fontSize: '11px',
+                          color: 'var(--red)',
+                          marginLeft: 'auto'
+                        }}
+                      >
+                        삭제
+                      </button>
+                    )}
+                  </div>
+                  <p
+                    style={{
+                      fontSize: '13px',
+                      color: r.deleted ? 'var(--text-muted)' : 'var(--text-primary)',
+                      lineHeight: '1.6',
+                      whiteSpace: 'pre-wrap',
+                      fontStyle: r.deleted ? 'italic' : 'normal'
+                    }}
+                  >
+                    {r.content}
+                  </p>
+                </div>
+              ))}
+            </div>
           )}
         </div>
-
-        {comment.replies && comment.replies.length > 0 && (
-          <div style={{ marginTop: '12px' }}>
-            {comment.replies.map((r) => (
-              <CommentItem key={r.id} comment={r} isReply />
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );

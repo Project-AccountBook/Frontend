@@ -101,3 +101,68 @@ export interface InterestCategoryResponse {
   categoryName: string;
   isAlarmEnabled: boolean;
 }
+
+/** Spring Data Page<T> */
+export interface PageResponse<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+  first: boolean;
+  last: boolean;
+  empty: boolean;
+}
+
+export type NotificationType = 'BUDGET' | 'INTEREST_CATEGORY' | 'SYSTEM';
+
+export interface NotificationResponse {
+  id: number;
+  title: string;
+  message: string;
+  redirectUrl: string | null;
+  referenceId: number | null;
+  type: NotificationType;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export type TransactionType = 'INCOME' | 'EXPENSE' | 'TRANSFER';
+
+export interface CategoryResponse {
+  id: number;
+  name: string;
+  type: TransactionType;
+  isCustom: boolean;
+}
+
+export interface CategoryRequest {
+  name: string;
+  type: TransactionType;
+}
+
+export interface BudgetRequest {
+  categoryId: number;
+  yearMonth: string;
+  totalBudget: number;
+  expectedExpense: number;
+}
+
+export interface BudgetResponse {
+  id: number;
+  categoryId: number;
+  categoryName: string;
+  totalBudget: number;
+  expectedExpense: number;
+  totalPlannedBudget: number;
+  actualExpense: number;
+  remainingBudget: number;
+  progress: number;
+}
+
+export interface BudgetSummaryResponse {
+  yearMonth: string;
+  totalPlannedBudgetSum: number;
+  totalActualExpenseSum: number;
+  totalRemainingBudget: number;
+}
