@@ -16,10 +16,10 @@ import {
 import {
   groupPurchaseCategoryApi,
   interestCategoryApi,
-  tokenStorage,
   type GroupPurchaseCategoryResponse,
   type InterestCategoryResponse,
 } from '../api';
+import { authFetch } from '../api/client';
 
 const formatKRW = (value: number) => {
   return new Intl.NumberFormat('ko-KR').format(value);
@@ -164,15 +164,13 @@ const FALLBACK_CATEGORIES: GroupPurchaseCategoryResponse[] = [
 ];
 
 export const GroupBuyView: React.FC = () => {
-  // API Call Helper
   const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
-    const token = tokenStorage.getAccessToken();
-    const headers = {
-      'Content-Type': 'application/json',
-      ...options.headers,
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-    };
-    const response = await fetch(url, { ...options, headers });
+    const headers = new Headers(options.headers);
+    if (!headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
+
+    const response = await authFetch(url, { ...options, headers });
     if (!response.ok) {
       const errText = await response.text();
       let errMsg = `HTTP error! status: ${response.status}`;

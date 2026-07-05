@@ -120,16 +120,15 @@ export interface ImageResponse {
   sortOrder: number;
 }
 
-const authHeader = (): Record<string, string> => ({
-  'Content-Type': 'application/json',
-  Authorization: `Bearer ${localStorage.getItem('accessToken') ?? ''}`,
-});
+import { authFetch } from '../api/client';
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    ...init,
-    headers: { ...authHeader(), ...(init?.headers as Record<string, string> | undefined) },
-  });
+  const headers = new Headers(init?.headers);
+  if (!headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  const res = await authFetch(url, { ...init, headers });
   const text = await res.text();
   const json = text ? JSON.parse(text) : { success: res.ok, data: null, error: null };
   if (!res.ok || json.success === false) {

@@ -59,8 +59,10 @@ export interface SignupResponse {
 }
 
 export interface UserProfileResponse {
+  id: number;
   email: string;
   username: string;
+  role: string;
   birthDate: string | null;
   address: string | null;
   hasPassword: boolean;

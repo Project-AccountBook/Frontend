@@ -18,7 +18,7 @@ import { AssetView, type AssetActiveSection } from './components/AssetView';
 import { LoginView } from './components/LoginView';
 import { MyPageView } from './components/MyPageView';
 import { AdminView } from './components/AdminView';
-import { authApi, notificationApi, setAuthExpiredHandler, tokenStorage } from './api';
+import { authApi, notificationApi, setAuthExpiredHandler, tokenStorage, userApi } from './api';
 import { clearMyUserIdCache } from './lib/boardApi';
 import { Construction } from 'lucide-react';
 
@@ -83,14 +83,11 @@ function App() {
 
   useEffect(() => {
     if (!isLoggedIn) return;
-    const token = localStorage.getItem('accessToken');
-    if (!token) return;
-    fetch('/api/v1/users/me', { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.json())
-      .then((r) => {
-        if (r?.success && r.data?.role === 'ROLE_ADMIN') setIsAdmin(true);
-      })
-      .catch(() => setIsAdmin(false));
+    userApi.getMyProfile().then((result) => {
+      if (result.ok && result.data?.role === 'ROLE_ADMIN') {
+        setIsAdmin(true);
+      }
+    }).catch(() => setIsAdmin(false));
   }, [isLoggedIn]);
 
   useEffect(() => {
