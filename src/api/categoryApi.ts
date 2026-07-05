@@ -1,18 +1,7 @@
-import { authFetch } from './client';
+import { authFetch, authRequest } from './client';
+import type { CategoryRequest, CategoryResponse, TransactionType } from './types';
 
-export type TransactionType = 'INCOME' | 'EXPENSE' | 'TRANSFER';
-
-export interface CategoryResponse {
-  id: number;
-  name: string;
-  type: TransactionType;
-  isCustom: boolean;
-}
-
-export interface CategoryRequest {
-  name: string;
-  type: TransactionType;
-}
+export type { CategoryRequest, CategoryResponse, TransactionType };
 
 interface ApiResponse<T> {
   success: boolean;
@@ -22,7 +11,29 @@ interface ApiResponse<T> {
 
 const jsonHeaders = { 'Content-Type': 'application/json' };
 
-/** GET /api/v1/categories */
+/** CategoryController (/api/v1/categories) — BudgetView 등 */
+export const categoryApi = {
+  getAll: () => authRequest<CategoryResponse[]>('/api/v1/categories'),
+
+  create: (request: CategoryRequest) =>
+    authRequest<CategoryResponse>('/api/v1/categories', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    }),
+
+  update: (id: number, request: CategoryRequest) =>
+    authRequest<void>(`/api/v1/categories/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(request),
+    }),
+
+  delete: (id: number) =>
+    authRequest<void>(`/api/v1/categories/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
+/** GET /api/v1/categories — AssetView 등 */
 export async function getCategories(): Promise<CategoryResponse[]> {
   const res = await authFetch('/api/v1/categories');
   const data: ApiResponse<CategoryResponse[]> = await res.json();
