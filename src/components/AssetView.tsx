@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   ReceiptText,
   Calendar as CalendarIcon,
@@ -11,65 +11,84 @@ import {
   Search,
   X,
   Info,
-  ArrowRight,
   Sparkles,
   List,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
+import {
+  getAccounts,
+  createAccount,
+  updateAccount,
+  deleteAccount,
+  type AccountResponse
+} from '../api/accountApi';
+import {
+  getCategories,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+  type CategoryResponse,
+  type TransactionType
+} from '../api/categoryApi';
+import {
+  getTransactionsForAccounts,
+  createTransaction,
+  updateTransaction,
+  deleteTransaction,
+  exportTransactions,
+  type TransactionResponse
+} from '../api/transactionApi';
+import {
+  getFixedTransactions,
+  createFixedTransaction,
+  updateFixedTransaction,
+  toggleFixedTransactionActive,
+  deleteFixedTransaction,
+  type FixedTransactionResponse,
+  type FrequencyType
+} from '../api/fixedTransactionApi';
 
 // ──────────────────────────────────────────────
 // Enums & Types
 // ──────────────────────────────────────────────
 export type AssetActiveSection = 'transactions' | 'fixed' | 'accounts' | 'categories';
-type ActiveSection = AssetActiveSection;
-type TransactionType = 'INCOME' | 'EXPENSE' | 'TRANSFER';
-type FrequencyType = 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+type ActiveSection = 'transactions' | 'fixed' | 'accounts' | 'categories';
 type ViewMode = 'calendar' | 'list';
 
-interface Account {
-  id: number;
-  accountName: string;
-  currentBalance: number;
-  initialBalance: number;
-}
+type Account = AccountResponse;
+type Category = CategoryResponse;
+type Transaction = TransactionResponse;
+type FixedTransaction = FixedTransactionResponse;
 
-interface Category {
-  id: number;
-  name: string;
-  type: TransactionType;
-  isCustom: boolean;
-}
+const getMonthRange = (year: number, month: number) => {
+  const mm = String(month + 1).padStart(2, '0');
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  return {
+    start: `${year}-${mm}-01`,
+    end: `${year}-${mm}-${String(lastDay).padStart(2, '0')}`,
+  };
+};
 
-interface FixedTransaction {
-  id: number;
+const ACCOUNT_COLOR_PALETTE = [
+  { dot: '#6366f1', bg: 'rgba(99, 102, 241, 0.14)' },
+  { dot: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.14)' },
+  { dot: '#10b981', bg: 'rgba(16, 185, 129, 0.14)' },
+  { dot: '#f59e0b', bg: 'rgba(245, 158, 11, 0.14)' },
+  { dot: '#ec4899', bg: 'rgba(236, 72, 153, 0.14)' },
+  { dot: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.14)' },
+];
+
+type DayAccountSummary = {
   accountId: number;
   accountName: string;
-  categoryId: number;
-  categoryName: string;
-  type: TransactionType;
-  amount: number;
-  frequency: FrequencyType;
-  repeatDay: number;
-  startDate: string;
-  endDate?: string;
-  description: string;
-  isActive: boolean;
-}
-
-interface Transaction {
-  id: number;
-  accountId: number;
-  accountName: string;
-  categoryId: number;
-  categoryName: string;
-  targetAccountId?: number;
-  targetAccountName?: string;
-  type: TransactionType;
-  amount: number;
-  transactionDate: string;
-  description: string;
-}
+  income: number;
+  expense: number;
+  transfer: number;
+  transferAmount: number;
+};
 
 interface AssetViewProps {
   initialSection?: AssetActiveSection;
@@ -105,45 +124,30 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showMonthPicker]);
 
-  const [accounts, setAccounts] = useState<Account[]>([
-    { id: 1, accountName: '신한 주거래 우대통장', currentBalance: 3450000, initialBalance: 2000000 },
-    { id: 2, accountName: '국민 생활비 통장', currentBalance: 1250000, initialBalance: 1000000 },
-    { id: 3, accountName: '카카오 26주 적금', currentBalance: 5200000, initialBalance: 0 },
-    { id: 4, accountName: '우리카드 (결제대금 계좌)', currentBalance: 450000, initialBalance: 500000 }
-  ]);
+  const initialMonthRange = getMonthRange(today.getFullYear(), today.getMonth());
 
-  const [categories, setCategories] = useState<Category[]>([
-    { id: 1, name: '월급/급여', type: 'INCOME', isCustom: false },
-    { id: 2, name: '부업/용돈', type: 'INCOME', isCustom: false },
-    { id: 3, name: '식비', type: 'EXPENSE', isCustom: false },
-    { id: 4, name: '교통비', type: 'EXPENSE', isCustom: false },
-    { id: 5, name: '쇼핑/생필품', type: 'EXPENSE', isCustom: false },
-    { id: 6, name: '경조사/기부', type: 'EXPENSE', isCustom: false },
-    { id: 7, name: '관리비/세금', type: 'EXPENSE', isCustom: false },
-    { id: 8, name: '계좌간 이체', type: 'TRANSFER', isCustom: false },
-    { id: 9, name: '배당금 수익', type: 'INCOME', isCustom: true },
-    { id: 10, name: '반려동물 용품', type: 'EXPENSE', isCustom: true }
-  ]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accountsLoading, setAccountsLoading] = useState(true);
+  const [accountsError, setAccountsError] = useState<string | null>(null);
 
-  const [transactions, setTransactions] = useState<Transaction[]>([
-    { id: 1, accountId: 1, accountName: '신한 주거래 우대통장', categoryId: 1, categoryName: '월급/급여', type: 'INCOME', amount: 3200000, transactionDate: '2026-06-21', description: '6월 월급' },
-    { id: 2, accountId: 1, accountName: '신한 주거래 우대통장', categoryId: 8, categoryName: '계좌간 이체', targetAccountId: 2, targetAccountName: '국민 생활비 통장', type: 'TRANSFER', amount: 1500000, transactionDate: '2026-06-22', description: '생활비 통장으로 이체' },
-    { id: 3, accountId: 2, accountName: '국민 생활비 통장', categoryId: 3, categoryName: '식비', type: 'EXPENSE', amount: 45000, transactionDate: '2026-06-23', description: '이마트 장보기' },
-    { id: 4, accountId: 2, accountName: '국민 생활비 통장', categoryId: 5, categoryName: '쇼핑/생필품', type: 'EXPENSE', amount: 28000, transactionDate: '2026-06-23', description: '올리브영 생필품' },
-    { id: 5, accountId: 1, accountName: '신한 주거래 우대통장', categoryId: 7, categoryName: '관리비/세금', type: 'EXPENSE', amount: 185000, transactionDate: '2026-06-20', description: '6월 아파트 관리비' },
-    { id: 6, accountId: 2, accountName: '국민 생활비 통장', categoryId: 4, categoryName: '교통비', type: 'EXPENSE', amount: 62000, transactionDate: '2026-06-18', description: '지하철/버스 카드대금' }
-  ]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
 
-  const [fixedTransactions, setFixedTransactions] = useState<FixedTransaction[]>([
-    { id: 1, accountId: 1, accountName: '신한 주거래 우대통장', categoryId: 1, categoryName: '월급/급여', type: 'INCOME', amount: 3200000, frequency: 'MONTHLY', repeatDay: 21, startDate: '2026-01-21', description: '정기 월급', isActive: true },
-    { id: 2, accountId: 1, accountName: '신한 주거래 우대통장', categoryId: 7, categoryName: '관리비/세금', type: 'EXPENSE', amount: 185000, frequency: 'MONTHLY', repeatDay: 20, startDate: '2026-01-20', description: '아파트 관리비 자동이체', isActive: true },
-    { id: 3, accountId: 2, accountName: '국민 생활비 통장', categoryId: 10, categoryName: '반려동물 용품', type: 'EXPENSE', amount: 49000, frequency: 'MONTHLY', repeatDay: 5, startDate: '2026-03-05', description: '사료 정기배송 구독', isActive: false }
-  ]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
+  const [transactionsError, setTransactionsError] = useState<string | null>(null);
+
+  const [fixedTransactions, setFixedTransactions] = useState<FixedTransaction[]>([]);
+  const [fixedLoading, setFixedLoading] = useState(true);
+  const [fixedError, setFixedError] = useState<string | null>(null);
+
+  const [submitting, setSubmitting] = useState(false);
 
   const [filterAccount, setFilterAccount] = useState<number | 'all'>('all');
   const [filterType, setFilterType] = useState<TransactionType | 'all'>('all');
-  const [startDate, setStartDate] = useState('2026-06-01');
-  const [endDate, setEndDate] = useState('2026-06-30');
+  const [startDate, setStartDate] = useState(initialMonthRange.start);
+  const [endDate, setEndDate] = useState(initialMonthRange.end);
   const [searchQuery, setSearchQuery] = useState('');
 
   const [showModal, setShowModal] = useState<boolean>(false);
@@ -169,10 +173,106 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
   const [formCategoryName, setFormCategoryName] = useState<string>('');
   const [formCategoryType, setFormCategoryType] = useState<TransactionType>('EXPENSE');
 
+  const fetchAccounts = useCallback(async () => {
+    setAccountsLoading(true);
+    setAccountsError(null);
+    try {
+      const data = await getAccounts();
+      setAccounts(data);
+    } catch (err) {
+      setAccountsError(err instanceof Error ? err.message : '계좌 목록을 불러오는 데 실패했습니다.');
+    } finally {
+      setAccountsLoading(false);
+    }
+  }, []);
+
+  const fetchCategories = useCallback(async () => {
+    setCategoriesLoading(true);
+    setCategoriesError(null);
+    try {
+      const data = await getCategories();
+      setCategories(data);
+    } catch (err) {
+      setCategoriesError(err instanceof Error ? err.message : '카테고리 목록을 불러오는 데 실패했습니다.');
+    } finally {
+      setCategoriesLoading(false);
+    }
+  }, []);
+
+  const fetchFixedTransactions = useCallback(async () => {
+    setFixedLoading(true);
+    setFixedError(null);
+    try {
+      const data = await getFixedTransactions();
+      setFixedTransactions(data);
+    } catch (err) {
+      setFixedError(err instanceof Error ? err.message : '고정 수입/지출 목록을 불러오는 데 실패했습니다.');
+    } finally {
+      setFixedLoading(false);
+    }
+  }, []);
+
+  const fetchTransactions = useCallback(async () => {
+    if (accounts.length === 0) {
+      setTransactions([]);
+      return;
+    }
+
+    const range = viewMode === 'calendar'
+      ? getMonthRange(calendarYear, calendarMonth)
+      : { start: startDate, end: endDate };
+
+    const accountIds = filterAccount === 'all'
+      ? accounts.map((a) => a.id)
+      : [filterAccount];
+
+    setTransactionsLoading(true);
+    setTransactionsError(null);
+    try {
+      const data = await getTransactionsForAccounts(accountIds, range.start, range.end);
+      setTransactions(data);
+    } catch (err) {
+      setTransactionsError(err instanceof Error ? err.message : '거래 내역을 불러오는 데 실패했습니다.');
+    } finally {
+      setTransactionsLoading(false);
+    }
+  }, [accounts, viewMode, calendarYear, calendarMonth, startDate, endDate, filterAccount]);
+
+  useEffect(() => {
+    fetchAccounts();
+    fetchCategories();
+    fetchFixedTransactions();
+  }, [fetchAccounts, fetchCategories, fetchFixedTransactions]);
+
+  useEffect(() => {
+    if (!accountsLoading) {
+      fetchTransactions();
+    }
+  }, [fetchTransactions, accountsLoading]);
+
+  useEffect(() => {
+    if (!showModal || (activeSection !== 'transactions' && activeSection !== 'fixed')) return;
+    const matching = categories.filter((c) => c.type === formType);
+    if (matching.length === 0) return;
+    if (!matching.some((c) => c.id.toString() === formCategory)) {
+      setFormCategory(matching[0].id.toString());
+    }
+  }, [formType, categories, showModal, activeSection, formCategory]);
+
+  const findAccountIdByName = (name: string) =>
+    accounts.find((a) => a.accountName === name)?.id;
+
+  const findCategoryIdByName = (name: string, type: TransactionType) =>
+    categories.find((c) => c.name === name && c.type === type)?.id;
+
   const resetFormFields = () => {
-    setFormAccount('1');
-    setFormTargetAccount('2');
-    setFormCategory('3');
+    const defaultAccountId = accounts[0]?.id?.toString() ?? '';
+    const defaultTargetId = accounts[1]?.id?.toString() ?? accounts[0]?.id?.toString() ?? '';
+    const defaultCategoryId = categories.find((c) => c.type === 'EXPENSE')?.id?.toString() ?? '';
+
+    setFormAccount(defaultAccountId);
+    setFormTargetAccount(defaultTargetId);
+    setFormCategory(defaultCategoryId);
     setFormType('EXPENSE');
     setFormAmount('');
     setFormDate(new Date().toISOString().split('T')[0]);
@@ -208,25 +308,26 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
       const tx = transactions.find(t => t.id === id);
       if (tx) {
         setFormAccount(tx.accountId.toString());
-        if (tx.targetAccountId) setFormTargetAccount(tx.targetAccountId.toString());
         setFormCategory(tx.categoryId.toString());
         setFormType(tx.type);
         setFormAmount(tx.amount.toString());
         setFormDate(tx.transactionDate);
-        setFormDescription(tx.description);
+        setFormDescription(tx.description ?? '');
       }
     } else if (activeSection === 'fixed') {
       const fx = fixedTransactions.find(f => f.id === id);
       if (fx) {
-        setFormAccount(fx.accountId.toString());
-        setFormCategory(fx.categoryId.toString());
+        const accountId = findAccountIdByName(fx.accountName);
+        const categoryId = findCategoryIdByName(fx.categoryName, fx.type);
+        if (accountId) setFormAccount(accountId.toString());
+        if (categoryId) setFormCategory(categoryId.toString());
         setFormType(fx.type);
         setFormAmount(fx.amount.toString());
         setFormFrequency(fx.frequency);
         setFormRepeatDay(fx.repeatDay.toString());
         setFormStartDate(fx.startDate);
         if (fx.endDate) setFormEndDate(fx.endDate);
-        setFormDescription(fx.description);
+        setFormDescription(fx.description ?? '');
       }
     } else if (activeSection === 'accounts') {
       const acc = accounts.find(a => a.id === id);
@@ -244,83 +345,99 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
     setShowModal(true);
   };
 
-  const handleDeleteItem = (id: number) => {
-    if (window.confirm('정말 삭제하시겠습니까?')) {
-      if (activeSection === 'transactions') {
-        setTransactions(transactions.filter(t => t.id !== id));
+  const handleDeleteItem = async (id: number): Promise<boolean> => {
+    if (!window.confirm('정말 삭제하시겠습니까?')) return false;
+
+    try {
+      if (activeSection === 'accounts') {
+        await deleteAccount(id);
+        await fetchAccounts();
+      } else if (activeSection === 'transactions') {
+        await deleteTransaction(id);
+        await fetchTransactions();
+        await fetchAccounts();
       } else if (activeSection === 'fixed') {
-        setFixedTransactions(fixedTransactions.filter(f => f.id !== id));
-      } else if (activeSection === 'accounts') {
-        setAccounts(accounts.filter(a => a.id !== id));
+        await deleteFixedTransaction(id);
+        await fetchFixedTransactions();
       } else if (activeSection === 'categories') {
-        setCategories(categories.filter(c => c.id !== id));
+        await deleteCategory(id);
+        await fetchCategories();
       }
+      return true;
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '삭제에 실패했습니다.');
+      return false;
     }
   };
 
-  const handleToggleFixedActive = (id: number) => {
-    setFixedTransactions(fixedTransactions.map(f => {
-      if (f.id === id) {
-        return { ...f, isActive: !f.isActive };
-      }
-      return f;
-    }));
+  const handleModalDelete = async () => {
+    if (selectedId === null) return;
+    const deleted = await handleDeleteItem(selectedId);
+    if (deleted) {
+      setShowModal(false);
+      resetFormFields();
+    }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleCloseModal = () => {
+    setShowModal(false);
+    resetFormFields();
+  };
+
+  const handleToggleFixedActive = async (id: number) => {
+    try {
+      await toggleFixedTransactionActive(id);
+      await fetchFixedTransactions();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '활성 상태 변경에 실패했습니다.');
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitting(true);
 
-    if (activeSection === 'transactions') {
-      const accObj = accounts.find(a => a.id === parseInt(formAccount));
-      const catObj = categories.find(c => c.id === parseInt(formCategory));
-      const targetAccObj = accounts.find(a => a.id === parseInt(formTargetAccount));
+    try {
+      if (activeSection === 'accounts') {
+        if (modalMode === 'create') {
+          await createAccount({
+            accountName: formAccountName,
+            initialBalance: parseFloat(formInitialBalance) || 0,
+          });
+        } else if (selectedId !== null) {
+          await updateAccount(selectedId, {
+            accountName: formAccountName,
+            initialBalance: parseFloat(formInitialBalance) || 0,
+          });
+        }
+        await fetchAccounts();
+        setShowModal(false);
+        resetFormFields();
+        return;
+      }
 
-      if (modalMode === 'create') {
-        const newTx: Transaction = {
-          id: transactions.length ? Math.max(...transactions.map(t => t.id)) + 1 : 1,
-          accountId: accObj ? accObj.id : 1,
-          accountName: accObj ? accObj.accountName : '알 수 없음 계좌',
-          categoryId: catObj ? catObj.id : 3,
-          categoryName: catObj ? catObj.name : '기타',
+      if (activeSection === 'transactions') {
+        const request = {
+          accountId: parseInt(formAccount),
+          categoryId: parseInt(formCategory),
           type: formType,
           amount: parseFloat(formAmount) || 0,
           transactionDate: formDate,
           description: formDescription,
-          targetAccountId: formType === 'TRANSFER' && targetAccObj ? targetAccObj.id : undefined,
-          targetAccountName: formType === 'TRANSFER' && targetAccObj ? targetAccObj.accountName : undefined
+          ...(formType === 'TRANSFER' ? { targetAccountId: parseInt(formTargetAccount) } : {}),
         };
-        setTransactions([newTx, ...transactions]);
-      } else {
-        setTransactions(transactions.map(t => {
-          if (t.id === selectedId) {
-            return {
-              ...t,
-              accountId: accObj ? accObj.id : t.accountId,
-              accountName: accObj ? accObj.accountName : t.accountName,
-              categoryId: catObj ? catObj.id : t.categoryId,
-              categoryName: catObj ? catObj.name : t.categoryName,
-              type: formType,
-              amount: parseFloat(formAmount) || 0,
-              transactionDate: formDate,
-              description: formDescription,
-              targetAccountId: formType === 'TRANSFER' && targetAccObj ? targetAccObj.id : undefined,
-              targetAccountName: formType === 'TRANSFER' && targetAccObj ? targetAccObj.accountName : undefined
-            };
-          }
-          return t;
-        }));
-      }
-    } else if (activeSection === 'fixed') {
-      const accObj = accounts.find(a => a.id === parseInt(formAccount));
-      const catObj = categories.find(c => c.id === parseInt(formCategory));
 
-      if (modalMode === 'create') {
-        const newFx: FixedTransaction = {
-          id: fixedTransactions.length ? Math.max(...fixedTransactions.map(f => f.id)) + 1 : 1,
-          accountId: accObj ? accObj.id : 1,
-          accountName: accObj ? accObj.accountName : '알 수 없음 계좌',
-          categoryId: catObj ? catObj.id : 3,
-          categoryName: catObj ? catObj.name : '기타',
+        if (modalMode === 'create') {
+          await createTransaction(request);
+        } else if (selectedId !== null) {
+          await updateTransaction(selectedId, request);
+        }
+        await fetchTransactions();
+        await fetchAccounts();
+      } else if (activeSection === 'fixed') {
+        const request = {
+          accountId: parseInt(formAccount),
+          categoryId: parseInt(formCategory),
           type: formType,
           amount: parseFloat(formAmount) || 0,
           frequency: formFrequency,
@@ -328,90 +445,52 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
           startDate: formStartDate,
           endDate: formEndDate || undefined,
           description: formDescription,
-          isActive: true
         };
-        setFixedTransactions([newFx, ...fixedTransactions]);
-      } else {
-        setFixedTransactions(fixedTransactions.map(f => {
-          if (f.id === selectedId) {
-            return {
-              ...f,
-              accountId: accObj ? accObj.id : f.accountId,
-              accountName: accObj ? accObj.accountName : f.accountName,
-              categoryId: catObj ? catObj.id : f.categoryId,
-              categoryName: catObj ? catObj.name : f.categoryName,
-              type: formType,
-              amount: parseFloat(formAmount) || 0,
-              frequency: formFrequency,
-              repeatDay: parseInt(formRepeatDay) || 1,
-              startDate: formStartDate,
-              endDate: formEndDate || undefined,
-              description: formDescription
-            };
-          }
-          return f;
-        }));
-      }
-    } else if (activeSection === 'accounts') {
-      if (modalMode === 'create') {
-        const newAcc: Account = {
-          id: accounts.length ? Math.max(...accounts.map(a => a.id)) + 1 : 1,
-          accountName: formAccountName,
-          initialBalance: parseFloat(formInitialBalance) || 0,
-          currentBalance: parseFloat(formInitialBalance) || 0
-        };
-        setAccounts([...accounts, newAcc]);
-      } else {
-        setAccounts(accounts.map(a => {
-          if (a.id === selectedId) {
-            return {
-              ...a,
-              accountName: formAccountName,
-              initialBalance: parseFloat(formInitialBalance) || 0,
-              currentBalance: parseFloat(formInitialBalance) || 0
-            };
-          }
-          return a;
-        }));
-      }
-    } else if (activeSection === 'categories') {
-      if (modalMode === 'create') {
-        const newCat: Category = {
-          id: categories.length ? Math.max(...categories.map(c => c.id)) + 1 : 1,
+
+        if (modalMode === 'create') {
+          await createFixedTransaction(request);
+        } else if (selectedId !== null) {
+          await updateFixedTransaction(selectedId, request);
+        }
+        await fetchFixedTransactions();
+      } else if (activeSection === 'categories') {
+        const request = {
           name: formCategoryName,
           type: formCategoryType,
-          isCustom: true
         };
-        setCategories([...categories, newCat]);
-      } else {
-        setCategories(categories.map(c => {
-          if (c.id === selectedId) {
-            return {
-              ...c,
-              name: formCategoryName,
-              type: formCategoryType
-            };
-          }
-          return c;
-        }));
-      }
-    }
 
-    setShowModal(false);
-    resetFormFields();
+        if (modalMode === 'create') {
+          await createCategory(request);
+        } else if (selectedId !== null) {
+          await updateCategory(selectedId, request);
+        }
+        await fetchCategories();
+      }
+
+      setShowModal(false);
+      resetFormFields();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '저장에 실패했습니다.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleExportCsv = () => {
-    alert(`[CSV Export] ${startDate} 부터 ${endDate} 까지의 거래 내역 파일 다운로드를 준비합니다.`);
+  const handleExportCsv = async () => {
+    try {
+      await exportTransactions(startDate, endDate);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '거래 내역 내보내기에 실패했습니다.');
+    }
   };
 
   const filteredTransactions = transactions.filter(tx => {
     if (filterAccount !== 'all' && tx.accountId !== filterAccount) return false;
     if (filterType !== 'all' && tx.type !== filterType) return false;
-    if (tx.transactionDate < startDate || tx.transactionDate > endDate) return false;
+    if (viewMode === 'list' && (tx.transactionDate < startDate || tx.transactionDate > endDate)) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      const matchDesc = tx.description.toLowerCase().includes(q);
+      const matchDesc = (tx.description ?? '').toLowerCase().includes(q);
       const matchCat = tx.categoryName.toLowerCase().includes(q);
       const matchAcc = tx.accountName.toLowerCase().includes(q);
       if (!matchDesc && !matchCat && !matchAcc) return false;
@@ -451,6 +530,14 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
   };
 
   const formatCalAmt = (val: number) => val.toLocaleString('ko-KR');
+
+  const getAccountColor = (accountId: number) => {
+    const idx = accounts.findIndex((a) => a.id === accountId);
+    return ACCOUNT_COLOR_PALETTE[(idx >= 0 ? idx : 0) % ACCOUNT_COLOR_PALETTE.length];
+  };
+
+  const getAccountShortName = (name: string, maxLen = 4) =>
+    name.length <= maxLen ? name : `${name.slice(0, maxLen)}…`;
 
   const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
   const MONTHS = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
@@ -508,12 +595,42 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
     return acc;
   }, {});
 
+  const getDayAccountSummaries = (dateStr: string): DayAccountSummary[] => {
+    const txs = txByDate[dateStr] || [];
+    const byAccount = new Map<number, DayAccountSummary>();
+
+    for (const tx of txs) {
+      let entry = byAccount.get(tx.accountId);
+      if (!entry) {
+        entry = {
+          accountId: tx.accountId,
+          accountName: tx.accountName,
+          income: 0,
+          expense: 0,
+          transfer: 0,
+          transferAmount: 0,
+        };
+        byAccount.set(tx.accountId, entry);
+      }
+      if (tx.type === 'INCOME') entry.income += tx.amount;
+      else if (tx.type === 'EXPENSE') entry.expense += tx.amount;
+      else if (tx.type === 'TRANSFER') {
+        entry.transfer += 1;
+        entry.transferAmount += tx.amount;
+      }
+    }
+
+    return Array.from(byAccount.values());
+  };
+
   const getDaySummary = (dateStr: string) => {
     const txs = txByDate[dateStr] || [];
     const income = txs.filter(t => t.type === 'INCOME').reduce((s, t) => s + t.amount, 0);
     const expense = txs.filter(t => t.type === 'EXPENSE').reduce((s, t) => s + t.amount, 0);
-    const transfer = txs.filter(t => t.type === 'TRANSFER').length;
-    return { txs, income, expense, transfer };
+    const transferTxs = txs.filter(t => t.type === 'TRANSFER');
+    const transfer = transferTxs.length;
+    const transferAmount = transferTxs.reduce((s, t) => s + t.amount, 0);
+    return { txs, income, expense, transfer, transferAmount };
   };
 
   const selectedDayTxs = selectedCalendarDay ? (txByDate[selectedCalendarDay] || []) : [];
@@ -598,6 +715,23 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
 
             {/* View Mode Toggle + List Filters */}
             <div className="tx-toolbar">
+              {transactionsLoading && (
+                <div className="table-empty-row" style={{ padding: '16px 0' }}>
+                  <Loader2 size={20} className="spin-animation" />
+                  <p>거래 내역을 불러오는 중...</p>
+                </div>
+              )}
+
+              {!transactionsLoading && transactionsError && (
+                <div className="table-empty-row" style={{ padding: '16px 0' }}>
+                  <AlertCircle size={20} />
+                  <p>{transactionsError}</p>
+                  <button className="btn-section-add" onClick={fetchTransactions} style={{ marginTop: '8px' }}>
+                    다시 시도
+                  </button>
+                </div>
+              )}
+
               <div className="tx-toolbar-top">
                 <div className="view-mode-toggle">
                   <button
@@ -706,6 +840,38 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
             {/* ── CALENDAR VIEW ── */}
             {viewMode === 'calendar' && (
               <div className="calendar-wrapper fade-in">
+                {/* 달력 필터: 계좌 칩 */}
+                {accounts.length > 0 && (
+                  <div className="cal-account-filter-bar">
+                    <span className="cal-filter-label">계좌</span>
+                    <div className="cal-account-chips">
+                      <button
+                        type="button"
+                        className={`cal-account-chip-btn${filterAccount === 'all' ? ' active' : ''}`}
+                        onClick={() => setFilterAccount('all')}
+                      >
+                        전체
+                      </button>
+                      {accounts.map((acc) => {
+                        const color = getAccountColor(acc.id);
+                        const isActive = filterAccount === acc.id;
+                        return (
+                          <button
+                            key={acc.id}
+                            type="button"
+                            className={`cal-account-chip-btn${isActive ? ' active' : ''}`}
+                            onClick={() => setFilterAccount(acc.id)}
+                            style={isActive ? { borderColor: color.dot, background: color.bg, color: color.dot } : undefined}
+                          >
+                            <span className="cal-account-dot" style={{ background: color.dot }} />
+                            {acc.accountName}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {/* 달력 헤더: 월 이동 */}
                 <div className="calendar-header">
                   <button className="cal-nav-btn" onClick={prevCalendarMonth}>
@@ -762,7 +928,10 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                       return <div key={`empty-${idx}`} className="cal-day-cell empty" />;
                     }
                     const dateStr = getDateString(day);
-                    const { txs, income, expense, transfer } = getDaySummary(dateStr);
+                    const { txs, income, expense, transferAmount } = getDaySummary(dateStr);
+                    const accountSummaries = filterAccount === 'all' ? getDayAccountSummaries(dateStr) : [];
+                    const visibleSummaries = accountSummaries.slice(0, 2);
+                    const hiddenSummaryCount = Math.max(0, accountSummaries.length - visibleSummaries.length);
                     const isToday = dateStr === todayStr;
                     const isSelected = dateStr === selectedCalendarDay;
                     const isSunday = (idx % 7 === 0);
@@ -786,14 +955,41 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                           {day}
                         </span>
                         <div className="cal-tx-summary">
-                          {income > 0 && (
-                            <span className="cal-income-dot">+{formatCalAmt(income)}</span>
-                          )}
-                          {expense > 0 && (
-                            <span className="cal-expense-dot">-{formatCalAmt(expense)}</span>
-                          )}
-                          {transfer > 0 && (
-                            <span className="cal-transfer-dot">이체</span>
+                          {filterAccount === 'all' && accountSummaries.length > 0 ? (
+                            <>
+                              {visibleSummaries.map((summary) => {
+                                const color = getAccountColor(summary.accountId);
+                                return (
+                                  <span
+                                    key={summary.accountId}
+                                    className="cal-account-chip"
+                                    style={{ background: color.bg, color: color.dot }}
+                                    title={summary.accountName}
+                                  >
+                                    <span className="cal-account-dot" style={{ background: color.dot }} />
+                                    {getAccountShortName(summary.accountName)}
+                                    {summary.income > 0 && ` +${formatCalAmt(summary.income)}`}
+                                    {summary.expense > 0 && ` -${formatCalAmt(summary.expense)}`}
+                                    {summary.transferAmount > 0 && ` ↔${formatCalAmt(summary.transferAmount)}`}
+                                  </span>
+                                );
+                              })}
+                              {hiddenSummaryCount > 0 && (
+                                <span className="cal-more-chip">+{hiddenSummaryCount}</span>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              {income > 0 && (
+                                <span className="cal-income-dot">+{formatCalAmt(income)}</span>
+                              )}
+                              {expense > 0 && (
+                                <span className="cal-expense-dot">-{formatCalAmt(expense)}</span>
+                              )}
+                              {transferAmount > 0 && (
+                                <span className="cal-transfer-dot">↔{formatCalAmt(transferAmount)}</span>
+                              )}
+                            </>
                           )}
                         </div>
                       </div>
@@ -836,8 +1032,22 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                       </div>
                     ) : (
                       <div className="cal-detail-list">
-                        {selectedDayTxs.map(tx => (
-                          <div key={tx.id} className="cal-detail-item">
+                        {selectedDayTxs.map(tx => {
+                          const accountColor = getAccountColor(tx.accountId);
+                          return (
+                          <div
+                            key={tx.id}
+                            className="cal-detail-item cal-detail-item-clickable"
+                            onClick={() => handleOpenEditModal(tx.id)}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                handleOpenEditModal(tx.id);
+                              }
+                            }}
+                          >
                             <div className="cal-detail-left">
                               <span className={`type-badge ${getTxTypeBadgeClass(tx.type)}`}>
                                 {getTxTypeLabel(tx.type)}
@@ -845,36 +1055,43 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                               <div className="cal-detail-info">
                                 <span className="cal-detail-desc">{tx.description || '—'}</span>
                                 <span className="cal-detail-meta">
-                                  {tx.accountName} · <span className="category-tag">{tx.categoryName}</span>
-                                  {tx.type === 'TRANSFER' && tx.targetAccountName && (
-                                    <> <ArrowRight size={11} /> {tx.targetAccountName}</>
-                                  )}
+                                  <span
+                                    className="cal-account-badge"
+                                    style={{ background: accountColor.bg, color: accountColor.dot }}
+                                  >
+                                    <span className="cal-account-dot" style={{ background: accountColor.dot }} />
+                                    {tx.accountName}
+                                  </span>
+                                  · <span className="category-tag">{tx.categoryName}</span>
                                 </span>
                               </div>
                             </div>
                             <div className="cal-detail-right">
                               <span className={`cal-detail-amount ${tx.type === 'INCOME' ? 'color-income' : tx.type === 'EXPENSE' ? 'color-expense' : 'color-transfer'}`}>
-                                {tx.type === 'INCOME' ? '+' : tx.type === 'EXPENSE' ? '-' : ''}
+                                {tx.type === 'INCOME' ? '+' : tx.type === 'EXPENSE' ? '-' : '↔'}
                                 {formatCurrency(tx.amount)}
                               </span>
-                              <div className="table-actions">
-                                <button className="btn-action-icon edit" onClick={() => handleOpenEditModal(tx.id)} title="수정">
-                                  <Edit2 size={13} />
-                                </button>
-                                <button className="btn-action-icon delete" onClick={() => handleDeleteItem(tx.id)} title="삭제">
+                              <div className="table-actions" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  type="button"
+                                  className="btn-action-icon delete"
+                                  onClick={() => handleDeleteItem(tx.id)}
+                                  title="삭제"
+                                >
                                   <Trash2 size={13} />
                                 </button>
                               </div>
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
                 )}
 
                 {!selectedCalendarDay && (
-                  <p className="cal-select-hint">날짜를 클릭하면 해당 날짜의 거래를 확인하고 등록할 수 있습니다.</p>
+                  <p className="cal-select-hint">날짜를 클릭해 거래를 확인하고, 항목을 클릭하면 수정·삭제할 수 있습니다.</p>
                 )}
               </div>
             )}
@@ -887,7 +1104,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                     <tr>
                       <th>날짜</th>
                       <th>계좌</th>
-                      <th>분류</th>
+                      <th>카테고리</th>
                       <th>유형</th>
                       <th>내용</th>
                       <th>금액</th>
@@ -904,7 +1121,11 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                       </tr>
                     ) : (
                       filteredTransactions.map(tx => (
-                        <tr key={tx.id} className="hover-row">
+                        <tr
+                          key={tx.id}
+                          className="hover-row tx-row-clickable"
+                          onClick={() => handleOpenEditModal(tx.id)}
+                        >
                           <td>{tx.transactionDate}</td>
                           <td className="font-semibold text-primary-dark">{tx.accountName}</td>
                           <td>
@@ -918,23 +1139,20 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                           <td>
                             <div className="tx-description-cell">
                               <span>{tx.description || '—'}</span>
-                              {tx.type === 'TRANSFER' && tx.targetAccountName && (
-                                <span className="transfer-target-desc">
-                                  <ArrowRight size={12} /> {tx.targetAccountName}
-                                </span>
-                              )}
                             </div>
                           </td>
                           <td className={`font-bold ${tx.type === 'INCOME' ? 'color-income' : tx.type === 'EXPENSE' ? 'color-expense' : 'color-transfer'}`}>
-                            {tx.type === 'INCOME' ? '+' : tx.type === 'EXPENSE' ? '-' : ''}
+                            {tx.type === 'INCOME' ? '+' : tx.type === 'EXPENSE' ? '-' : '↔'}
                             {formatCurrency(tx.amount)}
                           </td>
-                          <td>
+                          <td onClick={(e) => e.stopPropagation()}>
                             <div className="table-actions">
-                              <button className="btn-action-icon edit" onClick={() => handleOpenEditModal(tx.id)} title="수정">
-                                <Edit2 size={14} />
-                              </button>
-                              <button className="btn-action-icon delete" onClick={() => handleDeleteItem(tx.id)} title="삭제">
+                              <button
+                                type="button"
+                                className="btn-action-icon delete"
+                                onClick={() => handleDeleteItem(tx.id)}
+                                title="삭제"
+                              >
                                 <Trash2 size={14} />
                               </button>
                             </div>
@@ -964,12 +1182,30 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
             </div>
 
             <div className="table-responsive" style={{ marginTop: '20px' }}>
+              {fixedLoading && (
+                <div className="table-empty-row" style={{ padding: '40px 0' }}>
+                  <Loader2 size={24} className="spin-animation" />
+                  <p>고정 수입/지출 목록을 불러오는 중...</p>
+                </div>
+              )}
+
+              {!fixedLoading && fixedError && (
+                <div className="table-empty-row" style={{ padding: '40px 0' }}>
+                  <AlertCircle size={24} />
+                  <p>{fixedError}</p>
+                  <button className="btn-section-add" onClick={fetchFixedTransactions} style={{ marginTop: '12px' }}>
+                    다시 시도
+                  </button>
+                </div>
+              )}
+
+              {!fixedLoading && !fixedError && (
               <table className="asset-table">
                 <thead>
                   <tr>
                     <th>예약 상태</th>
                     <th>계좌</th>
-                    <th>분류</th>
+                    <th>카테고리</th>
                     <th>유형</th>
                     <th>반복 주기</th>
                     <th>반복일</th>
@@ -1034,6 +1270,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                   )}
                 </tbody>
               </table>
+              )}
             </div>
           </div>
         )}
@@ -1043,48 +1280,92 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
           <div className="section-content fade-in">
             <div className="section-action-bar">
               <span className="section-action-bar-title">등록된 계좌 {accounts.length}개</span>
-              <button className="btn-section-add" onClick={() => handleOpenAddModal()}>
+              <button className="btn-section-add" onClick={() => handleOpenAddModal()} disabled={accountsLoading}>
                 <Plus size={14} />
                 자산계좌 추가
               </button>
             </div>
-            <div className="accounts-grid">
-              {accounts.map(acc => (
-                <div key={acc.id} className="account-card">
-                  <div className="account-card-header">
-                    <div className="icon-circle">
-                      <Wallet size={20} />
-                    </div>
-                    <div className="card-actions">
-                      <button className="btn-action-icon edit" onClick={() => handleOpenEditModal(acc.id)}>
-                        <Edit2 size={13} />
-                      </button>
-                      <button className="btn-action-icon delete" onClick={() => handleDeleteItem(acc.id)}>
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="account-card-body">
-                    <h3 className="account-title">{acc.accountName}</h3>
-                    <div className="balance-info-row">
-                      <span className="balance-label">현재 잔고</span>
-                      <span className="balance-value">{formatCurrency(acc.currentBalance)}</span>
-                    </div>
-                    <div className="balance-info-row secondary">
-                      <span className="balance-label">초기 잔고</span>
-                      <span className="balance-value">{formatCurrency(acc.initialBalance)}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
 
-            </div>
+            {accountsLoading && (
+              <div className="table-empty-row" style={{ padding: '40px 0' }}>
+                <Loader2 size={24} className="spin-animation" />
+                <p>계좌 목록을 불러오는 중...</p>
+              </div>
+            )}
+
+            {!accountsLoading && accountsError && (
+              <div className="table-empty-row" style={{ padding: '40px 0' }}>
+                <AlertCircle size={24} />
+                <p>{accountsError}</p>
+                <button className="btn-section-add" onClick={fetchAccounts} style={{ marginTop: '12px' }}>
+                  다시 시도
+                </button>
+              </div>
+            )}
+
+            {!accountsLoading && !accountsError && accounts.length === 0 && (
+              <div className="table-empty-row" style={{ padding: '40px 0' }}>
+                <Info size={20} />
+                <p>등록된 계좌가 없습니다. 자산계좌를 추가해 주세요.</p>
+              </div>
+            )}
+
+            {!accountsLoading && !accountsError && accounts.length > 0 && (
+              <div className="accounts-grid">
+                {accounts.map(acc => (
+                  <div key={acc.id} className="account-card">
+                    <div className="account-card-header">
+                      <div className="icon-circle">
+                        <Wallet size={20} />
+                      </div>
+                      <div className="card-actions">
+                        <button className="btn-action-icon edit" onClick={() => handleOpenEditModal(acc.id)}>
+                          <Edit2 size={13} />
+                        </button>
+                        <button className="btn-action-icon delete" onClick={() => handleDeleteItem(acc.id)}>
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="account-card-body">
+                      <h3 className="account-title">{acc.accountName}</h3>
+                      <div className="balance-info-row">
+                        <span className="balance-label">초기 잔고</span>
+                        <span className="balance-value balance-value-muted">{formatCurrency(acc.initialBalance)}</span>
+                      </div>
+                      <div className="balance-info-row">
+                        <span className="balance-label">현재 잔고</span>
+                        <span className="balance-value">{formatCurrency(acc.currentBalance)}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
         {/* ─── SECTION 4: CATEGORIES ─── */}
         {activeSection === 'categories' && (
           <div className="section-content fade-in">
+            {categoriesLoading && (
+              <div className="table-empty-row" style={{ padding: '40px 0' }}>
+                <Loader2 size={24} className="spin-animation" />
+                <p>카테고리 목록을 불러오는 중...</p>
+              </div>
+            )}
+
+            {!categoriesLoading && categoriesError && (
+              <div className="table-empty-row" style={{ padding: '40px 0' }}>
+                <AlertCircle size={24} />
+                <p>{categoriesError}</p>
+                <button className="btn-section-add" onClick={fetchCategories} style={{ marginTop: '12px' }}>
+                  다시 시도
+                </button>
+              </div>
+            )}
+
+            {!categoriesLoading && !categoriesError && (
             <div className="categories-grid-columns">
 
               {/* Income Categories */}
@@ -1184,6 +1465,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
               </div>
 
             </div>
+            )}
           </div>
         )}
 
@@ -1193,8 +1475,16 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
          MODAL DIALOG (CRUD form)
       ────────────────────────────────────────────── */}
       {showModal && (
-        <div className="asset-modal-overlay">
-          <div className="asset-modal-content fade-in">
+        <div className="asset-modal-overlay" onClick={handleCloseModal}>
+          <div className="asset-modal-content fade-in" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="modal-close-btn"
+              onClick={handleCloseModal}
+              aria-label="닫기"
+            >
+              <X size={18} />
+            </button>
             <div className="modal-header">
               <h3>
                 {modalMode === 'create' ? '새로운 ' : '선택한 '}
@@ -1204,9 +1494,6 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                 {activeSection === 'categories' && '카테고리 정보'}
                 {modalMode === 'edit' && ' 수정'}
               </h3>
-              <button className="modal-close-btn" onClick={() => { setShowModal(false); resetFormFields(); }}>
-                <X size={18} />
-              </button>
             </div>
 
             <form onSubmit={handleSubmit} className="modal-form">
@@ -1267,7 +1554,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                           <option key={cat.id} value={cat.id}>{cat.name}</option>
                         ))}
                         {categories.filter(c => c.type === formType).length === 0 && (
-                          <option value="8">기타</option>
+                          <option value="" disabled>카테고리를 먼저 등록하세요</option>
                         )}
                       </select>
                     </div>
@@ -1300,7 +1587,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                     <label className="form-label">메모/내용</label>
                     <input
                       type="text"
-                      placeholder="상세 내용을 적어주세요 (예: 이마트 홈플러스 구입 등)"
+                      placeholder="상세 내용을 적어주세요"
                       value={formDescription}
                       onChange={(e) => setFormDescription(e.target.value)}
                       className="modal-input"
@@ -1438,6 +1725,16 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                     />
                   </div>
 
+                  {modalMode === 'edit' && selectedId !== null && (
+                    <div className="form-item">
+                      <label className="form-label">현재 잔고</label>
+                      <div className="modal-readonly-value">
+                        {formatCurrency(accounts.find((a) => a.id === selectedId)?.currentBalance ?? 0)}
+                      </div>
+                      <p className="form-hint">거래 내역에 따라 자동 계산됩니다. 직접 수정할 수 없습니다.</p>
+                    </div>
+                  )}
+
                   <div className="form-item">
                     <label className="form-label">초기 설정 잔고 (원)</label>
                     <input
@@ -1448,6 +1745,11 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                       onChange={(e) => setFormInitialBalance(e.target.value)}
                       className="modal-input"
                     />
+                    {modalMode === 'edit' && (
+                      <p className="form-hint">
+                        초기 잔고만 수정할 수 있으며, 변경 시 현재 잔고도 같은 금액만큼 함께 조정됩니다.
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
@@ -1484,12 +1786,34 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
 
               {/* Footer Actions */}
               <div className="modal-footer">
-                <button type="button" className="btn-secondary" onClick={() => { setShowModal(false); resetFormFields(); }}>
-                  취소
-                </button>
-                <button type="submit" className="btn-primary">
-                  등록/저장 완료
-                </button>
+                {modalMode === 'edit' && selectedId !== null ? (
+                  <button
+                    type="button"
+                    className="btn-modal-delete"
+                    onClick={handleModalDelete}
+                    disabled={submitting}
+                  >
+                    <Trash2 size={14} />
+                    삭제
+                  </button>
+                ) : (
+                  <span />
+                )}
+                <div className="modal-footer-actions">
+                  <button type="button" className="btn-secondary" onClick={handleCloseModal}>
+                    취소
+                  </button>
+                  <button type="submit" className="btn-primary" disabled={submitting}>
+                    {submitting ? (
+                      <>
+                        <Loader2 size={14} className="spin-animation" />
+                        저장 중...
+                      </>
+                    ) : (
+                      modalMode === 'edit' ? '저장' : '등록'
+                    )}
+                  </button>
+                </div>
               </div>
 
             </form>

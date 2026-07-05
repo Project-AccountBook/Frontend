@@ -144,33 +144,6 @@ export const MyPageView: React.FC = () => {
     (cat) => !interestCategories.some((ic) => ic.categoryId === cat.id),
   );
 
-  const handleToggleInterestAlarm = async (item: InterestCategoryResponse) => {
-    setInterestActionId(item.id);
-    setInterestCategoryError(null);
-    setInterestCategorySuccess(null);
-    try {
-      const nextEnabled = !item.isAlarmEnabled;
-      const result = await interestCategoryApi.updateAlarm(item.id, nextEnabled);
-      if (result.ok) {
-        setInterestCategories((prev) =>
-          prev.map((ic) => (ic.id === item.id ? { ...ic, isAlarmEnabled: nextEnabled } : ic)),
-        );
-        setInterestCategorySuccess(
-          nextEnabled
-            ? `"${item.categoryName}" 카테고리 알림을 켰습니다.`
-            : `"${item.categoryName}" 카테고리 알림을 껐습니다.`,
-        );
-        setTimeout(() => setInterestCategorySuccess(null), 3000);
-      } else {
-        setInterestCategoryError(result.error ?? '알림 설정 변경에 실패했습니다.');
-      }
-    } catch {
-      setInterestCategoryError('서버와 통신 중 오류가 발생했습니다.');
-    } finally {
-      setInterestActionId(null);
-    }
-  };
-
   const handleDeleteInterestCategory = async (item: InterestCategoryResponse) => {
     setInterestActionId(item.id);
     setInterestCategoryError(null);
@@ -179,7 +152,7 @@ export const MyPageView: React.FC = () => {
       const result = await interestCategoryApi.delete(item.id);
       if (result.ok) {
         setInterestCategories((prev) => prev.filter((ic) => ic.id !== item.id));
-        setInterestCategorySuccess(`"${item.categoryName}" 관심 카테고리를 해제했습니다.`);
+        setInterestCategorySuccess(`"${item.categoryName}" 카테고리 알림을 해제했습니다.`);
         setTimeout(() => setInterestCategorySuccess(null), 3000);
       } else {
         setInterestCategoryError(result.error ?? '관심 카테고리 해제에 실패했습니다.');
@@ -858,23 +831,16 @@ export const MyPageView: React.FC = () => {
                           <div className="mypage-interest-item-info">
                             <span className="mypage-interest-item-name">{item.categoryName}</span>
                             <span className="mypage-interest-item-desc">
-                              {item.isAlarmEnabled
-                                ? '새 공동구매 등록 시 알림을 받습니다'
-                                : '알림이 꺼져 있습니다 (구독은 유지됨)'}
+                              새 공동구매 등록 시 알림을 받습니다
                             </span>
                           </div>
                           <div className="mypage-interest-item-actions">
-                            <ToggleSwitch
-                              checked={item.isAlarmEnabled}
-                              onChange={() => handleToggleInterestAlarm(item)}
-                              label=""
-                            />
                             <button
                               type="button"
                               className="mypage-btn-icon-danger"
                               onClick={() => handleDeleteInterestCategory(item)}
                               disabled={interestActionId === item.id}
-                              title="관심 카테고리 해제"
+                              title="알림 해제"
                             >
                               {interestActionId === item.id ? (
                                 <Loader2 size={14} className="spin-animation" />

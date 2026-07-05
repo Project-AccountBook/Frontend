@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { DashboardView } from './components/DashboardView';
@@ -12,38 +12,71 @@ import { QnaListView } from './components/QnaListView';
 import { QnaDetailView } from './components/QnaDetailView';
 import { QnaWriteView } from './components/QnaWriteView';
 import { GroupBuyAdminView } from './components/GroupBuyAdminView';
-import { NotificationView, MOCK_NOTIFICATIONS } from './components/NotificationView';
+import { NotificationView } from './components/NotificationView';
 import { BudgetView } from './components/BudgetView';
 import { AssetView, type AssetActiveSection } from './components/AssetView';
 import { LoginView } from './components/LoginView';
 import { MyPageView } from './components/MyPageView';
 import { AdminView } from './components/AdminView';
-import { authApi, setAuthExpiredHandler, tokenStorage } from './api';
+import { authApi, notificationApi, setAuthExpiredHandler, tokenStorage } from './api';
 import { clearMyUserIdCache } from './lib/boardApi';
 import { Construction } from 'lucide-react';
 
 type BoardMode = 'list' | 'detail' | 'write';
 
+const APP_TABS = new Set([
+  'dashboard',
+  'history',
+  'budget',
+  'analysis',
+  'comparison',
+  'locationComparison',
+  'groupbuy',
+  'knowhow',
+  'qa',
+  'groupbuyAdmin',
+  'notifications',
+  'settings',
+]);
+
+function readTabFromUrl(): string {
+  const hash = window.location.hash.replace(/^#\/?/, '');
+  return APP_TABS.has(hash) ? hash : 'dashboard';
+}
+
+function writeTabToUrl(tab: string) {
+  const base = `${window.location.pathname}${window.location.search}`;
+  const url = tab === 'dashboard' ? base : `${base}#${tab}`;
+  window.history.replaceState({}, document.title, url);
+}
+
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => tokenStorage.hasToken());
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [activeTab, setActiveTab] = useState<string>(readTabFromUrl);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [knowhowMode, setKnowhowMode] = useState<BoardMode>('list');
   const [knowhowPostId, setKnowhowPostId] = useState<number | null>(null);
   const [qnaMode, setQnaMode] = useState<BoardMode>('list');
   const [qnaPostId, setQnaPostId] = useState<number | null>(null);
-  const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [assetInitialSection, setAssetInitialSection] = useState<AssetActiveSection | undefined>();
 
-  const unreadNotificationCount = useMemo(
-    () => notifications.filter((n) => !n.isRead).length,
-    [notifications]
-  );
+  const refreshUnreadCount = useCallback(async () => {
+    if (!tokenStorage.hasToken()) {
+      setUnreadNotificationCount(0);
+      return;
+    }
+    const result = await notificationApi.getUnreadCount();
+    if (result.ok && result.data !== null) {
+      setUnreadNotificationCount(result.data);
+    }
+  }, []);
 
   useEffect(() => {
     setAuthExpiredHandler(() => {
       setIsLoggedIn(false);
       setActiveTab('dashboard');
+      writeTabToUrl('dashboard');
     });
     return () => setAuthExpiredHandler(null);
   }, []);
@@ -61,6 +94,14 @@ function App() {
   }, [isLoggedIn]);
 
   useEffect(() => {
+    const syncTabFromUrl = () => {
+      setActiveTab(readTabFromUrl());
+    };
+    window.addEventListener('hashchange', syncTabFromUrl);
+    return () => window.removeEventListener('hashchange', syncTabFromUrl);
+  }, []);
+
+  useEffect(() => {
     if (window.location.pathname === '/oauth2/redirect') {
       const params = new URLSearchParams(window.location.search);
       const accessToken = params.get('accessToken');
@@ -69,10 +110,19 @@ function App() {
         const rememberMe = tokenStorage.consumePendingRememberMe() ?? true;
         tokenStorage.setTokens(accessToken, refreshToken, 'social-login', rememberMe);
         setIsLoggedIn(true);
+        refreshUnreadCount();
       }
       window.history.replaceState({}, document.title, '/');
     }
   }, []);
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      refreshUnreadCount();
+    } else {
+      setUnreadNotificationCount(0);
+    }
+  }, [isLoggedIn, refreshUnreadCount]);
 
   const handleLogout = async () => {
     if (tokenStorage.hasToken()) {
@@ -87,10 +137,12 @@ function App() {
     setIsAdmin(false);
     setIsLoggedIn(false);
     setActiveTab('dashboard');
+    writeTabToUrl('dashboard');
   };
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
+    writeTabToUrl(tab);
     setAssetInitialSection(undefined);
     setKnowhowMode('list');
     setKnowhowPostId(null);
@@ -99,8 +151,13 @@ function App() {
   };
 
   const goToCategorySettings = () => {
+    setKnowhowMode('list');
+    setKnowhowPostId(null);
+    setQnaMode('list');
+    setQnaPostId(null);
     setAssetInitialSection('categories');
     setActiveTab('history');
+    writeTabToUrl('history');
   };
 
   const renderKnowhow = () => {
@@ -187,10 +244,7 @@ function App() {
         return <GroupBuyAdminView />;
       case 'notifications':
         return (
-          <NotificationView
-            notifications={notifications}
-            setNotifications={setNotifications}
-          />
+          <NotificationView onUnreadCountChange={setUnreadNotificationCount} />
         );
       case 'settings':
         return <MyPageView />;
@@ -248,7 +302,7 @@ function App() {
               </p>
             </div>
             <button
-              onClick={() => setActiveTab('dashboard')}
+              onClick={() => handleTabChange('dashboard')}
               style={{
                 background: 'var(--navy)',
                 color: 'white',
