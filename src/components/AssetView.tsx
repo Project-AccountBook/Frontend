@@ -311,6 +311,9 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
       const tx = transactions.find(t => t.id === id);
       if (tx) {
         setFormAccount(tx.accountId.toString());
+        if (tx.type === 'TRANSFER' && tx.targetAccountId != null) {
+          setFormTargetAccount(tx.targetAccountId.toString());
+        }
         setFormCategory(tx.categoryId.toString());
         setFormType(tx.type);
         setFormAmount(tx.amount.toString());
@@ -498,7 +501,8 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
       const matchDesc = (tx.description ?? '').toLowerCase().includes(q);
       const matchCat = tx.categoryName.toLowerCase().includes(q);
       const matchAcc = tx.accountName.toLowerCase().includes(q);
-      if (!matchDesc && !matchCat && !matchAcc) return false;
+      const matchTarget = (tx.targetAccountName ?? '').toLowerCase().includes(q);
+      if (!matchDesc && !matchCat && !matchAcc && !matchTarget) return false;
     }
     return true;
   });
@@ -543,6 +547,18 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
 
   const getAccountShortName = (name: string, maxLen = 4) =>
     name.length <= maxLen ? name : `${name.slice(0, maxLen)}…`;
+
+  const getTransferTargetName = (tx: Transaction) =>
+    tx.targetAccountName
+    ?? (tx.targetAccountId != null
+      ? accounts.find((a) => a.id === tx.targetAccountId)?.accountName
+      : undefined);
+
+  const formatTransferRoute = (tx: Transaction) => {
+    const targetName = getTransferTargetName(tx);
+    if (!targetName) return null;
+    return `${tx.accountName} → ${targetName}`;
+  };
 
   const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
   const MONTHS = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
@@ -867,7 +883,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                       <Search size={16} className="search-icon" />
                       <input
                         type="text"
-                        placeholder="내용, 카테고리, 계좌 검색..."
+                        placeholder="내용, 카테고리, 계좌, 이체 대상 검색..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="search-input"
@@ -1106,13 +1122,17 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                               <div className="cal-detail-info">
                                 <span className="cal-detail-desc">{tx.description || '—'}</span>
                                 <span className="cal-detail-meta">
-                                  <span
-                                    className="cal-account-badge"
-                                    style={{ background: accountColor.bg, color: accountColor.dot }}
-                                  >
-                                    <span className="cal-account-dot" style={{ background: accountColor.dot }} />
-                                    {tx.accountName}
-                                  </span>
+                                  {tx.type === 'TRANSFER' && formatTransferRoute(tx) ? (
+                                    <span className="transfer-target-desc">{formatTransferRoute(tx)}</span>
+                                  ) : (
+                                    <span
+                                      className="cal-account-badge"
+                                      style={{ background: accountColor.bg, color: accountColor.dot }}
+                                    >
+                                      <span className="cal-account-dot" style={{ background: accountColor.dot }} />
+                                      {tx.accountName}
+                                    </span>
+                                  )}
                                   · <span className="category-tag">{tx.categoryName}</span>
                                 </span>
                               </div>
@@ -1178,7 +1198,11 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                           onClick={() => handleOpenEditModal(tx.id)}
                         >
                           <td>{tx.transactionDate}</td>
-                          <td className="font-semibold text-primary-dark">{tx.accountName}</td>
+                          <td className="font-semibold text-primary-dark">
+                            {tx.type === 'TRANSFER' && formatTransferRoute(tx)
+                              ? formatTransferRoute(tx)
+                              : tx.accountName}
+                          </td>
                           <td>
                             <span className="category-tag">{tx.categoryName}</span>
                           </td>

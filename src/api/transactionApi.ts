@@ -5,6 +5,8 @@ export interface TransactionResponse {
   id: number;
   accountId: number;
   accountName: string;
+  targetAccountId?: number | null;
+  targetAccountName?: string | null;
   categoryId: number;
   categoryName: string;
   type: TransactionType;
