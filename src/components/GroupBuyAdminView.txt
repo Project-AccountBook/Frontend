@@ -84,15 +84,9 @@ export const GroupBuyAdminView: React.FC = () => {
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
   const [productForm, setProductForm] = useState({
     name: '',
-    category: '',
-    price: 0,
-    stock: 0,
-    description: ''
-  });
-
-  // --- Loading / Error / API States ---
-  const [, setLoading] = useState(false);
-  const [, setError] = useState<string | null>(null);
+    category: '�  // --- Loading / Error / API States ---
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [posts, setPosts] = useState<GroupBuyPost[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -394,7 +388,7 @@ export const GroupBuyAdminView: React.FC = () => {
   };
 
   // --- Handlers for Report Management ---
-  const handleResolveReport = async (reportId: number, _targetId: number, _type: '글' | '댓글', action: '경고' | '삭제' | '반려') => {
+  const handleResolveReport = async (reportId: number, targetId: number, type: '글' | '댓글', action: '경고' | '삭제' | '반려') => {
     try {
       let backendAction = 'DISMISSED';
       if (action === '경고') backendAction = 'WARNED';
@@ -516,8 +510,46 @@ export const GroupBuyAdminView: React.FC = () => {
                             p.description.toLowerCase().includes(productSearchQuery.toLowerCase());
       return matchesSearch;
     });
-  }, [products, productSearchQuery]);
+  }, [products, productSearchQuery]); prod.id === selectedProductId 
+          ? { 
+              ...prod, 
+              name: productForm.name, 
+              category: productForm.category, 
+              price: Number(productForm.price), 
+              stock: Number(productForm.stock), 
+              description: productForm.description 
+            } 
+          : prod
+      ));
+    }
+    setIsProductModalOpen(false);
+  };
 
+  const handleDeleteProduct = (prodId: number, prodName: string) => {
+    if (window.confirm(`'${prodName}' 상품을 카탈로그에서 삭제하시겠습니까?`)) {
+      setProducts(prev => prev.filter(prod => prod.id !== prodId));
+    }
+  };
+
+  // --- Filtered lists for rendering ---
+  const filteredPosts = useMemo(() => {
+    return posts.filter(p => {
+      const matchesStatus = postFilterStatus === '전체' || p.status === postFilterStatus;
+      const matchesSearch = p.title.toLowerCase().includes(postSearchQuery.toLowerCase()) ||
+                            p.owner.toLowerCase().includes(postSearchQuery.toLowerCase()) ||
+                            p.category.toLowerCase().includes(postSearchQuery.toLowerCase());
+      return matchesStatus && matchesSearch;
+    });
+  }, [posts, postFilterStatus, postSearchQuery]);
+
+  const filteredProducts = useMemo(() => {
+    return products.filter(p => {
+      const matchesSearch = p.name.toLowerCase().includes(productSearchQuery.toLowerCase()) ||
+                            p.category.toLowerCase().includes(productSearchQuery.toLowerCase()) ||
+                            p.description.toLowerCase().includes(productSearchQuery.toLowerCase());
+      return matchesSearch;
+    });
+  }, [products, productSearchQuery]);
 
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
