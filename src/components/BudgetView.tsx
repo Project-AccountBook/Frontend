@@ -964,6 +964,7 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
     setModalOpen(false);
     setEditItem(null);
     setModalMode('create');
+
     onGoToCategorySettings?.();
   };
 

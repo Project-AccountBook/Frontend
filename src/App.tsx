@@ -227,6 +227,7 @@ function App() {
         return <AssetView initialSection={assetInitialSection} />;
       case 'budget':
         return <BudgetView onGoToCategorySettings={goToCategorySettings} />;
+
       case 'comparison':
         return <ComparisonView />;
       case 'locationComparison':

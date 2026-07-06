@@ -30,6 +30,15 @@ async function parseResponse<T>(res: Response): Promise<RequestResult<T>> {
     };
   }
 
+  if (!body) {
+    return {
+      ok: false,
+      status: res.status,
+      data: null,
+      error: '올바르지 않은 서버 응답입니다.',
+    };
+  }
+
   const success = body.success === true;
 
   return {

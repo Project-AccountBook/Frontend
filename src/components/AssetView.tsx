@@ -55,7 +55,7 @@ import {
 // Enums & Types
 // ──────────────────────────────────────────────
 export type AssetActiveSection = 'transactions' | 'fixed' | 'accounts' | 'categories';
-type ActiveSection = 'transactions' | 'fixed' | 'accounts' | 'categories';
+type ActiveSection = AssetActiveSection;
 type ViewMode = 'calendar' | 'list';
 
 type Account = AccountResponse;
@@ -93,6 +93,7 @@ type DayAccountSummary = {
 interface AssetViewProps {
   initialSection?: AssetActiveSection;
 }
+
 
 export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
   const [activeSection, setActiveSection] = useState<ActiveSection>(initialSection ?? 'transactions');

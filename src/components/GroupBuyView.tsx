@@ -14,7 +14,6 @@ import {
   Loader2,
 } from 'lucide-react';
 import {
-  groupPurchaseCategoryApi,
   interestCategoryApi,
   type GroupPurchaseCategoryResponse,
   type InterestCategoryResponse,
@@ -185,6 +184,7 @@ export const GroupBuyView: React.FC = () => {
 
   // States
   const [items, setItems] = useState<GroupBuyItem[]>(MOCK_ITEMS);
+
   const [categories, setCategories] = useState<GroupPurchaseCategoryResponse[]>(FALLBACK_CATEGORIES);
   const [userLocationText, setUserLocationText] = useState('서울시 마포구 서교동');
   const [userBudget, setUserBudget] = useState(3140894);
@@ -244,12 +244,11 @@ export const GroupBuyView: React.FC = () => {
           triggerToast(result.error ?? '관심 카테고리 등록에 실패했습니다.');
         }
       }
-    } catch {
-      triggerToast('서버와 통신 중 오류가 발생했습니다.');
-    } finally {
-      setSubscribingCategory(false);
+    } catch (err) {
+      console.error("Failed to load budget:", err);
     }
   };
+
 
   // Load initial data
   useEffect(() => {
