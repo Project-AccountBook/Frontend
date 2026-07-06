@@ -59,8 +59,10 @@ export interface SignupResponse {
 }
 
 export interface UserProfileResponse {
+  id: number;
   email: string;
   username: string;
+  role: string;
   birthDate: string | null;
   address: string | null;
   hasPassword: boolean;
@@ -91,6 +93,34 @@ export interface GroupPurchaseCategoryResponse {
   id: number;
   name: string;
   sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type GroupPurchaseStatus =
+  | 'RECRUITING'
+  | 'SUCCESS'
+  | 'FAILED'
+  | 'CLOSED'
+  | 'BLIND';
+
+export interface GroupPurchaseResponse {
+  id: number;
+  creatorId: number;
+  creatorNickname: string;
+  categoryId: number;
+  title: string;
+  content: string;
+  price: number;
+  minParticipants: number;
+  maxParticipants: number;
+  currentParticipants: number;
+  status: GroupPurchaseStatus;
+  deadline: string;
+  pickupLocation: string;
+  viewCount: number;
+  imageUrl: string | null;
+  achievementRate: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -165,4 +195,78 @@ export interface BudgetSummaryResponse {
   totalPlannedBudgetSum: number;
   totalActualExpenseSum: number;
   totalRemainingBudget: number;
+}
+
+/** DashboardController */
+export interface MonthlyTrendResponse {
+  yearMonth: string;
+  income: number;
+  expense: number;
+}
+
+export interface BudgetStatusResponse {
+  totalPlanned: number;
+  actualExpense: number;
+  remaining: number;
+}
+
+export interface SummaryResponse {
+  totalExpense: number;
+}
+
+export interface DashboardResponse {
+  categoryExpenses: Record<string, number>;
+  trends: MonthlyTrendResponse[];
+  budgetStatus: BudgetStatusResponse;
+  summary: SummaryResponse;
+}
+
+/** PortfolioController */
+export interface CategoryAmountResponse {
+  categoryId: number;
+  categoryName: string;
+  amount: number;
+}
+
+export interface MyIncomeResponse {
+  yearMonth: string;
+  totalIncome: number;
+  fixedIncome: number;
+  variableIncome: number;
+  fixedCategoryIncomes: CategoryAmountResponse[];
+  variableCategoryIncomes: CategoryAmountResponse[];
+}
+
+export interface MyExpenseResponse {
+  yearMonth: string;
+  totalExpense: number;
+  fixedExpense: number;
+  variableExpense: number;
+  fixedCategoryExpenses: CategoryAmountResponse[];
+  variableCategoryExpenses: CategoryAmountResponse[];
+}
+
+export interface CategoryBudgetResponse {
+  categoryId: number;
+  categoryName: string;
+  totalBudget: number;
+  actualExpense: number;
+  remainingBudget: number;
+}
+
+export interface MyBudgetResponse {
+  yearMonth: string;
+  totalBudget: number;
+  categoryBudgets: CategoryBudgetResponse[];
+}
+
+export interface MyPortfolioResponse {
+  yearMonth: string;
+  totalIncome: number;
+  totalExpense: number;
+  totalBudget: number;
+  balance: number;
+  income: MyIncomeResponse;
+  expense: MyExpenseResponse;
+  budget: MyBudgetResponse;
 }

@@ -165,6 +165,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
 
   const [formFrequency, setFormFrequency] = useState<FrequencyType>('MONTHLY');
   const [formRepeatDay, setFormRepeatDay] = useState<string>('20');
+  const [formRepeatMonth, setFormRepeatMonth] = useState<string>('1');
   const [formStartDate, setFormStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [formEndDate, setFormEndDate] = useState<string>('');
 
@@ -280,6 +281,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
     setFormDescription('');
     setFormFrequency('MONTHLY');
     setFormRepeatDay('20');
+    setFormRepeatMonth('1');
     setFormStartDate(new Date().toISOString().split('T')[0]);
     setFormEndDate('');
     setFormAccountName('');
@@ -326,6 +328,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
         setFormAmount(fx.amount.toString());
         setFormFrequency(fx.frequency);
         setFormRepeatDay(fx.repeatDay.toString());
+        setFormRepeatMonth((fx.repeatMonth ?? 1).toString());
         setFormStartDate(fx.startDate);
         if (fx.endDate) setFormEndDate(fx.endDate);
         setFormDescription(fx.description ?? '');
@@ -443,6 +446,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
           amount: parseFloat(formAmount) || 0,
           frequency: formFrequency,
           repeatDay: parseInt(formRepeatDay) || 1,
+          repeatMonth: formFrequency === 'YEARLY' ? parseInt(formRepeatMonth) || 1 : undefined,
           startDate: formStartDate,
           endDate: formEndDate || undefined,
           description: formDescription,
@@ -542,6 +546,52 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
 
   const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
   const MONTHS = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
+  const REPEAT_WEEKDAY_OPTIONS = [
+    { value: '1', label: '월요일' },
+    { value: '2', label: '화요일' },
+    { value: '3', label: '수요일' },
+    { value: '4', label: '목요일' },
+    { value: '5', label: '금요일' },
+    { value: '6', label: '토요일' },
+    { value: '7', label: '일요일' },
+  ];
+
+  const getIsoWeekday = (date = new Date()) => {
+    const jsDay = date.getDay();
+    return jsDay === 0 ? 7 : jsDay;
+  };
+
+  const applyFrequencyDefaults = (freq: FrequencyType) => {
+    const now = new Date();
+    if (freq === 'WEEKLY') {
+      setFormRepeatDay(String(getIsoWeekday(now)));
+    } else if (freq === 'MONTHLY') {
+      setFormRepeatDay(String(now.getDate()));
+    } else {
+      setFormRepeatMonth(String(now.getMonth() + 1));
+      setFormRepeatDay(String(now.getDate()));
+    }
+  };
+
+  const handleFrequencyChange = (freq: FrequencyType) => {
+    setFormFrequency(freq);
+    applyFrequencyDefaults(freq);
+  };
+
+  const formatRepeatSchedule = (fx: FixedTransaction) => {
+    switch (fx.frequency) {
+      case 'WEEKLY': {
+        const weekday = REPEAT_WEEKDAY_OPTIONS.find((opt) => opt.value === String(fx.repeatDay));
+        return weekday?.label ?? `${fx.repeatDay}요일`;
+      }
+      case 'MONTHLY':
+        return `매월 ${fx.repeatDay}일`;
+      case 'YEARLY':
+        return `매년 ${fx.repeatMonth ?? 1}월 ${fx.repeatDay}일`;
+      default:
+        return `${fx.repeatDay}일`;
+    }
+  };
 
   const prevCalendarMonth = () => {
     if (calendarMonth === 0) {
@@ -1174,7 +1224,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
             <div className="section-action-bar">
               <div className="fixed-intro-card">
                 <Sparkles size={18} className="intro-icon" />
-                <span>매주·매월 반복되는 수입/지출을 예약하고 자동 정합하세요.</span>
+                <span>매주·매월·매년 반복되는 수입/지출을 예약하고 자동 정합하세요.</span>
               </div>
               <button className="btn-section-add" onClick={() => handleOpenAddModal()}>
                 <Plus size={14} />
@@ -1247,7 +1297,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                           </span>
                         </td>
                         <td className="font-semibold">{getFreqLabel(fx.frequency)}</td>
-                        <td className="font-semibold">{fx.repeatDay}일</td>
+                        <td className="font-semibold">{formatRepeatSchedule(fx)}</td>
                         <td className="text-muted" style={{ fontSize: '12px' }}>
                           <div>시작: {fx.startDate}</div>
                           {fx.endDate && <div>종료: {fx.endDate}</div>}
@@ -1643,7 +1693,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                       <label className="form-label">반복 주기</label>
                       <select
                         value={formFrequency}
-                        onChange={(e) => setFormFrequency(e.target.value as FrequencyType)}
+                        onChange={(e) => handleFrequencyChange(e.target.value as FrequencyType)}
                         className="modal-select"
                       >
                         <option value="WEEKLY">매주</option>
@@ -1652,18 +1702,64 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                       </select>
                     </div>
 
-                    <div className="form-item">
-                      <label className="form-label">반복 실행일 (일 단위: 1~31일)</label>
-                      <input
-                        type="number"
-                        min="1"
-                        max="31"
-                        required
-                        value={formRepeatDay}
-                        onChange={(e) => setFormRepeatDay(e.target.value)}
-                        className="modal-input"
-                      />
-                    </div>
+                    {formFrequency === 'WEEKLY' && (
+                      <div className="form-item">
+                        <label className="form-label">반복 요일</label>
+                        <select
+                          value={formRepeatDay}
+                          onChange={(e) => setFormRepeatDay(e.target.value)}
+                          className="modal-select"
+                        >
+                          {REPEAT_WEEKDAY_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {formFrequency === 'MONTHLY' && (
+                      <div className="form-item">
+                        <label className="form-label">반복일 (매월)</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="31"
+                          required
+                          value={formRepeatDay}
+                          onChange={(e) => setFormRepeatDay(e.target.value)}
+                          className="modal-input"
+                        />
+                      </div>
+                    )}
+
+                    {formFrequency === 'YEARLY' && (
+                      <>
+                        <div className="form-item">
+                          <label className="form-label">반복 월</label>
+                          <select
+                            value={formRepeatMonth}
+                            onChange={(e) => setFormRepeatMonth(e.target.value)}
+                            className="modal-select"
+                          >
+                            {MONTHS.map((label, i) => (
+                              <option key={i + 1} value={String(i + 1)}>{label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-item">
+                          <label className="form-label">반복일</label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="31"
+                            required
+                            value={formRepeatDay}
+                            onChange={(e) => setFormRepeatDay(e.target.value)}
+                            className="modal-input"
+                          />
+                        </div>
+                      </>
+                    )}
 
                     <div className="form-item">
                       <label className="form-label">금액 (원)</label>

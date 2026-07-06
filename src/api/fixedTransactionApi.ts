@@ -11,6 +11,7 @@ export interface FixedTransactionResponse {
   amount: number;
   frequency: FrequencyType;
   repeatDay: number;
+  repeatMonth?: number | null;
   startDate: string;
   endDate?: string | null;
   description: string;
@@ -24,6 +25,7 @@ export interface FixedTransactionRequest {
   amount: number;
   frequency: FrequencyType;
   repeatDay: number;
+  repeatMonth?: number | null;
   startDate: string;
   endDate?: string;
   description?: string;
