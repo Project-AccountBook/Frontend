@@ -245,7 +245,10 @@ export const GroupBuyView: React.FC = () => {
         }
       }
     } catch (err) {
-      console.error("Failed to load budget:", err);
+      console.error('Failed to toggle category notification:', err);
+      triggerToast('관심 카테고리 처리 중 오류가 발생했습니다.');
+    } finally {
+      setSubscribingCategory(false);
     }
   };
 
