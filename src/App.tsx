@@ -60,6 +60,7 @@ function App() {
   const [qnaPostId, setQnaPostId] = useState<number | null>(null);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [assetInitialSection, setAssetInitialSection] = useState<AssetActiveSection | undefined>();
+  const [groupBuyFocusId, setGroupBuyFocusId] = useState<number | null>(null);
 
   const refreshUnreadCount = useCallback(async () => {
     if (!tokenStorage.hasToken()) {
@@ -137,7 +138,11 @@ function App() {
     writeTabToUrl('dashboard');
   };
 
-  const handleTabChange = (tab: string) => {
+  const clearGroupBuyFocus = useCallback(() => {
+    setGroupBuyFocusId(null);
+  }, []);
+
+  const handleTabChange = (tab: string, options?: { groupPurchaseId?: number }) => {
     setActiveTab(tab);
     writeTabToUrl(tab);
     setAssetInitialSection(undefined);
@@ -145,6 +150,7 @@ function App() {
     setKnowhowPostId(null);
     setQnaMode('list');
     setQnaPostId(null);
+    setGroupBuyFocusId(options?.groupPurchaseId ?? null);
   };
 
   const goToCategorySettings = () => {
@@ -233,7 +239,12 @@ function App() {
       case 'locationComparison':
         return <LocationComparisonView />;
       case 'groupbuy':
-        return <GroupBuyView />;
+        return (
+          <GroupBuyView
+            initialGroupPurchaseId={groupBuyFocusId}
+            onInitialGroupPurchaseHandled={clearGroupBuyFocus}
+          />
+        );
       case 'knowhow':
         return renderKnowhow();
       case 'qa':
@@ -242,7 +253,10 @@ function App() {
         return <GroupBuyAdminView />;
       case 'notifications':
         return (
-          <NotificationView onUnreadCountChange={setUnreadNotificationCount} />
+          <NotificationView
+            onUnreadCountChange={setUnreadNotificationCount}
+            onNavigate={handleTabChange}
+          />
         );
       case 'settings':
         return <MyPageView />;

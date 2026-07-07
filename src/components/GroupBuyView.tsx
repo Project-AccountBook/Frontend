@@ -162,7 +162,10 @@ const FALLBACK_CATEGORIES: GroupPurchaseCategoryResponse[] = [
   { id: 4, name: '가전', sortOrder: 4, createdAt: '', updatedAt: '' },
 ];
 
-export const GroupBuyView: React.FC = () => {
+export const GroupBuyView: React.FC<{
+  initialGroupPurchaseId?: number | null;
+  onInitialGroupPurchaseHandled?: () => void;
+}> = ({ initialGroupPurchaseId = null, onInitialGroupPurchaseHandled }) => {
   const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
     const headers = new Headers(options.headers);
     if (!headers.has('Content-Type')) {
@@ -432,6 +435,38 @@ export const GroupBuyView: React.FC = () => {
     }
     fetchComments(item.id);
   };
+
+  useEffect(() => {
+    if (!initialGroupPurchaseId || categories.length === 0) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await fetchWithAuth(`/api/v1/group-purchases/${initialGroupPurchaseId}`);
+        if (cancelled) return;
+
+        if (res.success && res.data) {
+          const updated = mapBackendItemToFrontend(res.data, categories);
+          setSelectedItem(updated);
+          if (res.data.categoryId) {
+            setActiveCategoryId(res.data.categoryId);
+          }
+          void fetchComments(initialGroupPurchaseId);
+        }
+      } catch (err) {
+        console.error('Failed to open group purchase from notification:', err);
+      } finally {
+        if (!cancelled) {
+          onInitialGroupPurchaseHandled?.();
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialGroupPurchaseId, categories, onInitialGroupPurchaseHandled]);
 
   const fetchComments = async (postId: number) => {
     try {
