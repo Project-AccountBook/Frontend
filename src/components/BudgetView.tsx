@@ -328,6 +328,7 @@ interface BudgetModalProps {
   editItem?: BudgetItem | null;
   onClose: () => void;
   onSubmit: (yearMonth: string, payload: BudgetFormPayload, editId?: number) => void;
+  onDelete?: () => void;
   onGoToCategorySettings?: () => void;
   submitting?: boolean;
 }
@@ -342,6 +343,7 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
   editItem,
   onClose,
   onSubmit,
+  onDelete,
   onGoToCategorySettings,
   submitting = false
 }) => {
@@ -695,38 +697,108 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
 
         {totalBudgetNum <= 0 && expectedExpenseNum <= 0 && <div style={{ marginBottom: '24px' }} />}
 
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            type="button"
-            onClick={onClose}
+        {isEdit && onDelete ? (
+          <div
             style={{
-              flex: 1,
-              padding: '12px',
-              borderRadius: '10px',
-              border: '1px solid var(--border)',
-              background: 'white',
-              fontSize: '13px',
-              fontWeight: '700',
-              color: 'var(--text-secondary)'
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '8px'
             }}
           >
-            취소
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            className="header-btn-primary"
-            style={{
-              flex: 1,
-              justifyContent: 'center',
-              background: canSubmit ? 'var(--blue)' : '#cbd5e1',
-              cursor: canSubmit ? 'pointer' : 'not-allowed'
-            }}
-            disabled={!canSubmit}
-          >
-            {isEdit ? '수정하기' : '등록하기'}
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={onDelete}
+              disabled={submitting}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '12px 14px',
+                borderRadius: '10px',
+                border: '1px solid var(--red-border)',
+                background: 'var(--red-bg)',
+                fontSize: '13px',
+                fontWeight: '700',
+                color: 'var(--red)',
+                cursor: submitting ? 'not-allowed' : 'pointer',
+                opacity: submitting ? 0.6 : 1
+              }}
+            >
+              <Trash2 size={14} />
+              삭제
+            </button>
+            <div style={{ display: 'flex', gap: '8px', flex: 1, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={onClose}
+                style={{
+                  flex: 1,
+                  minWidth: '100px',
+                  maxWidth: '140px',
+                  padding: '12px',
+                  borderRadius: '10px',
+                  border: '1px solid var(--border)',
+                  background: 'white',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  color: 'var(--text-secondary)'
+                }}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                className="header-btn-primary"
+                style={{
+                  flex: 1,
+                  minWidth: '100px',
+                  maxWidth: '140px',
+                  justifyContent: 'center',
+                  background: canSubmit ? 'var(--blue)' : '#cbd5e1',
+                  cursor: canSubmit ? 'pointer' : 'not-allowed'
+                }}
+                disabled={!canSubmit}
+              >
+                수정하기
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                flex: 1,
+                padding: '12px',
+                borderRadius: '10px',
+                border: '1px solid var(--border)',
+                background: 'white',
+                fontSize: '13px',
+                fontWeight: '700',
+                color: 'var(--text-secondary)'
+              }}
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              className="header-btn-primary"
+              style={{
+                flex: 1,
+                justifyContent: 'center',
+                background: canSubmit ? 'var(--blue)' : '#cbd5e1',
+                cursor: canSubmit ? 'pointer' : 'not-allowed'
+              }}
+              disabled={!canSubmit}
+            >
+              등록하기
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1405,6 +1477,16 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
           setModalMode('create');
         }}
         onSubmit={handleModalSubmit}
+        onDelete={
+          modalMode === 'edit' && editItem
+            ? () => {
+                setDeleteTarget(editItem);
+                setModalOpen(false);
+                setEditItem(null);
+                setModalMode('create');
+              }
+            : undefined
+        }
         onGoToCategorySettings={handleGoToCategorySettings}
         submitting={submitting}
       />
