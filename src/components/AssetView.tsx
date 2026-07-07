@@ -34,7 +34,7 @@ import {
   type TransactionType
 } from '../api/categoryApi';
 import {
-  getTransactionsForAccounts,
+  getAllUserTransactions,
   createTransaction,
   updateTransaction,
   deleteTransaction,
@@ -215,30 +215,25 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
   }, []);
 
   const fetchTransactions = useCallback(async () => {
-    if (accounts.length === 0) {
-      setTransactions([]);
-      return;
-    }
-
     const range = viewMode === 'calendar'
       ? getMonthRange(calendarYear, calendarMonth)
       : { start: startDate, end: endDate };
 
-    const accountIds = filterAccount === 'all'
-      ? accounts.map((a) => a.id)
-      : [filterAccount];
-
     setTransactionsLoading(true);
     setTransactionsError(null);
     try {
-      const data = await getTransactionsForAccounts(accountIds, range.start, range.end);
-      setTransactions(data);
+      const page = await getAllUserTransactions(range.start, range.end);
+      setTransactions(page.content.map((tx) => ({
+        ...tx,
+        amount: Number(tx.amount),
+        description: tx.description ?? '',
+      })));
     } catch (err) {
       setTransactionsError(err instanceof Error ? err.message : '거래 내역을 불러오는 데 실패했습니다.');
     } finally {
       setTransactionsLoading(false);
     }
-  }, [accounts, viewMode, calendarYear, calendarMonth, startDate, endDate, filterAccount]);
+  }, [viewMode, calendarYear, calendarMonth, startDate, endDate]);
 
   useEffect(() => {
     fetchAccounts();
@@ -247,10 +242,8 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
   }, [fetchAccounts, fetchCategories, fetchFixedTransactions]);
 
   useEffect(() => {
-    if (!accountsLoading) {
-      fetchTransactions();
-    }
-  }, [fetchTransactions, accountsLoading]);
+    fetchTransactions();
+  }, [fetchTransactions]);
 
   useEffect(() => {
     if (!showModal || (activeSection !== 'transactions' && activeSection !== 'fixed')) return;
@@ -353,12 +346,18 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
   };
 
   const handleDeleteItem = async (id: number): Promise<boolean> => {
-    if (!window.confirm('정말 삭제하시겠습니까?')) return false;
+    const confirmMessage = activeSection === 'accounts'
+      ? '이 계좌를 삭제하시겠습니까?\n\n· 연결된 고정 수입/지출은 함께 삭제됩니다.\n· 기존 거래 내역은 계좌명과 함께 보존됩니다.'
+      : '정말 삭제하시겠습니까?';
+
+    if (!window.confirm(confirmMessage)) return false;
 
     try {
       if (activeSection === 'accounts') {
         await deleteAccount(id);
         await fetchAccounts();
+        await fetchFixedTransactions();
+        await fetchTransactions();
       } else if (activeSection === 'transactions') {
         await deleteTransaction(id);
         await fetchTransactions();
@@ -554,10 +553,13 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
       ? accounts.find((a) => a.id === tx.targetAccountId)?.accountName
       : undefined);
 
+  const formatAccountDisplayName = (name: string, archived?: boolean) =>
+    archived ? `${name} (삭제됨)` : name;
+
   const formatTransferRoute = (tx: Transaction) => {
     const targetName = getTransferTargetName(tx);
     if (!targetName) return null;
-    return `${tx.accountName} → ${targetName}`;
+    return `${formatAccountDisplayName(tx.accountName, tx.accountArchived)} → ${formatAccountDisplayName(targetName, tx.targetAccountArchived)}`;
   };
 
   const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
@@ -1130,7 +1132,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                                       style={{ background: accountColor.bg, color: accountColor.dot }}
                                     >
                                       <span className="cal-account-dot" style={{ background: accountColor.dot }} />
-                                      {tx.accountName}
+                                      {formatAccountDisplayName(tx.accountName, tx.accountArchived)}
                                     </span>
                                   )}
                                   · <span className="category-tag">{tx.categoryName}</span>
@@ -1201,7 +1203,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                           <td className="font-semibold text-primary-dark">
                             {tx.type === 'TRANSFER' && formatTransferRoute(tx)
                               ? formatTransferRoute(tx)
-                              : tx.accountName}
+                              : formatAccountDisplayName(tx.accountName, tx.accountArchived)}
                           </td>
                           <td>
                             <span className="category-tag">{tx.categoryName}</span>

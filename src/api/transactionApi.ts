@@ -5,8 +5,10 @@ export interface TransactionResponse {
   id: number;
   accountId: number;
   accountName: string;
+  accountArchived?: boolean;
   targetAccountId?: number | null;
   targetAccountName?: string | null;
+  targetAccountArchived?: boolean;
   categoryId: number;
   categoryName: string;
   type: TransactionType;
@@ -128,6 +130,29 @@ export async function exportTransactions(startDate: string, endDate: string): Pr
   URL.revokeObjectURL(url);
 }
 
+/** GET /api/v1/transactions/all — 삭제된 계좌 거래 포함 전체 조회 */
+export async function getAllUserTransactions(
+  startDate: string,
+  endDate: string,
+  page = 0,
+  size = 500
+): Promise<SpringPage<TransactionResponse>> {
+  const search = new URLSearchParams({
+    startDate,
+    endDate,
+    page: String(page),
+    size: String(size),
+    sort: 'transactionDate,desc',
+  });
+
+  const res = await authFetch(`/api/v1/transactions/all?${search}`);
+  const data: ApiResponse<SpringPage<TransactionResponse>> = await res.json();
+  if (!res.ok || !data.success) {
+    throw new Error(data.error ?? '거래 내역을 불러오는 데 실패했습니다.');
+  }
+  return data.data;
+}
+
 /** 여러 계좌의 거래 내역을 병합 조회 */
 export async function getTransactionsForAccounts(
   accountIds: number[],
@@ -136,12 +161,12 @@ export async function getTransactionsForAccounts(
 ): Promise<TransactionResponse[]> {
   if (accountIds.length === 0) return [];
 
-  const pages = await Promise.all(
-    accountIds.map((accountId) => getTransactions({ accountId, startDate, endDate }))
-  );
+  const page = await getAllUserTransactions(startDate, endDate);
+  const accountIdSet = new Set(accountIds);
 
-  return pages
-    .flatMap((page) => page.content.map(normalizeTransaction))
+  return page.content
+    .map(normalizeTransaction)
+    .filter((tx) => accountIdSet.has(tx.accountId))
     .sort((a, b) => b.transactionDate.localeCompare(a.transactionDate) || b.id - a.id);
 }
 
