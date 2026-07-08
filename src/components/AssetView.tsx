@@ -227,6 +227,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
         ...tx,
         amount: Number(tx.amount),
         description: tx.description ?? '',
+        fixedTransactionGenerated: tx.fixedTransactionGenerated ?? false,
       })));
     } catch (err) {
       setTransactionsError(err instanceof Error ? err.message : '거래 내역을 불러오는 데 실패했습니다.');
@@ -515,11 +516,12 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
     }
   };
 
-  const getTxTypeLabel = (type: TransactionType) => {
+  const getTxTypeLabel = (type: TransactionType, fixedTransactionGenerated = false) => {
+    const prefix = fixedTransactionGenerated ? '고정 ' : '';
     switch (type) {
-      case 'INCOME': return '수입';
-      case 'EXPENSE': return '지출';
-      case 'TRANSFER': return '이체';
+      case 'INCOME': return `${prefix}수입`;
+      case 'EXPENSE': return `${prefix}지출`;
+      case 'TRANSFER': return `${prefix}이체`;
       default: return '';
     }
   };
@@ -1119,7 +1121,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                           >
                             <div className="cal-detail-left">
                               <span className={`type-badge ${getTxTypeBadgeClass(tx.type)}`}>
-                                {getTxTypeLabel(tx.type)}
+                                {getTxTypeLabel(tx.type, tx.fixedTransactionGenerated)}
                               </span>
                               <div className="cal-detail-info">
                                 <span className="cal-detail-desc">{tx.description || '—'}</span>
@@ -1210,7 +1212,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                           </td>
                           <td>
                             <span className={`type-badge ${getTxTypeBadgeClass(tx.type)}`}>
-                              {getTxTypeLabel(tx.type)}
+                              {getTxTypeLabel(tx.type, tx.fixedTransactionGenerated)}
                             </span>
                           </td>
                           <td>

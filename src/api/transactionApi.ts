@@ -15,6 +15,7 @@ export interface TransactionResponse {
   amount: number;
   transactionDate: string;
   description: string;
+  fixedTransactionGenerated?: boolean;
 }
 
 export interface TransactionRequest {
@@ -175,5 +176,6 @@ function normalizeTransaction(tx: TransactionResponse): TransactionResponse {
     ...tx,
     amount: Number(tx.amount),
     description: tx.description ?? '',
+    fixedTransactionGenerated: tx.fixedTransactionGenerated ?? false,
   };
 }
