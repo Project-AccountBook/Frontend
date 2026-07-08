@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Wallet,
   Users,
@@ -12,8 +12,36 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   PieChart,
-  MapPin
+  MapPin,
 } from 'lucide-react';
+import {
+  budgetCompareApi,
+  expenseCompareApi,
+  incomeCompareApi,
+  locationApi,
+  portfolioApi,
+  portfolioCompareApi,
+} from '../api';
+import type {
+  BudgetCompareResponse,
+  CategoryAmountResponse,
+  CategoryBudgetResponse,
+  ExpenseCompareResponse,
+  IncomeCompareResponse,
+  MyBudgetResponse,
+  MyExpenseResponse,
+  MyIncomeResponse,
+  MyPortfolioResponse,
+  NearbyUserResponse,
+  PairBudgetDetailResponse,
+  PairExpenseDetailResponse,
+  PairIncomeDetailResponse,
+  PairPortfolioDetailResponse,
+  PublicMonthlyBudgetResponse,
+  PublicMonthlyExpenseResponse,
+  PublicMonthlyIncomeResponse,
+  PublicMonthlyPortfolioResponse,
+} from '../api/types';
 
 type MetricKey = 'budget' | 'expense' | 'income';
 type MainTab = MetricKey | 'overall';
@@ -37,44 +65,16 @@ interface PublicUserMetric {
   username: string;
   yearMonth: string;
   total: number;
-  ageGroup: string;
-  region: string;
   distanceKm: number;
-  categories: CategoryItem[];
 }
 
 interface MetricConfig {
   key: MetricKey;
-  label: string; // "예산" / "지출" / "수입"
-  // 카드 노출 시 사용할 동사 (예: "책정", "지출", "벌었")
+  label: string;
   verbPositive: string;
   verbNegative: string;
-  // 색상 테마: 예산-blue, 지출-red, 수입-green
   themeClass: 'blue-theme' | 'red-theme' | 'purple-theme' | 'navy-theme';
   accentColor: string;
-  my: MyMetric;
-  publicUsers: PublicUserMetric[];
-  categoryAverages: Record<number, number>;
-}
-
-interface PairCompareResult {
-  type: CompareType;
-  yearMonth: string;
-  myLabel: string;
-  myAmount: number;
-  targetLabel: string;
-  targetAmount: number;
-  difference: number;
-}
-
-interface CompareResult {
-  type: CompareType;
-  yearMonth: string;
-  myAmount: number;
-  averageAmount: number;
-  sampleSize: number;
-  difference: number;
-  label: string;
 }
 
 const formatKRW = (value: number) => new Intl.NumberFormat('ko-KR').format(value);
@@ -83,143 +83,13 @@ const mainTabs: { id: MainTab; label: string }[] = [
   { id: 'budget', label: '예산' },
   { id: 'expense', label: '지출' },
   { id: 'income', label: '수입' },
-  { id: 'overall', label: '종합 비교' }
+  { id: 'overall', label: '종합 비교' },
 ];
 
 const CATEGORY_COLORS = ['#3b82f6', '#10b981', '#f43f5e', '#8b5cf6', '#f59e0b', '#06b6d4'];
+const colorFor = (idx: number) => CATEGORY_COLORS[idx % CATEGORY_COLORS.length];
 
-// === Budget mock (GET /api/v1/budgets/me, /compare/users, ...) ===
-const budgetCategories: CategoryItem[] = [
-  { categoryId: 1, categoryName: '식비', amount: 2800000, color: CATEGORY_COLORS[0] },
-  { categoryId: 2, categoryName: '주거비', amount: 1800000, color: CATEGORY_COLORS[1] },
-  { categoryId: 3, categoryName: '육아용품', amount: 1500000, color: CATEGORY_COLORS[2] },
-  { categoryId: 4, categoryName: '교통/통신', amount: 900000, color: CATEGORY_COLORS[3] },
-  { categoryId: 5, categoryName: '문화/여가', amount: 1000000, color: CATEGORY_COLORS[4] },
-  { categoryId: 6, categoryName: '기타/예비비', amount: 2000000, color: CATEGORY_COLORS[5] }
-];
-
-// === Expense mock (GET /api/v1/expenses/me, /compare/users, ...) ===
-const expenseCategories: CategoryItem[] = [
-  { categoryId: 1, categoryName: '식비', amount: 2500000, color: CATEGORY_COLORS[0] },
-  { categoryId: 2, categoryName: '주거비', amount: 1500000, color: CATEGORY_COLORS[1] },
-  { categoryId: 3, categoryName: '육아용품', amount: 1200000, color: CATEGORY_COLORS[2] },
-  { categoryId: 4, categoryName: '교통/통신', amount: 859106, color: CATEGORY_COLORS[3] },
-  { categoryId: 5, categoryName: '문화/여가', amount: 800000, color: CATEGORY_COLORS[4] },
-  { categoryId: 6, categoryName: '기타/예비비', amount: 0, color: CATEGORY_COLORS[5] }
-];
-
-// === Income mock (GET /api/v1/incomes/me, /compare/users, ...) ===
-const incomeCategories: CategoryItem[] = [
-  { categoryId: 11, categoryName: '근로소득', amount: 9500000, color: CATEGORY_COLORS[0] },
-  { categoryId: 12, categoryName: '사업소득', amount: 3000000, color: CATEGORY_COLORS[1] },
-  { categoryId: 13, categoryName: '금융소득', amount: 1200000, color: CATEGORY_COLORS[2] },
-  { categoryId: 14, categoryName: '기타수입', amount: 846049, color: CATEGORY_COLORS[3] }
-];
-
-const sumCategories = (cats: CategoryItem[]) => cats.reduce((s, c) => s + c.amount, 0);
-
-// 공개 사용자 8명을 한 번 정의하고 메트릭별로 분포 비율을 다르게 적용
-// distanceKm: 내 위치로부터 거리 (km) — Redis GEORADIUSBYMEMBER 결과를 시뮬레이션
-const publicUserBase = [
-  { userId: 101, username: '알뜰살림민지', yearMonth: '2026-06', ageGroup: '30대', region: '서울 강남구', distanceKm: 0.8 },
-  { userId: 102, username: '꼼꼼한엄마', yearMonth: '2026-06', ageGroup: '30대', region: '서울 강남구', distanceKm: 1.4 },
-  { userId: 103, username: '주부9단', yearMonth: '2026-06', ageGroup: '40대', region: '서울 서초구', distanceKm: 2.6 },
-  { userId: 104, username: '슬기로운가계부', yearMonth: '2026-06', ageGroup: '30대', region: '경기 성남시', distanceKm: 12.3 },
-  { userId: 105, username: '두아이맘', yearMonth: '2026-06', ageGroup: '40대', region: '서울 강남구', distanceKm: 2.1 },
-  { userId: 106, username: '미니멀리스트', yearMonth: '2026-06', ageGroup: '20대', region: '서울 마포구', distanceKm: 8.5 },
-  { userId: 107, username: '워킹맘이정', yearMonth: '2026-06', ageGroup: '30대', region: '서울 송파구', distanceKm: 5.2 },
-  { userId: 108, username: '알찬소비', yearMonth: '2026-06', ageGroup: '30대', region: '경기 용인시', distanceKm: 18.7 }
-];
-
-const totalsPerMetric: Record<MetricKey, Record<number, number>> = {
-  budget: {
-    101: 7500000, 102: 8200000, 103: 9100000, 104: 11200000,
-    105: 12500000, 106: 5400000, 107: 9800000, 108: 6800000
-  },
-  expense: {
-    101: 5800000, 102: 6400000, 103: 7100000, 104: 9500000,
-    105: 10300000, 106: 4100000, 107: 7800000, 108: 5300000
-  },
-  income: {
-    101: 12000000, 102: 14500000, 103: 13000000, 104: 18500000,
-    105: 16000000, 106: 8500000, 107: 15800000, 108: 11200000
-  }
-};
-
-const distributionPresets: Record<number, number[]> = {
-  101: [0.30, 0.20, 0.13, 0.10, 0.07, 0.20],
-  102: [0.28, 0.22, 0.15, 0.09, 0.08, 0.18],
-  103: [0.32, 0.18, 0.18, 0.11, 0.06, 0.15],
-  104: [0.26, 0.25, 0.16, 0.10, 0.10, 0.13],
-  105: [0.24, 0.20, 0.22, 0.09, 0.09, 0.16],
-  106: [0.35, 0.18, 0.05, 0.12, 0.15, 0.15],
-  107: [0.29, 0.21, 0.17, 0.11, 0.08, 0.14],
-  108: [0.33, 0.19, 0.14, 0.10, 0.08, 0.16]
-};
-
-const incomeDistributionPresets: Record<number, number[]> = {
-  101: [0.70, 0.15, 0.10, 0.05],
-  102: [0.65, 0.20, 0.10, 0.05],
-  103: [0.60, 0.25, 0.10, 0.05],
-  104: [0.55, 0.30, 0.10, 0.05],
-  105: [0.50, 0.35, 0.10, 0.05],
-  106: [0.75, 0.10, 0.10, 0.05],
-  107: [0.60, 0.25, 0.10, 0.05],
-  108: [0.68, 0.18, 0.09, 0.05]
-};
-
-const buildPublicCategories = (
-  userId: number,
-  total: number,
-  template: CategoryItem[],
-  metric: MetricKey
-): CategoryItem[] => {
-  const ratios =
-    metric === 'income'
-      ? incomeDistributionPresets[userId] ?? []
-      : distributionPresets[userId] ?? [];
-  return template.map((cat, i) => ({
-    categoryId: cat.categoryId,
-    categoryName: cat.categoryName,
-    color: cat.color,
-    amount: Math.round(total * (ratios[i] ?? 1 / template.length))
-  }));
-};
-
-const buildPublicUsers = (
-  template: CategoryItem[],
-  metric: MetricKey
-): PublicUserMetric[] =>
-  publicUserBase.map((u) => {
-    const total = totalsPerMetric[metric][u.userId];
-    return {
-      ...u,
-      total,
-      categories: buildPublicCategories(u.userId, total, template, metric)
-    };
-  });
-
-// 카테고리별 평균 = 공개 사용자들의 평균
-const buildCategoryAverages = (users: PublicUserMetric[]): Record<number, number> => {
-  if (users.length === 0) return {};
-  const sums: Record<number, number> = {};
-  users.forEach((u) =>
-    u.categories.forEach((c) => {
-      sums[c.categoryId] = (sums[c.categoryId] ?? 0) + c.amount;
-    })
-  );
-  const avgs: Record<number, number> = {};
-  Object.entries(sums).forEach(([id, s]) => {
-    avgs[Number(id)] = Math.round(s / users.length);
-  });
-  return avgs;
-};
-
-const budgetPublicUsers = buildPublicUsers(budgetCategories, 'budget');
-const expensePublicUsers = buildPublicUsers(expenseCategories, 'expense');
-const incomePublicUsers = buildPublicUsers(incomeCategories, 'income');
-
-const metricConfigs: Record<MetricKey, MetricConfig> = {
+const METRIC_CONFIGS: Record<MetricKey, MetricConfig> = {
   budget: {
     key: 'budget',
     label: '예산',
@@ -227,13 +97,6 @@ const metricConfigs: Record<MetricKey, MetricConfig> = {
     verbNegative: '적게 책정',
     themeClass: 'blue-theme',
     accentColor: '#3b82f6',
-    my: {
-      yearMonth: '2026-06',
-      total: sumCategories(budgetCategories),
-      categories: budgetCategories
-    },
-    publicUsers: budgetPublicUsers,
-    categoryAverages: buildCategoryAverages(budgetPublicUsers)
   },
   expense: {
     key: 'expense',
@@ -242,13 +105,6 @@ const metricConfigs: Record<MetricKey, MetricConfig> = {
     verbNegative: '적게 지출',
     themeClass: 'red-theme',
     accentColor: '#f43f5e',
-    my: {
-      yearMonth: '2026-06',
-      total: sumCategories(expenseCategories),
-      categories: expenseCategories
-    },
-    publicUsers: expensePublicUsers,
-    categoryAverages: buildCategoryAverages(expensePublicUsers)
   },
   income: {
     key: 'income',
@@ -257,53 +113,320 @@ const metricConfigs: Record<MetricKey, MetricConfig> = {
     verbNegative: '적게 벌었어요',
     themeClass: 'purple-theme',
     accentColor: '#10b981',
-    my: {
-      yearMonth: '2026-06',
-      total: sumCategories(incomeCategories),
-      categories: incomeCategories
-    },
-    publicUsers: incomePublicUsers,
-    categoryAverages: buildCategoryAverages(incomePublicUsers)
-  }
+  },
 };
 
 const metricIcon: Record<MetricKey, React.ReactNode> = {
   budget: <Wallet size={20} />,
   expense: <ArrowDownRight size={20} />,
-  income: <ArrowUpRight size={20} />
+  income: <ArrowUpRight size={20} />,
 };
+
+const budgetToMy = (r: MyBudgetResponse): MyMetric => ({
+  yearMonth: r.yearMonth,
+  total: r.totalBudget,
+  categories: r.categoryBudgets.map((c, i) => ({
+    categoryId: c.categoryId,
+    categoryName: c.categoryName,
+    amount: c.totalBudget,
+    color: colorFor(i),
+  })),
+});
+
+const expenseToMy = (r: MyExpenseResponse): MyMetric => {
+  const items: CategoryAmountResponse[] = [
+    ...r.fixedCategoryExpenses,
+    ...r.variableCategoryExpenses,
+  ];
+  return {
+    yearMonth: r.yearMonth,
+    total: r.totalExpense,
+    categories: items.map((c, i) => ({
+      categoryId: c.categoryId,
+      categoryName: c.categoryName,
+      amount: c.amount,
+      color: colorFor(i),
+    })),
+  };
+};
+
+const incomeToMy = (r: MyIncomeResponse): MyMetric => {
+  const items: CategoryAmountResponse[] = [
+    ...r.fixedCategoryIncomes,
+    ...r.variableCategoryIncomes,
+  ];
+  return {
+    yearMonth: r.yearMonth,
+    total: r.totalIncome,
+    categories: items.map((c, i) => ({
+      categoryId: c.categoryId,
+      categoryName: c.categoryName,
+      amount: c.amount,
+      color: colorFor(i),
+    })),
+  };
+};
+
+const budgetDetailToCategories = (
+  categoryBudgets: CategoryBudgetResponse[]
+): CategoryItem[] =>
+  categoryBudgets.map((c, i) => ({
+    categoryId: c.categoryId,
+    categoryName: c.categoryName,
+    amount: c.totalBudget,
+    color: colorFor(i),
+  }));
+
+const flatDetailToCategories = (
+  fixed: CategoryAmountResponse[],
+  variable: CategoryAmountResponse[]
+): CategoryItem[] =>
+  [...fixed, ...variable].map((c, i) => ({
+    categoryId: c.categoryId,
+    categoryName: c.categoryName,
+    amount: c.amount,
+    color: colorFor(i),
+  }));
+
+const mergeWithDistance = <
+  T extends { userId: number; username: string; yearMonth: string }
+>(
+  publicList: T[],
+  distanceMap: Map<number, number>,
+  totalOf: (r: T) => number
+): PublicUserMetric[] =>
+  publicList
+    .filter((u) => distanceMap.has(u.userId))
+    .map((u) => ({
+      userId: u.userId,
+      username: u.username,
+      yearMonth: u.yearMonth,
+      total: totalOf(u),
+      distanceKm: distanceMap.get(u.userId) ?? 0,
+    }));
 
 export const LocationComparisonView: React.FC = () => {
   const [mainTab, setMainTab] = useState<MainTab>('budget');
-  const [year, setYear] = useState<number>(2026);
-  const [month, setMonth] = useState<number>(6);
+  const [year, setYear] = useState<number>(new Date().getFullYear());
+  const [month, setMonth] = useState<number>(new Date().getMonth() + 1);
   const [radiusKm, setRadiusKm] = useState<number>(3);
-  const [compareType, setCompareType] = useState<CompareType>('AGE');
-  const [selectedCategoryId, setSelectedCategoryId] = useState<number>(
-    metricConfigs.budget.my.categories[0].categoryId
-  );
+  const [compareType, setCompareType] = useState<CompareType>('AMOUNT');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
-  const [pairCompareType, setPairCompareType] = useState<CompareType>('AGE');
-  const [pairCategoryId, setPairCategoryId] = useState<number>(
-    metricConfigs.budget.my.categories[0].categoryId
-  );
+  const [pairCompareType, setPairCompareType] = useState<CompareType>('AMOUNT');
+  const [pairCategoryId, setPairCategoryId] = useState<number | null>(null);
   const [overallFilterMetric, setOverallFilterMetric] = useState<MetricKey>('budget');
+
+  const [myPortfolio, setMyPortfolio] = useState<MyPortfolioResponse | null>(null);
+  const [nearby, setNearby] = useState<NearbyUserResponse[]>([]);
+  const [publicBudget, setPublicBudget] = useState<PublicMonthlyBudgetResponse[]>([]);
+  const [publicExpense, setPublicExpense] = useState<PublicMonthlyExpenseResponse[]>([]);
+  const [publicIncome, setPublicIncome] = useState<PublicMonthlyIncomeResponse[]>([]);
+  const [publicPortfolio, setPublicPortfolio] = useState<PublicMonthlyPortfolioResponse[]>(
+    []
+  );
+  const [compareBudget, setCompareBudget] = useState<BudgetCompareResponse | null>(null);
+  const [compareExpense, setCompareExpense] = useState<ExpenseCompareResponse | null>(null);
+  const [compareIncome, setCompareIncome] = useState<IncomeCompareResponse | null>(null);
+  const [pairBudget, setPairBudget] = useState<PairBudgetDetailResponse | null>(null);
+  const [pairExpense, setPairExpense] = useState<PairExpenseDetailResponse | null>(null);
+  const [pairIncome, setPairIncome] = useState<PairIncomeDetailResponse | null>(null);
+  const [pairPortfolio, setPairPortfolio] = useState<PairPortfolioDetailResponse | null>(
+    null
+  );
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [locationMissing, setLocationMissing] = useState<boolean>(false);
 
   const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
   const activeMetric: MetricKey | null =
     mainTab === 'overall' ? null : (mainTab as MetricKey);
 
-  // 메트릭 전환 시 카테고리 선택 자동 보정
-  React.useEffect(() => {
+  const myBudget = useMemo<MyMetric | null>(
+    () => (myPortfolio ? budgetToMy(myPortfolio.budget) : null),
+    [myPortfolio]
+  );
+  const myExpense = useMemo<MyMetric | null>(
+    () => (myPortfolio ? expenseToMy(myPortfolio.expense) : null),
+    [myPortfolio]
+  );
+  const myIncome = useMemo<MyMetric | null>(
+    () => (myPortfolio ? incomeToMy(myPortfolio.income) : null),
+    [myPortfolio]
+  );
+  const myByKey = useCallback(
+    (key: MetricKey): MyMetric | null =>
+      key === 'budget' ? myBudget : key === 'expense' ? myExpense : myIncome,
+    [myBudget, myExpense, myIncome]
+  );
+
+  const distanceMap = useMemo(() => {
+    const map = new Map<number, number>();
+    nearby.forEach((n) => map.set(n.userId, n.distanceKm));
+    return map;
+  }, [nearby]);
+
+  const budgetUsers = useMemo(
+    () => mergeWithDistance(publicBudget, distanceMap, (u) => u.totalBudget),
+    [publicBudget, distanceMap]
+  );
+  const expenseUsers = useMemo(
+    () => mergeWithDistance(publicExpense, distanceMap, (u) => u.totalExpense),
+    [publicExpense, distanceMap]
+  );
+  const incomeUsers = useMemo(
+    () => mergeWithDistance(publicIncome, distanceMap, (u) => u.totalIncome),
+    [publicIncome, distanceMap]
+  );
+  const overallUsers = useMemo(
+    () =>
+      publicPortfolio
+        .filter((u) => distanceMap.has(u.userId))
+        .map((u) => ({ ...u, distanceKm: distanceMap.get(u.userId) ?? 0 })),
+    [publicPortfolio, distanceMap]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    portfolioApi.getMyPortfolio(yearMonth).then((res) => {
+      if (cancelled) return;
+      if (res.ok && res.data) {
+        setMyPortfolio(res.data);
+      } else {
+        setMyPortfolio(null);
+        setError(res.error ?? '내 포트폴리오를 불러올 수 없습니다.');
+      }
+      setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [yearMonth]);
+
+  useEffect(() => {
+    let cancelled = false;
+    locationApi.nearby(radiusKm).then((res) => {
+      if (cancelled) return;
+      if (res.ok && res.data) {
+        setNearby(res.data);
+        setLocationMissing(false);
+      } else {
+        setNearby([]);
+        setLocationMissing(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [radiusKm]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const filter = { year, month };
+    Promise.all([
+      budgetCompareApi.users(filter),
+      expenseCompareApi.users(filter),
+      incomeCompareApi.users(filter),
+      portfolioCompareApi.users({ year, month }),
+    ]).then(([b, e, i, p]) => {
+      if (cancelled) return;
+      setPublicBudget(b.data ?? []);
+      setPublicExpense(e.data ?? []);
+      setPublicIncome(i.data ?? []);
+      setPublicPortfolio(p.data ?? []);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [year, month]);
+
+  useEffect(() => {
     if (!activeMetric) return;
-    const cats = metricConfigs[activeMetric].my.categories;
-    if (!cats.find((c) => c.categoryId === selectedCategoryId)) {
-      setSelectedCategoryId(cats[0].categoryId);
+    let cancelled = false;
+    const type = compareType === 'AMOUNT' ? 'LOCATION' : compareType;
+    const categoryId =
+      compareType === 'CATEGORY' && selectedCategoryId != null
+        ? selectedCategoryId
+        : undefined;
+    const compareFilter = {
+      type,
+      yearMonth,
+      categoryId,
+      radiusKm,
+    } as const;
+    const run = async () => {
+      if (activeMetric === 'budget') {
+        const res = await budgetCompareApi.compare(compareFilter);
+        if (!cancelled) setCompareBudget(res.data);
+      } else if (activeMetric === 'expense') {
+        const res = await expenseCompareApi.compare(compareFilter);
+        if (!cancelled) setCompareExpense(res.data);
+      } else {
+        const res = await incomeCompareApi.compare(compareFilter);
+        if (!cancelled) setCompareIncome(res.data);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeMetric, compareType, selectedCategoryId, yearMonth, radiusKm]);
+
+  useEffect(() => {
+    if (selectedUserId == null) {
+      setPairBudget(null);
+      setPairExpense(null);
+      setPairIncome(null);
+      setPairPortfolio(null);
+      return;
     }
-    if (!cats.find((c) => c.categoryId === pairCategoryId)) {
-      setPairCategoryId(cats[0].categoryId);
+    let cancelled = false;
+    if (mainTab === 'overall') {
+      portfolioCompareApi.userDetails(selectedUserId, yearMonth).then((res) => {
+        if (!cancelled) setPairPortfolio(res.data);
+      });
+    } else if (mainTab === 'budget') {
+      budgetCompareApi.userDetails(selectedUserId, yearMonth).then((res) => {
+        if (!cancelled) setPairBudget(res.data);
+      });
+    } else if (mainTab === 'expense') {
+      expenseCompareApi.userDetails(selectedUserId, yearMonth).then((res) => {
+        if (!cancelled) setPairExpense(res.data);
+      });
+    } else if (mainTab === 'income') {
+      incomeCompareApi.userDetails(selectedUserId, yearMonth).then((res) => {
+        if (!cancelled) setPairIncome(res.data);
+      });
     }
-  }, [activeMetric, selectedCategoryId, pairCategoryId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedUserId, mainTab, yearMonth]);
+
+  useEffect(() => {
+    if (!activeMetric) return;
+    const my = myByKey(activeMetric);
+    if (!my) return;
+    if (my.categories.length === 0) {
+      setSelectedCategoryId(null);
+      setPairCategoryId(null);
+      return;
+    }
+    if (
+      selectedCategoryId == null ||
+      !my.categories.find((c) => c.categoryId === selectedCategoryId)
+    ) {
+      setSelectedCategoryId(my.categories[0].categoryId);
+    }
+    if (
+      pairCategoryId == null ||
+      !my.categories.find((c) => c.categoryId === pairCategoryId)
+    ) {
+      setPairCategoryId(my.categories[0].categoryId);
+    }
+  }, [activeMetric, myByKey, selectedCategoryId, pairCategoryId]);
 
   const handlePrevMonth = () => {
     if (month === 1) {
@@ -322,59 +445,48 @@ export const LocationComparisonView: React.FC = () => {
     }
   };
 
-  const renderMetricTab = (config: MetricConfig) => {
-    const filteredPublicUsers = config.publicUsers.filter(
-      (b) =>
-        b.yearMonth === yearMonth &&
-        b.distanceKm <= radiusKm
-    );
+  const usersFor = (key: MetricKey): PublicUserMetric[] =>
+    key === 'budget' ? budgetUsers : key === 'expense' ? expenseUsers : incomeUsers;
 
+  const compareFor = (
+    key: MetricKey
+  ): BudgetCompareResponse | ExpenseCompareResponse | IncomeCompareResponse | null =>
+    key === 'budget'
+      ? compareBudget
+      : key === 'expense'
+      ? compareExpense
+      : compareIncome;
+
+  const renderMetricTab = (config: MetricConfig) => {
+    const my = myByKey(config.key);
+    if (!my) return null;
+    const publicUsers = usersFor(config.key);
+    const compare = compareFor(config.key);
+
+    const filteredPublicUsers = publicUsers.filter(
+      (b) => b.yearMonth === yearMonth && b.distanceKm <= radiusKm
+    );
     const sumPublic = filteredPublicUsers.reduce((s, b) => s + b.total, 0);
     const avgPublic = filteredPublicUsers.length
       ? Math.round(sumPublic / filteredPublicUsers.length)
       : 0;
 
-    const compareResult: CompareResult = (() => {
-      let pool: PublicUserMetric[] = filteredPublicUsers;
-      let label = '';
-      let my = config.my.total;
-      let avg = 0;
-
-      if (compareType === 'AGE') {
-        pool = filteredPublicUsers.filter((b) => b.ageGroup === '30대');
-        label = '30대 평균';
-        avg = pool.length ? pool.reduce((s, b) => s + b.total, 0) / pool.length : 0;
-      } else if (compareType === 'AMOUNT') {
-        pool = filteredPublicUsers;
-        label = `반경 ${radiusKm}km 이웃 평균`;
-        avg = pool.length ? pool.reduce((s, b) => s + b.total, 0) / pool.length : 0;
-      } else {
-        const cat = config.my.categories.find(
-          (c) => c.categoryId === selectedCategoryId
-        );
-        pool = filteredPublicUsers;
-        my = cat?.amount ?? 0;
-        avg = config.categoryAverages[selectedCategoryId] ?? 0;
-        label = `${cat?.categoryName ?? ''} 카테고리 평균`;
-      }
-
-      return {
-        type: compareType,
-        yearMonth,
-        myAmount: my,
-        averageAmount: Math.round(avg),
-        sampleSize: pool.length,
-        difference: my - Math.round(avg),
-        label
-      };
+    const compareLabel = (() => {
+      if (compareType === 'AGE') return '동일 나이대 이웃 평균';
+      if (compareType === 'AMOUNT') return `반경 ${radiusKm}km 이웃 평균`;
+      const cat = my.categories.find((c) => c.categoryId === selectedCategoryId);
+      return `${cat?.categoryName ?? ''} 이웃 평균`;
     })();
 
-    const isMyLess = compareResult.difference < 0;
-    const totalAmt = config.my.total;
+    const myAmount = compare?.myAmount ?? my.total;
+    const averageAmount = compare?.averageAmount ?? 0;
+    const difference = compare?.difference ?? myAmount - averageAmount;
+    const sampleSize = compare?.sampleSize ?? filteredPublicUsers.length;
+    const isMyLess = difference < 0;
+    const totalAmt = my.total;
 
     return (
       <>
-        {/* Top Stat Cards */}
         <div className="dashboard-grid-3">
           <div className={`card stat-card ${config.themeClass}`}>
             <div className="card-header-row">
@@ -387,13 +499,13 @@ export const LocationComparisonView: React.FC = () => {
 
           <div className="card stat-card purple-theme">
             <div className="card-header-row">
-              <span className="card-title">카테고리 수</span>
+              <span className="card-title">반경 이웃 수</span>
               <div className="icon-wrapper">
-                <Filter size={20} />
+                <MapPin size={20} />
               </div>
             </div>
-            <div className="stat-value">{config.my.categories.length}개</div>
-            <div className="stat-label">{config.label} 카테고리</div>
+            <div className="stat-value">{filteredPublicUsers.length}명</div>
+            <div className="stat-label">{radiusKm}km 반경</div>
           </div>
 
           <div className="card stat-card navy-theme">
@@ -405,13 +517,12 @@ export const LocationComparisonView: React.FC = () => {
             </div>
             <div className="stat-value">
               {isMyLess ? '-' : '+'}
-              {formatKRW(Math.abs(compareResult.difference))}
+              {formatKRW(Math.abs(difference))}
             </div>
-            <div className="stat-label">{compareResult.label}</div>
+            <div className="stat-label">{compareLabel}</div>
           </div>
         </div>
 
-        {/* Main 2-Column: 내 카테고리 + 평균 비교 */}
         <div className="dashboard-grid-3">
           <div className="card" style={{ gridColumn: 'span 2' }}>
             <div className="card-header-row">
@@ -422,13 +533,19 @@ export const LocationComparisonView: React.FC = () => {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {config.my.categories.map((cat) => {
+              {my.categories.map((cat) => {
                 const pct = totalAmt > 0 ? (cat.amount / totalAmt) * 100 : 0;
                 return (
                   <div key={cat.categoryId}>
-                    <div className="asset-progress-header" style={{ marginBottom: '6px' }}>
+                    <div
+                      className="asset-progress-header"
+                      style={{ marginBottom: '6px' }}
+                    >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div className="legend-dot" style={{ backgroundColor: cat.color }}></div>
+                        <div
+                          className="legend-dot"
+                          style={{ backgroundColor: cat.color }}
+                        ></div>
                         <span className="asset-progress-name">{cat.categoryName}</span>
                       </div>
                       <span className="asset-progress-val">
@@ -449,15 +566,15 @@ export const LocationComparisonView: React.FC = () => {
 
           <div className="card">
             <div className="card-header-row">
-              <span className="card-title">평균 {config.label} 비교</span>
+              <span className="card-title">이웃 {config.label} 비교</span>
             </div>
 
             <div className="sub-tabs-container" style={{ width: '100%' }}>
               {(
                 [
                   { id: 'AGE', label: '나이대' },
-                  { id: 'AMOUNT', label: '금액' },
-                  { id: 'CATEGORY', label: '카테고리' }
+                  { id: 'AMOUNT', label: '이웃' },
+                  { id: 'CATEGORY', label: '카테고리' },
                 ] as { id: CompareType; label: string }[]
               ).map((tab) => (
                 <button
@@ -473,19 +590,9 @@ export const LocationComparisonView: React.FC = () => {
 
             {compareType === 'CATEGORY' && (
               <div style={{ marginBottom: '16px' }}>
-                <label
-                  style={{
-                    display: 'block',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    color: 'var(--text-secondary)',
-                    marginBottom: '8px'
-                  }}
-                >
-                  비교 카테고리
-                </label>
+                <label className="filter-label">비교 카테고리</label>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                  {config.my.categories.map((cat) => {
+                  {my.categories.map((cat) => {
                     const isActive = selectedCategoryId === cat.categoryId;
                     return (
                       <button
@@ -502,7 +609,7 @@ export const LocationComparisonView: React.FC = () => {
                           fontSize: '12px',
                           fontWeight: 600,
                           color: isActive ? cat.color : 'var(--text-secondary)',
-                          transition: 'all var(--transition-fast)'
+                          transition: 'all var(--transition-fast)',
                         }}
                       >
                         <span
@@ -510,7 +617,7 @@ export const LocationComparisonView: React.FC = () => {
                             width: '8px',
                             height: '8px',
                             borderRadius: '50%',
-                            backgroundColor: cat.color
+                            backgroundColor: cat.color,
                           }}
                         ></span>
                         {cat.categoryName}
@@ -526,7 +633,7 @@ export const LocationComparisonView: React.FC = () => {
                 padding: '16px',
                 background: '#f8fafc',
                 borderRadius: '12px',
-                marginBottom: '16px'
+                marginBottom: '16px',
               }}
             >
               <div
@@ -534,29 +641,29 @@ export const LocationComparisonView: React.FC = () => {
                   fontSize: '12px',
                   fontWeight: 600,
                   color: 'var(--text-secondary)',
-                  marginBottom: '4px'
+                  marginBottom: '4px',
                 }}
               >
-                {compareResult.label}
+                {compareLabel}
               </div>
               <div
                 style={{
                   fontSize: '22px',
                   fontWeight: 800,
-                  color: 'var(--text-primary)'
+                  color: 'var(--text-primary)',
                 }}
               >
-                {formatKRW(compareResult.averageAmount)}원
+                {formatKRW(averageAmount)}원
               </div>
               {compareType !== 'CATEGORY' && (
                 <div
                   style={{
                     fontSize: '11px',
                     color: 'var(--text-muted)',
-                    marginTop: '4px'
+                    marginTop: '4px',
                   }}
                 >
-                  표본 {compareResult.sampleSize}명
+                  표본 {sampleSize}명
                 </div>
               )}
             </div>
@@ -565,9 +672,7 @@ export const LocationComparisonView: React.FC = () => {
               <div className="asset-progress-item">
                 <div className="asset-progress-header">
                   <span className="asset-progress-name">내 {config.label}</span>
-                  <span className="asset-progress-val">
-                    {formatKRW(compareResult.myAmount)}원
-                  </span>
+                  <span className="asset-progress-val">{formatKRW(myAmount)}원</span>
                 </div>
                 <div className="progress-bar-container">
                   <div
@@ -575,11 +680,9 @@ export const LocationComparisonView: React.FC = () => {
                     style={{
                       width: `${Math.min(
                         100,
-                        (compareResult.myAmount /
-                          Math.max(compareResult.myAmount, compareResult.averageAmount, 1)) *
-                          100
+                        (myAmount / Math.max(myAmount, averageAmount, 1)) * 100
                       )}%`,
-                      backgroundColor: config.accentColor
+                      backgroundColor: config.accentColor,
                     }}
                   ></div>
                 </div>
@@ -587,10 +690,8 @@ export const LocationComparisonView: React.FC = () => {
 
               <div className="asset-progress-item">
                 <div className="asset-progress-header">
-                  <span className="asset-progress-name">평균</span>
-                  <span className="asset-progress-val">
-                    {formatKRW(compareResult.averageAmount)}원
-                  </span>
+                  <span className="asset-progress-name">이웃 평균</span>
+                  <span className="asset-progress-val">{formatKRW(averageAmount)}원</span>
                 </div>
                 <div className="progress-bar-container">
                   <div
@@ -598,11 +699,9 @@ export const LocationComparisonView: React.FC = () => {
                     style={{
                       width: `${Math.min(
                         100,
-                        (compareResult.averageAmount /
-                          Math.max(compareResult.myAmount, compareResult.averageAmount, 1)) *
-                          100
+                        (averageAmount / Math.max(myAmount, averageAmount, 1)) * 100
                       )}%`,
-                      backgroundColor: '#94a3b8'
+                      backgroundColor: '#94a3b8',
                     }}
                   ></div>
                 </div>
@@ -618,17 +717,16 @@ export const LocationComparisonView: React.FC = () => {
                 borderRadius: '10px',
                 fontSize: '12px',
                 fontWeight: 700,
-                color: isMyLess ? 'var(--green)' : 'var(--red)'
+                color: isMyLess ? 'var(--green)' : 'var(--red)',
               }}
             >
               {isMyLess
-                ? `평균보다 ${formatKRW(Math.abs(compareResult.difference))}원 ${config.verbNegative}`
-                : `평균보다 ${formatKRW(Math.abs(compareResult.difference))}원 ${config.verbPositive}`}
+                ? `이웃보다 ${formatKRW(Math.abs(difference))}원 ${config.verbNegative}`
+                : `이웃보다 ${formatKRW(Math.abs(difference))}원 ${config.verbPositive}`}
             </div>
           </div>
         </div>
 
-        {/* Filters */}
         <div className="card" style={{ marginTop: '24px' }}>
           <div className="card-header-row">
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -641,7 +739,7 @@ export const LocationComparisonView: React.FC = () => {
                   color: 'var(--blue)',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
                 }}
               >
                 <Filter size={18} />
@@ -649,7 +747,7 @@ export const LocationComparisonView: React.FC = () => {
               <span className="card-title">위치 기반 {config.label} 필터</span>
             </div>
             <span className="stat-label" style={{ marginTop: 0 }}>
-              공개 설정한 사용자만 조회 (isPortfolioPublic=true) · Redis GEORADIUSBYMEMBER
+              내 위치로부터 반경 내 공개 사용자만 조회
             </span>
           </div>
 
@@ -658,37 +756,17 @@ export const LocationComparisonView: React.FC = () => {
               display: 'grid',
               gridTemplateColumns: '1fr 1fr 2fr',
               gap: '16px',
-              alignItems: 'end'
+              alignItems: 'end',
             }}
           >
             <div>
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: 'var(--text-secondary)',
-                  marginBottom: '8px'
-                }}
-              >
-                연도
-              </label>
+              <label className="filter-label">연도</label>
               <select
                 value={year}
                 onChange={(e) => setYear(Number(e.target.value))}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: '10px',
-                  border: '1px solid var(--border)',
-                  background: '#fff',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  color: 'var(--text-primary)',
-                  fontFamily: 'var(--font-sans)'
-                }}
+                className="filter-select"
               >
-                {[2024, 2025, 2026].map((y) => (
+                {[year - 2, year - 1, year, year + 1].map((y) => (
                   <option key={y} value={y}>
                     {y}년
                   </option>
@@ -697,31 +775,11 @@ export const LocationComparisonView: React.FC = () => {
             </div>
 
             <div>
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: 'var(--text-secondary)',
-                  marginBottom: '8px'
-                }}
-              >
-                월
-              </label>
+              <label className="filter-label">월</label>
               <select
                 value={month}
                 onChange={(e) => setMonth(Number(e.target.value))}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: '10px',
-                  border: '1px solid var(--border)',
-                  background: '#fff',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  color: 'var(--text-primary)',
-                  fontFamily: 'var(--font-sans)'
-                }}
+                className="filter-select"
               >
                 {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
                   <option key={m} value={m}>
@@ -732,36 +790,25 @@ export const LocationComparisonView: React.FC = () => {
             </div>
 
             <div>
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: 'var(--text-secondary)',
-                  marginBottom: '8px'
-                }}
-              >
-                검색 반경:{' '}
+              <label className="filter-label">
+                반경:{' '}
                 <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
-                  {radiusKm.toFixed(1)} km
+                  {radiusKm}km
                 </span>
               </label>
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                <input
-                  type="range"
-                  min={0.5}
-                  max={20}
-                  step={0.5}
-                  value={radiusKm}
-                  onChange={(e) => setRadiusKm(Number(e.target.value))}
-                  style={{ flex: 1, accentColor: config.accentColor }}
-                />
-              </div>
+              <input
+                type="range"
+                min={0.5}
+                max={50}
+                step={0.5}
+                value={radiusKm}
+                onChange={(e) => setRadiusKm(Number(e.target.value))}
+                style={{ width: '100%', accentColor: config.accentColor }}
+              />
             </div>
           </div>
         </div>
 
-        {/* Public users list */}
         <div className="card" style={{ marginTop: '24px' }}>
           <div className="card-header-row">
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -774,35 +821,29 @@ export const LocationComparisonView: React.FC = () => {
                   color: 'var(--purple)',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
                 }}
               >
                 <Users size={18} />
               </div>
-              <span className="card-title">근처 공개 사용자 월 총 {config.label}</span>
+              <span className="card-title">반경 내 이웃 월 총 {config.label}</span>
             </div>
             <span className="stat-label" style={{ marginTop: 0 }}>
-              반경 {radiusKm.toFixed(1)}km · {filteredPublicUsers.length}명 · 평균 {formatKRW(avgPublic)}원
+              {filteredPublicUsers.length}명 · 평균 {formatKRW(avgPublic)}원
             </span>
           </div>
 
-          {filteredPublicUsers.length === 0 ? (
-            <div
-              style={{
-                padding: '40px 20px',
-                textAlign: 'center',
-                color: 'var(--text-secondary)',
-                fontSize: '13px'
-              }}
-            >
-              반경 내 공개 사용자가 없습니다. 검색 반경을 넓혀 보세요.
+          {locationMissing ? (
+            <div className="empty-state">
+              내 위치 정보가 등록되지 않았습니다. 위치를 먼저 등록해 주세요.
+            </div>
+          ) : filteredPublicUsers.length === 0 ? (
+            <div className="empty-state">
+              반경 내에 공개 사용자가 없습니다. 반경을 넓혀 보세요.
             </div>
           ) : (
             <div className="public-user-grid">
-              {filteredPublicUsers
-                .slice()
-                .sort((a, b) => a.distanceKm - b.distanceKm)
-                .map((u) => {
+              {filteredPublicUsers.map((u) => {
                 const diff = u.total - totalAmt;
                 const isLess = diff < 0;
                 const initial = u.username.charAt(0);
@@ -816,9 +857,9 @@ export const LocationComparisonView: React.FC = () => {
                       <div className="public-user-avatar">{initial}</div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div className="public-user-name">{u.username}</div>
-                        <div className="public-user-meta" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <MapPin size={12} />
-                          {u.region} · {u.distanceKm.toFixed(1)}km
+                        <div className="public-user-meta">
+                          <MapPin size={11} style={{ marginRight: '4px' }} />
+                          {u.distanceKm.toFixed(1)}km · {u.yearMonth}
                         </div>
                       </div>
                       <span
@@ -848,92 +889,157 @@ export const LocationComparisonView: React.FC = () => {
     );
   };
 
-  const renderUserDetailView = (config: MetricConfig) => {
-    const target = config.publicUsers.find((u) => u.userId === selectedUserId);
-    if (!target) return null;
-
-    let pairCompare: PairCompareResult;
-
-    if (pairCompareType === 'AGE' || pairCompareType === 'AMOUNT') {
-      pairCompare = {
-        type: pairCompareType,
-        yearMonth,
-        myLabel: `내 월 총 ${config.label}`,
-        myAmount: config.my.total,
-        targetLabel: `${target.username} 월 총 ${config.label}`,
-        targetAmount: target.total,
-        difference: config.my.total - target.total
-      };
-    } else {
-      const myCat = config.my.categories.find(
-        (c) => c.categoryId === pairCategoryId
-      );
-      const targetCat = target.categories.find(
-        (c) => c.categoryId === pairCategoryId
-      );
-      pairCompare = {
-        type: 'CATEGORY',
-        yearMonth,
-        myLabel: `내 ${myCat?.categoryName ?? ''}`,
-        myAmount: myCat?.amount ?? 0,
-        targetLabel: `${target.username} ${targetCat?.categoryName ?? ''}`,
-        targetAmount: targetCat?.amount ?? 0,
-        difference: (myCat?.amount ?? 0) - (targetCat?.amount ?? 0)
-      };
-    }
-
-    const isMyLess = pairCompare.difference < 0;
-    const maxPairAmount = Math.max(pairCompare.myAmount, pairCompare.targetAmount, 1);
-    const maxCatBudget = Math.max(
-      ...config.my.categories.map((c) => c.amount),
-      ...target.categories.map((c) => c.amount),
+  const renderCategoryPair = (
+    label: string,
+    myCategories: CategoryItem[],
+    targetCategories: CategoryItem[],
+    targetName: string
+  ) => {
+    const maxCatAmount = Math.max(
+      ...myCategories.map((c) => c.amount),
+      ...targetCategories.map((c) => c.amount),
       1
     );
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        {myCategories.map((myCat) => {
+          const tCat = targetCategories.find((c) => c.categoryId === myCat.categoryId);
+          const tAmount = tCat?.amount ?? 0;
+          const catDiff = myCat.amount - tAmount;
+          const isLess = catDiff < 0;
+          const myW = (myCat.amount / maxCatAmount) * 100;
+          const tW = (tAmount / maxCatAmount) * 100;
+          return (
+            <div key={myCat.categoryId}>
+              <div className="cat-pair-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div className="legend-dot" style={{ backgroundColor: myCat.color }}></div>
+                  <span className="cat-pair-name">{myCat.categoryName}</span>
+                </div>
+                <span className={`public-user-diff-badge ${isLess ? 'less' : 'more'}`}>
+                  {isLess ? '-' : '+'}
+                  {formatKRW(Math.abs(catDiff))}
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div className="cat-pair-row">
+                  <span className="cat-pair-row-lbl">내 {label}</span>
+                  <div style={{ flex: 1 }}>
+                    <div className="progress-bar-container" style={{ height: '14px' }}>
+                      <div
+                        className="progress-bar-fill"
+                        style={{ width: `${myW}%`, backgroundColor: myCat.color }}
+                      ></div>
+                    </div>
+                  </div>
+                  <span className="cat-pair-row-val">{formatKRW(myCat.amount)}</span>
+                </div>
+                <div className="cat-pair-row">
+                  <span className="cat-pair-row-lbl">{targetName}</span>
+                  <div style={{ flex: 1 }}>
+                    <div className="progress-bar-container" style={{ height: '14px' }}>
+                      <div
+                        className="progress-bar-fill"
+                        style={{ width: `${tW}%`, backgroundColor: '#cbd5e1' }}
+                      ></div>
+                    </div>
+                  </div>
+                  <span className="cat-pair-row-val muted">{formatKRW(tAmount)}</span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderUserDetailView = (config: MetricConfig) => {
+    const my = myByKey(config.key);
+    if (!my) return null;
+
+    let targetUsername = '';
+    let targetYearMonth = yearMonth;
+    let targetTotal = 0;
+    let targetCategories: CategoryItem[] = [];
+
+    if (config.key === 'budget' && pairBudget) {
+      targetUsername = pairBudget.target.username;
+      targetYearMonth = pairBudget.target.yearMonth;
+      targetTotal = pairBudget.target.totalBudget;
+      targetCategories = budgetDetailToCategories(pairBudget.target.categoryBudgets);
+    } else if (config.key === 'expense' && pairExpense) {
+      targetUsername = pairExpense.target.username;
+      targetYearMonth = pairExpense.target.yearMonth;
+      targetTotal = pairExpense.target.totalExpense;
+      targetCategories = flatDetailToCategories(
+        pairExpense.target.fixedCategoryExpenses,
+        pairExpense.target.variableCategoryExpenses
+      );
+    } else if (config.key === 'income' && pairIncome) {
+      targetUsername = pairIncome.target.username;
+      targetYearMonth = pairIncome.target.yearMonth;
+      targetTotal = pairIncome.target.totalIncome;
+      targetCategories = flatDetailToCategories(
+        pairIncome.target.fixedCategoryIncomes,
+        pairIncome.target.variableCategoryIncomes
+      );
+    } else {
+      return <div className="loading-state">불러오는 중…</div>;
+    }
+
+    const targetDistance = distanceMap.get(selectedUserId ?? -1);
+    const totalDiff = my.total - targetTotal;
+    const isMyLess = totalDiff < 0;
+
+    let pairMyAmount = my.total;
+    let pairTargetAmount = targetTotal;
+    let pairMyLabel = `내 월 총 ${config.label}`;
+    let pairTargetLabel = `${targetUsername} 월 총 ${config.label}`;
+    if (pairCompareType === 'CATEGORY' && pairCategoryId != null) {
+      const myCat = my.categories.find((c) => c.categoryId === pairCategoryId);
+      const tCat = targetCategories.find((c) => c.categoryId === pairCategoryId);
+      pairMyAmount = myCat?.amount ?? 0;
+      pairTargetAmount = tCat?.amount ?? 0;
+      pairMyLabel = `내 ${myCat?.categoryName ?? ''}`;
+      pairTargetLabel = `${targetUsername} ${tCat?.categoryName ?? ''}`;
+    }
+    const pairDiff = pairMyAmount - pairTargetAmount;
+    const pairIsMyLess = pairDiff < 0;
+    const maxPairAmount = Math.max(pairMyAmount, pairTargetAmount, 1);
 
     return (
       <>
-        {/* Detail header */}
         <div className="card" style={{ marginBottom: '24px' }}>
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: '16px',
-              flexWrap: 'wrap'
+              flexWrap: 'wrap',
             }}
           >
-            <button
-              onClick={() => setSelectedUserId(null)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 14px',
-                borderRadius: '10px',
-                border: '1px solid var(--border)',
-                background: '#fff',
-                fontSize: '13px',
-                fontWeight: 600,
-                color: 'var(--text-secondary)'
-              }}
-            >
+            <button onClick={() => setSelectedUserId(null)} className="back-btn">
               <ArrowLeft size={14} />
               <span>목록으로</span>
             </button>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div className="public-user-avatar" style={{ width: '44px', height: '44px' }}>
-                {target.username.charAt(0)}
+              <div
+                className="public-user-avatar"
+                style={{ width: '44px', height: '44px' }}
+              >
+                {targetUsername.charAt(0)}
               </div>
               <div>
                 <div
                   style={{
                     fontSize: '17px',
                     fontWeight: 800,
-                    color: 'var(--text-primary)'
+                    color: 'var(--text-primary)',
                   }}
                 >
-                  {target.username}와(과)의 {config.label} 비교
+                  {targetUsername}와(과)의 {config.label} 비교
                 </div>
                 <div
                   style={{
@@ -941,191 +1047,86 @@ export const LocationComparisonView: React.FC = () => {
                     color: 'var(--text-secondary)',
                     fontWeight: 500,
                     marginTop: '2px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
                   }}
                 >
-                  <MapPin size={12} />
-                  {target.region} · {target.distanceKm.toFixed(1)}km · {target.ageGroup} · {target.yearMonth}
+                  {targetDistance != null && (
+                    <>
+                      <MapPin size={11} style={{ marginRight: '4px' }} />
+                      {targetDistance.toFixed(1)}km ·{' '}
+                    </>
+                  )}
+                  {targetYearMonth}
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Side-by-side total cards */}
         <div className="dashboard-grid-3" style={{ marginTop: 0 }}>
           <div className={`card stat-card ${config.themeClass}`}>
             <div className="card-header-row">
               <span className="card-title">내 월 총 {config.label}</span>
               <div className="icon-wrapper">{metricIcon[config.key]}</div>
             </div>
-            <div className="stat-value">{formatKRW(config.my.total)}</div>
+            <div className="stat-value">{formatKRW(my.total)}</div>
             <div className="stat-label">{yearMonth} 기준</div>
           </div>
 
           <div className="card stat-card purple-theme">
             <div className="card-header-row">
-              <span className="card-title">{target.username} 월 총 {config.label}</span>
+              <span className="card-title">
+                {targetUsername} 월 총 {config.label}
+              </span>
               <div className="icon-wrapper">{metricIcon[config.key]}</div>
             </div>
-            <div className="stat-value">{formatKRW(target.total)}</div>
-            <div className="stat-label">{target.yearMonth} 기준</div>
+            <div className="stat-value">{formatKRW(targetTotal)}</div>
+            <div className="stat-label">{targetYearMonth} 기준</div>
           </div>
 
           <div className="card stat-card navy-theme">
             <div className="card-header-row">
               <span className="card-title">총 {config.label} 차이</span>
               <div className="icon-wrapper">
-                {config.my.total < target.total ? (
-                  <TrendingDown size={20} />
-                ) : (
-                  <TrendingUp size={20} />
-                )}
+                {isMyLess ? <TrendingDown size={20} /> : <TrendingUp size={20} />}
               </div>
             </div>
             <div className="stat-value">
-              {config.my.total < target.total ? '-' : '+'}
-              {formatKRW(Math.abs(config.my.total - target.total))}
+              {isMyLess ? '-' : '+'}
+              {formatKRW(Math.abs(totalDiff))}
             </div>
-            <div className="stat-label">내 {config.label} - 상대 {config.label}</div>
+            <div className="stat-label">
+              내 {config.label} - 상대 {config.label}
+            </div>
           </div>
         </div>
 
-        {/* Category breakdown side-by-side */}
         <div className="dashboard-grid-3" style={{ marginTop: '24px' }}>
           <div className="card" style={{ gridColumn: 'span 2' }}>
             <div className="card-header-row">
               <span className="card-title">카테고리별 {config.label} 상세</span>
               <span className="stat-label" style={{ marginTop: 0 }}>
-                나 vs {target.username}
+                나 vs {targetUsername}
               </span>
             </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {config.my.categories.map((myCat) => {
-                const tCat = target.categories.find(
-                  (c) => c.categoryId === myCat.categoryId
-                );
-                const tAmount = tCat?.amount ?? 0;
-                const catDiff = myCat.amount - tAmount;
-                const isLess = catDiff < 0;
-                const myW = (myCat.amount / maxCatBudget) * 100;
-                const tW = (tAmount / maxCatBudget) * 100;
-
-                return (
-                  <div key={myCat.categoryId}>
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: '10px'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div className="legend-dot" style={{ backgroundColor: myCat.color }}></div>
-                        <span
-                          style={{
-                            fontSize: '14px',
-                            fontWeight: 700,
-                            color: 'var(--text-primary)'
-                          }}
-                        >
-                          {myCat.categoryName}
-                        </span>
-                      </div>
-                      <span className={`public-user-diff-badge ${isLess ? 'less' : 'more'}`}>
-                        {isLess ? '-' : '+'}
-                        {formatKRW(Math.abs(catDiff))}
-                      </span>
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span
-                          style={{
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            color: 'var(--text-secondary)',
-                            width: '64px',
-                            flexShrink: 0
-                          }}
-                        >
-                          내 {config.label}
-                        </span>
-                        <div style={{ flex: 1 }}>
-                          <div className="progress-bar-container" style={{ height: '14px' }}>
-                            <div
-                              className="progress-bar-fill"
-                              style={{ width: `${myW}%`, backgroundColor: myCat.color }}
-                            ></div>
-                          </div>
-                        </div>
-                        <span
-                          style={{
-                            fontSize: '12px',
-                            fontWeight: 700,
-                            color: 'var(--text-primary)',
-                            width: '90px',
-                            textAlign: 'right'
-                          }}
-                        >
-                          {formatKRW(myCat.amount)}
-                        </span>
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span
-                          style={{
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            color: 'var(--text-secondary)',
-                            width: '64px',
-                            flexShrink: 0
-                          }}
-                        >
-                          {target.username}
-                        </span>
-                        <div style={{ flex: 1 }}>
-                          <div className="progress-bar-container" style={{ height: '14px' }}>
-                            <div
-                              className="progress-bar-fill"
-                              style={{ width: `${tW}%`, backgroundColor: '#cbd5e1' }}
-                            ></div>
-                          </div>
-                        </div>
-                        <span
-                          style={{
-                            fontSize: '12px',
-                            fontWeight: 700,
-                            color: 'var(--text-secondary)',
-                            width: '90px',
-                            textAlign: 'right'
-                          }}
-                        >
-                          {formatKRW(tAmount)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            {renderCategoryPair(
+              config.label,
+              my.categories,
+              targetCategories,
+              targetUsername
+            )}
           </div>
 
           <div className="card">
             <div className="card-header-row">
-              <span className="card-title">{target.username}와 비교</span>
+              <span className="card-title">{targetUsername}와 비교</span>
             </div>
 
             <div className="sub-tabs-container" style={{ width: '100%' }}>
               {(
                 [
                   { id: 'AGE', label: '나이대' },
-                  { id: 'AMOUNT', label: '금액' },
-                  { id: 'CATEGORY', label: '카테고리' }
+                  { id: 'AMOUNT', label: '이웃' },
+                  { id: 'CATEGORY', label: '카테고리' },
                 ] as { id: CompareType; label: string }[]
               ).map((tab) => (
                 <button
@@ -1141,19 +1142,9 @@ export const LocationComparisonView: React.FC = () => {
 
             {pairCompareType === 'CATEGORY' && (
               <div style={{ marginBottom: '16px' }}>
-                <label
-                  style={{
-                    display: 'block',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    color: 'var(--text-secondary)',
-                    marginBottom: '8px'
-                  }}
-                >
-                  비교 카테고리
-                </label>
+                <label className="filter-label">비교 카테고리</label>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                  {config.my.categories.map((cat) => {
+                  {my.categories.map((cat) => {
                     const isActive = pairCategoryId === cat.categoryId;
                     return (
                       <button
@@ -1170,7 +1161,7 @@ export const LocationComparisonView: React.FC = () => {
                           fontSize: '12px',
                           fontWeight: 600,
                           color: isActive ? cat.color : 'var(--text-secondary)',
-                          transition: 'all var(--transition-fast)'
+                          transition: 'all var(--transition-fast)',
                         }}
                       >
                         <span
@@ -1178,7 +1169,7 @@ export const LocationComparisonView: React.FC = () => {
                             width: '8px',
                             height: '8px',
                             borderRadius: '50%',
-                            backgroundColor: cat.color
+                            backgroundColor: cat.color,
                           }}
                         ></span>
                         {cat.categoryName}
@@ -1190,34 +1181,21 @@ export const LocationComparisonView: React.FC = () => {
             )}
 
             {pairCompareType === 'AMOUNT' && (
-              <div
-                style={{
-                  padding: '12px 14px',
-                  background: '#f8fafc',
-                  borderRadius: '10px',
-                  fontSize: '11px',
-                  color: 'var(--text-secondary)',
-                  marginBottom: '16px'
-                }}
-              >
-                반경 {radiusKm.toFixed(1)}km 이웃 기준 비교
-              </div>
+              <div className="hint-box">반경 {radiusKm}km 이웃 기준 비교</div>
             )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div className="asset-progress-item">
                 <div className="asset-progress-header">
-                  <span className="asset-progress-name">{pairCompare.myLabel}</span>
-                  <span className="asset-progress-val">
-                    {formatKRW(pairCompare.myAmount)}원
-                  </span>
+                  <span className="asset-progress-name">{pairMyLabel}</span>
+                  <span className="asset-progress-val">{formatKRW(pairMyAmount)}원</span>
                 </div>
                 <div className="progress-bar-container">
                   <div
                     className="progress-bar-fill"
                     style={{
-                      width: `${(pairCompare.myAmount / maxPairAmount) * 100}%`,
-                      backgroundColor: config.accentColor
+                      width: `${(pairMyAmount / maxPairAmount) * 100}%`,
+                      backgroundColor: config.accentColor,
                     }}
                   ></div>
                 </div>
@@ -1225,17 +1203,17 @@ export const LocationComparisonView: React.FC = () => {
 
               <div className="asset-progress-item">
                 <div className="asset-progress-header">
-                  <span className="asset-progress-name">{pairCompare.targetLabel}</span>
+                  <span className="asset-progress-name">{pairTargetLabel}</span>
                   <span className="asset-progress-val">
-                    {formatKRW(pairCompare.targetAmount)}원
+                    {formatKRW(pairTargetAmount)}원
                   </span>
                 </div>
                 <div className="progress-bar-container">
                   <div
                     className="progress-bar-fill"
                     style={{
-                      width: `${(pairCompare.targetAmount / maxPairAmount) * 100}%`,
-                      backgroundColor: '#8b5cf6'
+                      width: `${(pairTargetAmount / maxPairAmount) * 100}%`,
+                      backgroundColor: '#8b5cf6',
                     }}
                   ></div>
                 </div>
@@ -1246,17 +1224,17 @@ export const LocationComparisonView: React.FC = () => {
               style={{
                 marginTop: '16px',
                 padding: '12px 14px',
-                border: `1px solid ${isMyLess ? 'var(--green-border)' : 'var(--red-border)'}`,
-                background: isMyLess ? 'var(--green-bg)' : 'var(--red-bg)',
+                border: `1px solid ${pairIsMyLess ? 'var(--green-border)' : 'var(--red-border)'}`,
+                background: pairIsMyLess ? 'var(--green-bg)' : 'var(--red-bg)',
                 borderRadius: '10px',
                 fontSize: '12px',
                 fontWeight: 700,
-                color: isMyLess ? 'var(--green)' : 'var(--red)'
+                color: pairIsMyLess ? 'var(--green)' : 'var(--red)',
               }}
             >
-              {isMyLess
-                ? `상대보다 ${formatKRW(Math.abs(pairCompare.difference))}원 ${config.verbNegative}`
-                : `상대보다 ${formatKRW(Math.abs(pairCompare.difference))}원 ${config.verbPositive}`}
+              {pairIsMyLess
+                ? `상대보다 ${formatKRW(Math.abs(pairDiff))}원 ${config.verbNegative}`
+                : `상대보다 ${formatKRW(Math.abs(pairDiff))}원 ${config.verbPositive}`}
             </div>
           </div>
         </div>
@@ -1264,37 +1242,16 @@ export const LocationComparisonView: React.FC = () => {
     );
   };
 
-  // === 종합 비교: 예산 / 지출 / 수입을 한 화면에서 비교 ===
   const renderOverallTab = () => {
-    const b = metricConfigs.budget;
-    const e = metricConfigs.expense;
-    const i = metricConfigs.income;
-
-    // 필터 기준 메트릭의 공개 사용자에서 [연도/월 + 반경] 통과한 userId 추출
-    const filterConfig = metricConfigs[overallFilterMetric];
-    const passingUserIds = new Set(
-      filterConfig.publicUsers
-        .filter(
-          (u) =>
-            u.yearMonth === yearMonth &&
-            u.distanceKm <= radiusKm
-        )
-        .map((u) => u.userId)
+    if (!myBudget || !myExpense || !myIncome) return null;
+    const filteredOverall = overallUsers.filter(
+      (u) => u.yearMonth === yearMonth && u.distanceKm <= radiusKm
     );
-
-    const filteredUsers = (users: PublicUserMetric[]) =>
-      users.filter((u) => passingUserIds.has(u.userId) && u.yearMonth === yearMonth);
-
-    const filteredBudgetUsers = filteredUsers(b.publicUsers);
-    const filteredExpenseUsers = filteredUsers(e.publicUsers);
-    const filteredIncomeUsers = filteredUsers(i.publicUsers);
-
-    const avgOf = (arr: PublicUserMetric[]) =>
-      arr.length === 0 ? 0 : Math.round(arr.reduce((s, u) => s + u.total, 0) / arr.length);
-
-    const avgBudget = avgOf(filteredBudgetUsers);
-    const avgExpense = avgOf(filteredExpenseUsers);
-    const avgIncome = avgOf(filteredIncomeUsers);
+    const avgOf = (arr: number[]) =>
+      arr.length === 0 ? 0 : Math.round(arr.reduce((s, v) => s + v, 0) / arr.length);
+    const avgBudget = avgOf(filteredOverall.map((u) => u.totalBudget));
+    const avgExpense = avgOf(filteredOverall.map((u) => u.totalExpense));
+    const avgIncome = avgOf(filteredOverall.map((u) => u.totalIncome));
 
     const rows: {
       key: MetricKey;
@@ -1308,54 +1265,34 @@ export const LocationComparisonView: React.FC = () => {
       {
         key: 'budget',
         label: '예산',
-        my: b.my.total,
+        my: myBudget.total,
         avg: avgBudget,
         color: '#3b82f6',
         icon: <Wallet size={20} />,
-        themeClass: 'blue-theme'
+        themeClass: 'blue-theme',
       },
       {
         key: 'expense',
         label: '지출',
-        my: e.my.total,
+        my: myExpense.total,
         avg: avgExpense,
         color: '#f43f5e',
         icon: <ArrowDownRight size={20} />,
-        themeClass: 'red-theme'
+        themeClass: 'red-theme',
       },
       {
         key: 'income',
         label: '수입',
-        my: i.my.total,
+        my: myIncome.total,
         avg: avgIncome,
         color: '#10b981',
         icon: <ArrowUpRight size={20} />,
-        themeClass: 'purple-theme'
-      }
+        themeClass: 'purple-theme',
+      },
     ];
-
-    // 공개 사용자 결합 (필터 통과 사용자 + 각 메트릭 total 합산)
-    const overallPublicUsers = b.publicUsers
-      .filter((u) => passingUserIds.has(u.userId) && u.yearMonth === yearMonth)
-      .map((bu) => {
-        const eu = e.publicUsers.find((x) => x.userId === bu.userId);
-        const iu = i.publicUsers.find((x) => x.userId === bu.userId);
-        return {
-          userId: bu.userId,
-          username: bu.username,
-          yearMonth: bu.yearMonth,
-          ageGroup: bu.ageGroup,
-          region: bu.region,
-          distanceKm: bu.distanceKm,
-          budget: bu.total,
-          expense: eu?.total ?? 0,
-          income: iu?.total ?? 0
-        };
-      });
 
     return (
       <>
-        {/* 3-stat overview */}
         <div className="dashboard-grid-3">
           {rows.map((row) => {
             const diff = row.my - row.avg;
@@ -1368,7 +1305,7 @@ export const LocationComparisonView: React.FC = () => {
                 </div>
                 <div className="stat-value">{formatKRW(row.my)}</div>
                 <div className="stat-label">
-                  평균 대비 {isLess ? '-' : '+'}
+                  이웃 평균 대비 {isLess ? '-' : '+'}
                   {formatKRW(Math.abs(diff))}
                 </div>
               </div>
@@ -1376,7 +1313,6 @@ export const LocationComparisonView: React.FC = () => {
           })}
         </div>
 
-        {/* Side-by-side mine vs average bars */}
         <div className="card" style={{ marginTop: '24px' }}>
           <div className="card-header-row">
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -1389,7 +1325,7 @@ export const LocationComparisonView: React.FC = () => {
                   color: 'var(--blue)',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
                 }}
               >
                 <PieChart size={18} />
@@ -1397,7 +1333,7 @@ export const LocationComparisonView: React.FC = () => {
               <span className="card-title">예산 · 지출 · 수입 종합</span>
             </div>
             <span className="stat-label" style={{ marginTop: 0 }}>
-              {yearMonth} · 반경 {radiusKm.toFixed(1)}km 이웃 평균과 비교
+              {yearMonth} · 반경 {radiusKm}km 이웃 평균과 비교
             </span>
           </div>
 
@@ -1408,103 +1344,51 @@ export const LocationComparisonView: React.FC = () => {
               const isLess = diff < 0;
               return (
                 <div key={row.key}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      marginBottom: '10px'
-                    }}
-                  >
+                  <div className="cat-pair-header">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div className="legend-dot" style={{ backgroundColor: row.color }}></div>
-                      <span
-                        style={{
-                          fontSize: '14px',
-                          fontWeight: 700,
-                          color: 'var(--text-primary)'
-                        }}
-                      >
-                        {row.label}
-                      </span>
+                      <div
+                        className="legend-dot"
+                        style={{ backgroundColor: row.color }}
+                      ></div>
+                      <span className="cat-pair-name">{row.label}</span>
                     </div>
-                    <span className={`public-user-diff-badge ${isLess ? 'less' : 'more'}`}>
+                    <span
+                      className={`public-user-diff-badge ${isLess ? 'less' : 'more'}`}
+                    >
                       {isLess ? '-' : '+'}
                       {formatKRW(Math.abs(diff))}
                     </span>
                   </div>
-
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span
-                        style={{
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          color: 'var(--text-secondary)',
-                          width: '64px',
-                          flexShrink: 0
-                        }}
-                      >
-                        나
-                      </span>
+                    <div className="cat-pair-row">
+                      <span className="cat-pair-row-lbl">나</span>
                       <div style={{ flex: 1 }}>
                         <div className="progress-bar-container" style={{ height: '14px' }}>
                           <div
                             className="progress-bar-fill"
                             style={{
                               width: `${(row.my / maxVal) * 100}%`,
-                              backgroundColor: row.color
+                              backgroundColor: row.color,
                             }}
                           ></div>
                         </div>
                       </div>
-                      <span
-                        style={{
-                          fontSize: '12px',
-                          fontWeight: 700,
-                          color: 'var(--text-primary)',
-                          width: '100px',
-                          textAlign: 'right'
-                        }}
-                      >
-                        {formatKRW(row.my)}
-                      </span>
+                      <span className="cat-pair-row-val">{formatKRW(row.my)}</span>
                     </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span
-                        style={{
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          color: 'var(--text-secondary)',
-                          width: '64px',
-                          flexShrink: 0
-                        }}
-                      >
-                        이웃 평균
-                      </span>
+                    <div className="cat-pair-row">
+                      <span className="cat-pair-row-lbl">이웃 평균</span>
                       <div style={{ flex: 1 }}>
                         <div className="progress-bar-container" style={{ height: '14px' }}>
                           <div
                             className="progress-bar-fill"
                             style={{
                               width: `${(row.avg / maxVal) * 100}%`,
-                              backgroundColor: '#cbd5e1'
+                              backgroundColor: '#cbd5e1',
                             }}
                           ></div>
                         </div>
                       </div>
-                      <span
-                        style={{
-                          fontSize: '12px',
-                          fontWeight: 700,
-                          color: 'var(--text-secondary)',
-                          width: '100px',
-                          textAlign: 'right'
-                        }}
-                      >
-                        {formatKRW(row.avg)}
-                      </span>
+                      <span className="cat-pair-row-val muted">{formatKRW(row.avg)}</span>
                     </div>
                   </div>
                 </div>
@@ -1513,7 +1397,6 @@ export const LocationComparisonView: React.FC = () => {
           </div>
         </div>
 
-        {/* Filters */}
         <div className="card" style={{ marginTop: '24px' }}>
           <div className="card-header-row">
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -1526,15 +1409,15 @@ export const LocationComparisonView: React.FC = () => {
                   color: 'var(--blue)',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
                 }}
               >
                 <Filter size={18} />
               </div>
-              <span className="card-title">위치 기반 공개 사용자 필터</span>
+              <span className="card-title">위치 기반 이웃 필터</span>
             </div>
             <span className="stat-label" style={{ marginTop: 0 }}>
-              공개 설정한 사용자만 조회 (isPortfolioPublic=true) · Redis GEORADIUSBYMEMBER
+              내 위치로부터 반경 내 공개 사용자만 조회
             </span>
           </div>
 
@@ -1543,37 +1426,17 @@ export const LocationComparisonView: React.FC = () => {
               display: 'grid',
               gridTemplateColumns: '1fr 1fr 1fr 2fr',
               gap: '16px',
-              alignItems: 'end'
+              alignItems: 'end',
             }}
           >
             <div>
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: 'var(--text-secondary)',
-                  marginBottom: '8px'
-                }}
-              >
-                연도
-              </label>
+              <label className="filter-label">연도</label>
               <select
                 value={year}
                 onChange={(ev) => setYear(Number(ev.target.value))}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: '10px',
-                  border: '1px solid var(--border)',
-                  background: '#fff',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  color: 'var(--text-primary)',
-                  fontFamily: 'var(--font-sans)'
-                }}
+                className="filter-select"
               >
-                {[2024, 2025, 2026].map((y) => (
+                {[year - 2, year - 1, year, year + 1].map((y) => (
                   <option key={y} value={y}>
                     {y}년
                   </option>
@@ -1582,31 +1445,11 @@ export const LocationComparisonView: React.FC = () => {
             </div>
 
             <div>
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: 'var(--text-secondary)',
-                  marginBottom: '8px'
-                }}
-              >
-                월
-              </label>
+              <label className="filter-label">월</label>
               <select
                 value={month}
                 onChange={(ev) => setMonth(Number(ev.target.value))}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: '10px',
-                  border: '1px solid var(--border)',
-                  background: '#fff',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  color: 'var(--text-primary)',
-                  fontFamily: 'var(--font-sans)'
-                }}
+                className="filter-select"
               >
                 {Array.from({ length: 12 }, (_, idx) => idx + 1).map((m) => (
                   <option key={m} value={m}>
@@ -1617,33 +1460,11 @@ export const LocationComparisonView: React.FC = () => {
             </div>
 
             <div>
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: 'var(--text-secondary)',
-                  marginBottom: '8px'
-                }}
-              >
-                금액 기준
-              </label>
+              <label className="filter-label">기준</label>
               <select
                 value={overallFilterMetric}
-                onChange={(ev) =>
-                  setOverallFilterMetric(ev.target.value as MetricKey)
-                }
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: '10px',
-                  border: '1px solid var(--border)',
-                  background: '#fff',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  color: 'var(--text-primary)',
-                  fontFamily: 'var(--font-sans)'
-                }}
+                onChange={(ev) => setOverallFilterMetric(ev.target.value as MetricKey)}
+                className="filter-select"
               >
                 <option value="budget">예산</option>
                 <option value="expense">지출</option>
@@ -1652,39 +1473,28 @@ export const LocationComparisonView: React.FC = () => {
             </div>
 
             <div>
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: 'var(--text-secondary)',
-                  marginBottom: '8px'
-                }}
-              >
-                검색 반경:{' '}
+              <label className="filter-label">
+                반경:{' '}
                 <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
-                  {radiusKm.toFixed(1)} km
+                  {radiusKm}km
                 </span>
               </label>
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                <input
-                  type="range"
-                  min={0.5}
-                  max={20}
-                  step={0.5}
-                  value={radiusKm}
-                  onChange={(ev) => setRadiusKm(Number(ev.target.value))}
-                  style={{
-                    flex: 1,
-                    accentColor: metricConfigs[overallFilterMetric].accentColor
-                  }}
-                />
-              </div>
+              <input
+                type="range"
+                min={0.5}
+                max={50}
+                step={0.5}
+                value={radiusKm}
+                onChange={(ev) => setRadiusKm(Number(ev.target.value))}
+                style={{
+                  width: '100%',
+                  accentColor: METRIC_CONFIGS[overallFilterMetric].accentColor,
+                }}
+              />
             </div>
           </div>
         </div>
 
-        {/* Public users list */}
         <div className="card" style={{ marginTop: '24px' }}>
           <div className="card-header-row">
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -1697,35 +1507,27 @@ export const LocationComparisonView: React.FC = () => {
                   color: 'var(--purple)',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
                 }}
               >
                 <Users size={18} />
               </div>
-              <span className="card-title">근처 공개 사용자 종합 현황</span>
+              <span className="card-title">반경 내 이웃 종합 현황</span>
             </div>
             <span className="stat-label" style={{ marginTop: 0 }}>
-              반경 {radiusKm.toFixed(1)}km · {overallPublicUsers.length}명 · 사용자를 선택하면 상세 비교가 열려요
+              {filteredOverall.length}명 · 사용자를 선택하면 상세 비교가 열려요
             </span>
           </div>
 
-          {overallPublicUsers.length === 0 ? (
-            <div
-              style={{
-                padding: '40px 20px',
-                textAlign: 'center',
-                color: 'var(--text-secondary)',
-                fontSize: '13px'
-              }}
-            >
-              반경 내 공개 사용자가 없습니다. 검색 반경을 넓혀 보세요.
+          {locationMissing ? (
+            <div className="empty-state">
+              내 위치 정보가 등록되지 않았습니다. 위치를 먼저 등록해 주세요.
             </div>
+          ) : filteredOverall.length === 0 ? (
+            <div className="empty-state">반경 내에 공개된 이웃이 없습니다.</div>
           ) : (
             <div className="public-user-grid">
-              {overallPublicUsers
-                .slice()
-                .sort((a, b) => a.distanceKm - b.distanceKm)
-                .map((u) => {
+              {filteredOverall.map((u) => {
                 const initial = u.username.charAt(0);
                 return (
                   <div
@@ -1737,9 +1539,9 @@ export const LocationComparisonView: React.FC = () => {
                       <div className="public-user-avatar">{initial}</div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div className="public-user-name">{u.username}</div>
-                        <div className="public-user-meta" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <MapPin size={12} />
-                          {u.region} · {u.distanceKm.toFixed(1)}km
+                        <div className="public-user-meta">
+                          <MapPin size={11} style={{ marginRight: '4px' }} />
+                          {u.distanceKm.toFixed(1)}km · {u.yearMonth}
                         </div>
                       </div>
                     </div>
@@ -1750,51 +1552,29 @@ export const LocationComparisonView: React.FC = () => {
                         flexDirection: 'column',
                         gap: '8px',
                         paddingTop: '14px',
-                        borderTop: '1px solid var(--border)'
+                        borderTop: '1px solid var(--border)',
                       }}
                     >
-                      {([
-                        { label: '예산', value: u.budget, color: '#3b82f6' },
-                        { label: '지출', value: u.expense, color: '#f43f5e' },
-                        { label: '수입', value: u.income, color: '#10b981' }
-                      ] as const).map((m) => (
-                        <div
-                          key={m.label}
-                          style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            fontSize: '12px'
-                          }}
-                        >
-                          <span
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              fontWeight: 600,
-                              color: 'var(--text-secondary)'
-                            }}
-                          >
+                      {(
+                        [
+                          { label: '예산', value: u.totalBudget, color: '#3b82f6' },
+                          { label: '지출', value: u.totalExpense, color: '#f43f5e' },
+                          { label: '수입', value: u.totalIncome, color: '#10b981' },
+                        ] as const
+                      ).map((m) => (
+                        <div key={m.label} className="overall-row">
+                          <span className="overall-row-lbl">
                             <span
                               style={{
                                 width: '8px',
                                 height: '8px',
                                 borderRadius: '50%',
-                                backgroundColor: m.color
+                                backgroundColor: m.color,
                               }}
                             ></span>
                             {m.label}
                           </span>
-                          <span
-                            style={{
-                              fontSize: '13px',
-                              fontWeight: 700,
-                              color: 'var(--text-primary)'
-                            }}
-                          >
-                            {formatKRW(m.value)}원
-                          </span>
+                          <span className="overall-row-val">{formatKRW(m.value)}원</span>
                         </div>
                       ))}
                     </div>
@@ -1808,21 +1588,29 @@ export const LocationComparisonView: React.FC = () => {
     );
   };
 
-  // === 종합 탭 - 사용자 선택 상세 비교 ===
   const renderOverallDetailView = () => {
-    const b = metricConfigs.budget;
-    const e = metricConfigs.expense;
-    const i = metricConfigs.income;
-    const targetBudget = b.publicUsers.find((u) => u.userId === selectedUserId);
-    const targetExpense = e.publicUsers.find((u) => u.userId === selectedUserId);
-    const targetIncome = i.publicUsers.find((u) => u.userId === selectedUserId);
-    if (!targetBudget) return null;
+    if (!pairPortfolio || !myBudget || !myExpense || !myIncome) {
+      return <div className="loading-state">불러오는 중…</div>;
+    }
+    const t = pairPortfolio.target;
+    const targetDistance = distanceMap.get(selectedUserId ?? -1);
+    const targetBudgetCats = budgetDetailToCategories(t.budget.categoryBudgets);
+    const targetExpenseCats = flatDetailToCategories(
+      t.expense.fixedCategoryExpenses,
+      t.expense.variableCategoryExpenses
+    );
+    const targetIncomeCats = flatDetailToCategories(
+      t.income.fixedCategoryIncomes,
+      t.income.variableCategoryIncomes
+    );
 
     const sections: {
       key: MetricKey;
       label: string;
       my: number;
       target: number;
+      myCategories: CategoryItem[];
+      targetCategories: CategoryItem[];
       color: string;
       themeClass: 'blue-theme' | 'red-theme' | 'purple-theme';
       icon: React.ReactNode;
@@ -1830,76 +1618,70 @@ export const LocationComparisonView: React.FC = () => {
       {
         key: 'budget',
         label: '예산',
-        my: b.my.total,
-        target: targetBudget.total,
+        my: myBudget.total,
+        target: t.totalBudget,
+        myCategories: myBudget.categories,
+        targetCategories: targetBudgetCats,
         color: '#3b82f6',
         themeClass: 'blue-theme',
-        icon: <Wallet size={20} />
+        icon: <Wallet size={20} />,
       },
       {
         key: 'expense',
         label: '지출',
-        my: e.my.total,
-        target: targetExpense?.total ?? 0,
+        my: myExpense.total,
+        target: t.totalExpense,
+        myCategories: myExpense.categories,
+        targetCategories: targetExpenseCats,
         color: '#f43f5e',
         themeClass: 'red-theme',
-        icon: <ArrowDownRight size={20} />
+        icon: <ArrowDownRight size={20} />,
       },
       {
         key: 'income',
         label: '수입',
-        my: i.my.total,
-        target: targetIncome?.total ?? 0,
+        my: myIncome.total,
+        target: t.totalIncome,
+        myCategories: myIncome.categories,
+        targetCategories: targetIncomeCats,
         color: '#10b981',
         themeClass: 'purple-theme',
-        icon: <ArrowUpRight size={20} />
-      }
+        icon: <ArrowUpRight size={20} />,
+      },
     ];
 
     return (
       <>
-        {/* Detail header */}
         <div className="card" style={{ marginBottom: '24px' }}>
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: '16px',
-              flexWrap: 'wrap'
+              flexWrap: 'wrap',
             }}
           >
-            <button
-              onClick={() => setSelectedUserId(null)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 14px',
-                borderRadius: '10px',
-                border: '1px solid var(--border)',
-                background: '#fff',
-                fontSize: '13px',
-                fontWeight: 600,
-                color: 'var(--text-secondary)'
-              }}
-            >
+            <button onClick={() => setSelectedUserId(null)} className="back-btn">
               <ArrowLeft size={14} />
               <span>목록으로</span>
             </button>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div className="public-user-avatar" style={{ width: '44px', height: '44px' }}>
-                {targetBudget.username.charAt(0)}
+              <div
+                className="public-user-avatar"
+                style={{ width: '44px', height: '44px' }}
+              >
+                {t.username.charAt(0)}
               </div>
               <div>
                 <div
                   style={{
                     fontSize: '17px',
                     fontWeight: 800,
-                    color: 'var(--text-primary)'
+                    color: 'var(--text-primary)',
                   }}
                 >
-                  {targetBudget.username}와(과)의 종합 비교
+                  {t.username}와(과)의 종합 비교
                 </div>
                 <div
                   style={{
@@ -1907,20 +1689,21 @@ export const LocationComparisonView: React.FC = () => {
                     color: 'var(--text-secondary)',
                     fontWeight: 500,
                     marginTop: '2px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
                   }}
                 >
-                  <MapPin size={12} />
-                  {targetBudget.region} · {targetBudget.distanceKm.toFixed(1)}km · {targetBudget.ageGroup} · {targetBudget.yearMonth}
+                  {targetDistance != null && (
+                    <>
+                      <MapPin size={11} style={{ marginRight: '4px' }} />
+                      {targetDistance.toFixed(1)}km ·{' '}
+                    </>
+                  )}
+                  {t.yearMonth}
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* 3-stat top: 차이 */}
         <div className="dashboard-grid-3">
           {sections.map((sec) => {
             const diff = sec.my - sec.target;
@@ -1937,13 +1720,14 @@ export const LocationComparisonView: React.FC = () => {
                   {isLess ? '-' : '+'}
                   {formatKRW(Math.abs(diff))}
                 </div>
-                <div className="stat-label">내 {sec.label} - 상대 {sec.label}</div>
+                <div className="stat-label">
+                  내 {sec.label} - 상대 {sec.label}
+                </div>
               </div>
             );
           })}
         </div>
 
-        {/* Side-by-side mine vs target bars */}
         <div className="card" style={{ marginTop: '24px' }}>
           <div className="card-header-row">
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -1956,7 +1740,7 @@ export const LocationComparisonView: React.FC = () => {
                   color: 'var(--blue)',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
                 }}
               >
                 <PieChart size={18} />
@@ -1964,7 +1748,7 @@ export const LocationComparisonView: React.FC = () => {
               <span className="card-title">예산 · 지출 · 수입 1:1 비교</span>
             </div>
             <span className="stat-label" style={{ marginTop: 0 }}>
-              나 vs {targetBudget.username}
+              나 vs {t.username}
             </span>
           </div>
 
@@ -1975,101 +1759,51 @@ export const LocationComparisonView: React.FC = () => {
               const isLess = diff < 0;
               return (
                 <div key={sec.key}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      marginBottom: '10px'
-                    }}
-                  >
+                  <div className="cat-pair-header">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div className="legend-dot" style={{ backgroundColor: sec.color }}></div>
-                      <span
-                        style={{
-                          fontSize: '14px',
-                          fontWeight: 700,
-                          color: 'var(--text-primary)'
-                        }}
-                      >
-                        {sec.label}
-                      </span>
+                      <div
+                        className="legend-dot"
+                        style={{ backgroundColor: sec.color }}
+                      ></div>
+                      <span className="cat-pair-name">{sec.label}</span>
                     </div>
-                    <span className={`public-user-diff-badge ${isLess ? 'less' : 'more'}`}>
+                    <span
+                      className={`public-user-diff-badge ${isLess ? 'less' : 'more'}`}
+                    >
                       {isLess ? '-' : '+'}
                       {formatKRW(Math.abs(diff))}
                     </span>
                   </div>
-
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span
-                        style={{
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          color: 'var(--text-secondary)',
-                          width: '64px',
-                          flexShrink: 0
-                        }}
-                      >
-                        내 {sec.label}
-                      </span>
+                    <div className="cat-pair-row">
+                      <span className="cat-pair-row-lbl">내 {sec.label}</span>
                       <div style={{ flex: 1 }}>
                         <div className="progress-bar-container" style={{ height: '14px' }}>
                           <div
                             className="progress-bar-fill"
                             style={{
                               width: `${(sec.my / maxVal) * 100}%`,
-                              backgroundColor: sec.color
+                              backgroundColor: sec.color,
                             }}
                           ></div>
                         </div>
                       </div>
-                      <span
-                        style={{
-                          fontSize: '12px',
-                          fontWeight: 700,
-                          color: 'var(--text-primary)',
-                          width: '100px',
-                          textAlign: 'right'
-                        }}
-                      >
-                        {formatKRW(sec.my)}
-                      </span>
+                      <span className="cat-pair-row-val">{formatKRW(sec.my)}</span>
                     </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span
-                        style={{
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          color: 'var(--text-secondary)',
-                          width: '64px',
-                          flexShrink: 0
-                        }}
-                      >
-                        {targetBudget.username}
-                      </span>
+                    <div className="cat-pair-row">
+                      <span className="cat-pair-row-lbl">{t.username}</span>
                       <div style={{ flex: 1 }}>
                         <div className="progress-bar-container" style={{ height: '14px' }}>
                           <div
                             className="progress-bar-fill"
                             style={{
                               width: `${(sec.target / maxVal) * 100}%`,
-                              backgroundColor: '#cbd5e1'
+                              backgroundColor: '#cbd5e1',
                             }}
                           ></div>
                         </div>
                       </div>
-                      <span
-                        style={{
-                          fontSize: '12px',
-                          fontWeight: 700,
-                          color: 'var(--text-secondary)',
-                          width: '100px',
-                          textAlign: 'right'
-                        }}
-                      >
+                      <span className="cat-pair-row-val muted">
                         {formatKRW(sec.target)}
                       </span>
                     </div>
@@ -2080,172 +1814,33 @@ export const LocationComparisonView: React.FC = () => {
           </div>
         </div>
 
-        {/* 카테고리별 비교 (메트릭 3개 섹션 스택) */}
-        {sections.map((sec) => {
-          const cfg = metricConfigs[sec.key];
-          const targetUser =
-            sec.key === 'budget'
-              ? targetBudget
-              : sec.key === 'expense'
-              ? targetExpense
-              : targetIncome;
-          if (!targetUser) return null;
-
-          const maxCatAmount = Math.max(
-            ...cfg.my.categories.map((c) => c.amount),
-            ...targetUser.categories.map((c) => c.amount),
-            1
-          );
-
-          return (
-            <div key={sec.key} className="card" style={{ marginTop: '24px' }}>
-              <div className="card-header-row">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div
-                    style={{
-                      width: '36px',
-                      height: '36px',
-                      borderRadius: '8px',
-                      background: `${sec.color}1f`,
-                      color: sec.color,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}
-                  >
-                    {sec.icon}
-                  </div>
-                  <span className="card-title">{sec.label} 카테고리별 비교</span>
+        {sections.map((sec) => (
+          <div key={sec.key} className="card" style={{ marginTop: '24px' }}>
+            <div className="card-header-row">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '8px',
+                    background: `${sec.color}1f`,
+                    color: sec.color,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {sec.icon}
                 </div>
-                <span className="stat-label" style={{ marginTop: 0 }}>
-                  나 vs {targetBudget.username}
-                </span>
+                <span className="card-title">{sec.label} 카테고리별 비교</span>
               </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                {cfg.my.categories.map((myCat) => {
-                  const tCat = targetUser.categories.find(
-                    (c) => c.categoryId === myCat.categoryId
-                  );
-                  const tAmount = tCat?.amount ?? 0;
-                  const catDiff = myCat.amount - tAmount;
-                  const isLess = catDiff < 0;
-                  const myW = (myCat.amount / maxCatAmount) * 100;
-                  const tW = (tAmount / maxCatAmount) * 100;
-
-                  return (
-                    <div key={myCat.categoryId}>
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          marginBottom: '10px'
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <div
-                            className="legend-dot"
-                            style={{ backgroundColor: myCat.color }}
-                          ></div>
-                          <span
-                            style={{
-                              fontSize: '14px',
-                              fontWeight: 700,
-                              color: 'var(--text-primary)'
-                            }}
-                          >
-                            {myCat.categoryName}
-                          </span>
-                        </div>
-                        <span
-                          className={`public-user-diff-badge ${isLess ? 'less' : 'more'}`}
-                        >
-                          {isLess ? '-' : '+'}
-                          {formatKRW(Math.abs(catDiff))}
-                        </span>
-                      </div>
-
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <span
-                            style={{
-                              fontSize: '11px',
-                              fontWeight: 600,
-                              color: 'var(--text-secondary)',
-                              width: '64px',
-                              flexShrink: 0
-                            }}
-                          >
-                            내 {sec.label}
-                          </span>
-                          <div style={{ flex: 1 }}>
-                            <div className="progress-bar-container" style={{ height: '14px' }}>
-                              <div
-                                className="progress-bar-fill"
-                                style={{
-                                  width: `${myW}%`,
-                                  backgroundColor: myCat.color
-                                }}
-                              ></div>
-                            </div>
-                          </div>
-                          <span
-                            style={{
-                              fontSize: '12px',
-                              fontWeight: 700,
-                              color: 'var(--text-primary)',
-                              width: '90px',
-                              textAlign: 'right'
-                            }}
-                          >
-                            {formatKRW(myCat.amount)}
-                          </span>
-                        </div>
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <span
-                            style={{
-                              fontSize: '11px',
-                              fontWeight: 600,
-                              color: 'var(--text-secondary)',
-                              width: '64px',
-                              flexShrink: 0
-                            }}
-                          >
-                            {targetBudget.username}
-                          </span>
-                          <div style={{ flex: 1 }}>
-                            <div className="progress-bar-container" style={{ height: '14px' }}>
-                              <div
-                                className="progress-bar-fill"
-                                style={{
-                                  width: `${tW}%`,
-                                  backgroundColor: '#cbd5e1'
-                                }}
-                              ></div>
-                            </div>
-                          </div>
-                          <span
-                            style={{
-                              fontSize: '12px',
-                              fontWeight: 700,
-                              color: 'var(--text-secondary)',
-                              width: '90px',
-                              textAlign: 'right'
-                            }}
-                          >
-                            {formatKRW(tAmount)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <span className="stat-label" style={{ marginTop: 0 }}>
+                나 vs {t.username}
+              </span>
             </div>
-          );
-        })}
+            {renderCategoryPair(sec.label, sec.myCategories, sec.targetCategories, t.username)}
+          </div>
+        ))}
       </>
     );
   };
@@ -2260,7 +1855,7 @@ export const LocationComparisonView: React.FC = () => {
         justifyContent: 'center',
         padding: '80px 24px',
         textAlign: 'center',
-        gap: '20px'
+        gap: '20px',
       }}
     >
       <div
@@ -2272,7 +1867,7 @@ export const LocationComparisonView: React.FC = () => {
           color: 'var(--blue)',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center'
+          justifyContent: 'center',
         }}
       >
         <Construction size={32} />
@@ -2283,7 +1878,7 @@ export const LocationComparisonView: React.FC = () => {
             fontSize: '20px',
             fontWeight: 700,
             color: 'var(--text-primary)',
-            marginBottom: '8px'
+            marginBottom: '8px',
           }}
         >
           {label} 비교는 준비 중입니다
@@ -2292,7 +1887,6 @@ export const LocationComparisonView: React.FC = () => {
     </div>
   );
 
-  // 탭 전환 시 선택 사용자 초기화
   const handleMainTabChange = (tab: MainTab) => {
     setMainTab(tab);
     setSelectedUserId(null);
@@ -2313,28 +1907,44 @@ export const LocationComparisonView: React.FC = () => {
           ))}
         </div>
         <div className="dashboard-date-selector">
-          <button className="dashboard-date-arrow" onClick={handlePrevMonth} aria-label="Previous month">
+          <button
+            className="dashboard-date-arrow"
+            onClick={handlePrevMonth}
+            aria-label="Previous month"
+          >
             <ChevronLeft size={16} />
           </button>
           <span>
             {year}년 {month}월
           </span>
-          <button className="dashboard-date-arrow" onClick={handleNextMonth} aria-label="Next month">
+          <button
+            className="dashboard-date-arrow"
+            onClick={handleNextMonth}
+            aria-label="Next month"
+          >
             <ChevronRight size={16} />
           </button>
         </div>
       </div>
 
-      {activeMetric &&
-        (selectedUserId !== null
-          ? renderUserDetailView(metricConfigs[activeMetric])
-          : renderMetricTab(metricConfigs[activeMetric]))}
+      {loading && !myPortfolio && (
+        <div className="loading-state">내 포트폴리오를 불러오는 중…</div>
+      )}
+      {error && !loading && <div className="empty-state">{error}</div>}
 
-      {mainTab === 'overall' &&
+      {!loading &&
+        !error &&
+        activeMetric &&
+        (selectedUserId !== null
+          ? renderUserDetailView(METRIC_CONFIGS[activeMetric])
+          : renderMetricTab(METRIC_CONFIGS[activeMetric]))}
+
+      {!loading &&
+        !error &&
+        mainTab === 'overall' &&
         (selectedUserId !== null ? renderOverallDetailView() : renderOverallTab())}
 
-      {/* Placeholder fallback (안전 가드) */}
-      {!activeMetric && mainTab !== 'overall' && renderPlaceholder('해당')}
+      {!loading && !error && !activeMetric && mainTab !== 'overall' && renderPlaceholder('해당')}
     </div>
   );
 };

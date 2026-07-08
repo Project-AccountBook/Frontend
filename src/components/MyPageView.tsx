@@ -26,11 +26,13 @@ import {
   userApi,
   interestCategoryApi,
   groupPurchaseCategoryApi,
+  locationApi,
   type UserProfileResponse,
   type InterestCategoryResponse,
   type GroupPurchaseCategoryResponse,
 } from '../api';
 import { openAddressSearch } from '../utils/daumPostcode';
+import { geocodeAddress } from '../utils/kakaoGeocoder';
 
 type UserProfile = UserProfileResponse;
 
@@ -241,7 +243,28 @@ export const MyPageView: React.FC = () => {
         setEditing(false);
         setEditBaseAddress('');
         setEditDetailAddress('');
-        setProfileSuccess('프로필이 성공적으로 저장되었습니다.');
+
+        const addressChanged = fullAddress && fullAddress !== (profile?.address ?? null);
+        if (addressChanged) {
+          try {
+            const coords = await geocodeAddress(fullAddress!);
+            if (coords) {
+              const locResult = await locationApi.update(coords);
+              if (locResult.ok) {
+                setProfileSuccess('프로필과 위치가 저장되었습니다.');
+              } else {
+                setProfileSuccess('프로필은 저장했지만 위치 등록에 실패했습니다.');
+              }
+            } else {
+              setProfileSuccess('프로필은 저장했지만 주소를 좌표로 변환하지 못했습니다.');
+            }
+          } catch (err) {
+            console.error(err);
+            setProfileSuccess('프로필은 저장했지만 위치 등록 중 오류가 발생했습니다.');
+          }
+        } else {
+          setProfileSuccess('프로필이 성공적으로 저장되었습니다.');
+        }
         setTimeout(() => setProfileSuccess(null), 3000);
       } else {
         setProfileError(result.error ?? '저장에 실패했습니다.');

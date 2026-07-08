@@ -270,3 +270,222 @@ export interface MyPortfolioResponse {
   expense: MyExpenseResponse;
   budget: MyBudgetResponse;
 }
+
+/** Comparison-common enums (backend {Budget,Expense,Income,Portfolio}CompareType) */
+export type CompareType = 'AGE' | 'AMOUNT' | 'CATEGORY' | 'LOCATION';
+
+/** Budget compare */
+export interface PublicMonthlyBudgetResponse {
+  userId: number;
+  username: string;
+  yearMonth: string;
+  totalBudget: number;
+}
+
+export interface BudgetCompareResponse {
+  type: CompareType;
+  yearMonth: string;
+  myAmount: number;
+  averageAmount: number;
+  sampleSize: number;
+  difference: number;
+}
+
+export interface UserBudgetCompareResponse {
+  type: CompareType;
+  yearMonth: string;
+  myUserId: number;
+  myLabel: string;
+  myAmount: number;
+  targetUserId: number;
+  targetLabel: string;
+  targetAmount: number;
+  difference: number;
+}
+
+export interface UserBudgetDetailResponse {
+  userId: number;
+  username: string;
+  yearMonth: string;
+  totalBudget: number;
+  categoryBudgets: CategoryBudgetResponse[];
+}
+
+export interface PairBudgetDetailResponse {
+  me: UserBudgetDetailResponse;
+  target: UserBudgetDetailResponse;
+}
+
+/** Expense compare */
+export interface PublicMonthlyExpenseResponse {
+  userId: number;
+  username: string;
+  yearMonth: string;
+  totalExpense: number;
+  fixedExpense: number;
+  variableExpense: number;
+}
+
+export interface ExpenseCompareResponse {
+  type: CompareType;
+  yearMonth: string;
+  myAmount: number;
+  myFixedAmount: number;
+  myVariableAmount: number;
+  averageAmount: number;
+  averageFixedAmount: number;
+  averageVariableAmount: number;
+  sampleSize: number;
+  difference: number;
+}
+
+export interface UserExpenseCompareResponse {
+  type: CompareType;
+  yearMonth: string;
+  myUserId: number;
+  myLabel: string;
+  myAmount: number;
+  myFixedAmount: number;
+  myVariableAmount: number;
+  targetUserId: number;
+  targetLabel: string;
+  targetAmount: number;
+  targetFixedAmount: number;
+  targetVariableAmount: number;
+  difference: number;
+}
+
+export interface UserExpenseDetailResponse {
+  userId: number;
+  username: string;
+  yearMonth: string;
+  totalExpense: number;
+  fixedExpense: number;
+  variableExpense: number;
+  fixedCategoryExpenses: CategoryAmountResponse[];
+  variableCategoryExpenses: CategoryAmountResponse[];
+}
+
+export interface PairExpenseDetailResponse {
+  me: UserExpenseDetailResponse;
+  target: UserExpenseDetailResponse;
+}
+
+/** Income compare */
+export interface PublicMonthlyIncomeResponse {
+  userId: number;
+  username: string;
+  yearMonth: string;
+  totalIncome: number;
+  fixedIncome: number;
+  variableIncome: number;
+}
+
+export interface IncomeCompareResponse {
+  type: CompareType;
+  yearMonth: string;
+  myAmount: number;
+  myFixedAmount: number;
+  myVariableAmount: number;
+  averageAmount: number;
+  averageFixedAmount: number;
+  averageVariableAmount: number;
+  sampleSize: number;
+  difference: number;
+}
+
+export interface UserIncomeCompareResponse {
+  type: CompareType;
+  yearMonth: string;
+  myUserId: number;
+  myLabel: string;
+  myAmount: number;
+  myFixedAmount: number;
+  myVariableAmount: number;
+  targetUserId: number;
+  targetLabel: string;
+  targetAmount: number;
+  targetFixedAmount: number;
+  targetVariableAmount: number;
+  difference: number;
+}
+
+export interface UserIncomeDetailResponse {
+  userId: number;
+  username: string;
+  yearMonth: string;
+  totalIncome: number;
+  fixedIncome: number;
+  variableIncome: number;
+  fixedCategoryIncomes: CategoryAmountResponse[];
+  variableCategoryIncomes: CategoryAmountResponse[];
+}
+
+export interface PairIncomeDetailResponse {
+  me: UserIncomeDetailResponse;
+  target: UserIncomeDetailResponse;
+}
+
+/** Portfolio compare (composite) */
+export interface PublicMonthlyPortfolioResponse {
+  userId: number;
+  username: string;
+  yearMonth: string;
+  totalIncome: number;
+  totalExpense: number;
+  totalBudget: number;
+  balance: number;
+}
+
+export interface PortfolioCompareResponse {
+  type: CompareType;
+  yearMonth: string;
+  income: IncomeCompareResponse;
+  expense: ExpenseCompareResponse;
+  budget: BudgetCompareResponse;
+}
+
+export interface UserPortfolioCompareResponse {
+  type: CompareType;
+  yearMonth: string;
+  income: UserIncomeCompareResponse;
+  expense: UserExpenseCompareResponse;
+  budget: UserBudgetCompareResponse;
+}
+
+export interface UserPortfolioDetailResponse {
+  userId: number;
+  username: string;
+  yearMonth: string;
+  totalIncome: number;
+  totalExpense: number;
+  totalBudget: number;
+  balance: number;
+  income: UserIncomeDetailResponse;
+  expense: UserExpenseDetailResponse;
+  budget: UserBudgetDetailResponse;
+}
+
+export interface PairPortfolioDetailResponse {
+  me: UserPortfolioDetailResponse;
+  target: UserPortfolioDetailResponse;
+}
+
+/** User location (Redis GEO) */
+export interface LocationResponse {
+  userId: number;
+  latitude: number;
+  longitude: number;
+}
+
+export interface UpdateLocationRequest {
+  latitude: number;
+  longitude: number;
+}
+
+export interface NearbyUserResponse {
+  userId: number;
+  latitude: number;
+  longitude: number;
+  distanceKm: number;
+}
