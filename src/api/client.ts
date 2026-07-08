@@ -2,11 +2,23 @@ import { resolveApiUrl } from './config';
 import type { ApiResponse, RequestResult, TokenResponse } from './types';
 import { tokenStorage } from './tokenStorage';
 
+const FETCH_NO_REDIRECT: RequestInit = { redirect: 'manual' };
+
+function isAuthFailureResponse(res: Response): boolean {
+  return (
+    res.status === 401 ||
+    res.status === 403 ||
+    res.status === 302 ||
+    res.type === 'opaqueredirect'
+  );
+}
+
 async function parseResponse<T>(res: Response): Promise<RequestResult<T>> {
   let body: ApiResponse<T> | null = null;
+  let text = '';
 
   try {
-    const text = await res.text();
+    text = await res.text();
     if (!text) {
       if (res.ok) {
         return { ok: true, status: res.status, data: null, error: null };
@@ -20,13 +32,17 @@ async function parseResponse<T>(res: Response): Promise<RequestResult<T>> {
     }
     body = JSON.parse(text) as ApiResponse<T>;
   } catch {
+    const looksLikeHtml = text.trimStart().startsWith('<');
     return {
       ok: false,
       status: res.status,
       data: null,
-      error: res.ok
-        ? '서버 응답을 처리할 수 없습니다.'
-        : `요청에 실패했습니다. (${res.status})`,
+      error:
+        looksLikeHtml || isAuthFailureResponse(res)
+          ? '로그인이 만료되었습니다. 다시 로그인해 주세요.'
+          : res.ok
+            ? '서버 응답을 처리할 수 없습니다.'
+            : `요청에 실패했습니다. (${res.status})`,
     };
   }
 
@@ -74,6 +90,7 @@ async function tryReissue(): Promise<boolean> {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
+        ...FETCH_NO_REDIRECT,
       });
       const text = await res.text();
       if (!text) return false;
@@ -95,6 +112,31 @@ async function tryReissue(): Promise<boolean> {
   }
 }
 
+async function handleAuthFailure(
+  initialRes: Response,
+  requestUrl: string,
+  init: RequestInit,
+  headers: Headers,
+): Promise<Response> {
+  if (!tokenStorage.getRefreshToken()) {
+    handleAuthExpired();
+    return initialRes;
+  }
+
+  const renewed = await tryReissue();
+  if (renewed) {
+    headers.set('Authorization', `Bearer ${tokenStorage.getAccessToken()}`);
+    const retryRes = await fetch(requestUrl, { ...init, headers, ...FETCH_NO_REDIRECT });
+    if (isAuthFailureResponse(retryRes)) {
+      handleAuthExpired();
+    }
+    return retryRes;
+  }
+
+  handleAuthExpired();
+  return initialRes;
+}
+
 export async function publicRequest<T>(
   url: string,
   init: RequestInit = {}
@@ -113,19 +155,10 @@ async function executeWithReissue(
   init: RequestInit,
   headers: Headers,
 ): Promise<Response> {
-  let res = await fetch(requestUrl, { ...init, headers });
+  let res = await fetch(requestUrl, { ...init, headers, ...FETCH_NO_REDIRECT });
 
-  if ((res.status === 401 || res.status === 403) && tokenStorage.getRefreshToken()) {
-    const renewed = await tryReissue();
-    if (renewed) {
-      headers.set('Authorization', `Bearer ${tokenStorage.getAccessToken()}`);
-      res = await fetch(requestUrl, { ...init, headers });
-      if (res.status === 401) {
-        handleAuthExpired();
-      }
-    } else {
-      handleAuthExpired();
-    }
+  if (isAuthFailureResponse(res) && tokenStorage.hasToken()) {
+    res = await handleAuthFailure(res, requestUrl, init, headers);
   }
 
   return res;

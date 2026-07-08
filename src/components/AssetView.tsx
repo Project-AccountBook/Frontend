@@ -34,7 +34,7 @@ import {
   type TransactionType
 } from '../api/categoryApi';
 import {
-  getTransactionsForAccounts,
+  getAllUserTransactions,
   createTransaction,
   updateTransaction,
   deleteTransaction,
@@ -215,30 +215,26 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
   }, []);
 
   const fetchTransactions = useCallback(async () => {
-    if (accounts.length === 0) {
-      setTransactions([]);
-      return;
-    }
-
     const range = viewMode === 'calendar'
       ? getMonthRange(calendarYear, calendarMonth)
       : { start: startDate, end: endDate };
 
-    const accountIds = filterAccount === 'all'
-      ? accounts.map((a) => a.id)
-      : [filterAccount];
-
     setTransactionsLoading(true);
     setTransactionsError(null);
     try {
-      const data = await getTransactionsForAccounts(accountIds, range.start, range.end);
-      setTransactions(data);
+      const page = await getAllUserTransactions(range.start, range.end);
+      setTransactions(page.content.map((tx) => ({
+        ...tx,
+        amount: Number(tx.amount),
+        description: tx.description ?? '',
+        fixedTransactionGenerated: tx.fixedTransactionGenerated ?? false,
+      })));
     } catch (err) {
       setTransactionsError(err instanceof Error ? err.message : '거래 내역을 불러오는 데 실패했습니다.');
     } finally {
       setTransactionsLoading(false);
     }
-  }, [accounts, viewMode, calendarYear, calendarMonth, startDate, endDate, filterAccount]);
+  }, [viewMode, calendarYear, calendarMonth, startDate, endDate]);
 
   useEffect(() => {
     fetchAccounts();
@@ -247,10 +243,8 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
   }, [fetchAccounts, fetchCategories, fetchFixedTransactions]);
 
   useEffect(() => {
-    if (!accountsLoading) {
-      fetchTransactions();
-    }
-  }, [fetchTransactions, accountsLoading]);
+    fetchTransactions();
+  }, [fetchTransactions]);
 
   useEffect(() => {
     if (!showModal || (activeSection !== 'transactions' && activeSection !== 'fixed')) return;
@@ -311,6 +305,9 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
       const tx = transactions.find(t => t.id === id);
       if (tx) {
         setFormAccount(tx.accountId.toString());
+        if (tx.type === 'TRANSFER' && tx.targetAccountId != null) {
+          setFormTargetAccount(tx.targetAccountId.toString());
+        }
         setFormCategory(tx.categoryId.toString());
         setFormType(tx.type);
         setFormAmount(tx.amount.toString());
@@ -350,12 +347,18 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
   };
 
   const handleDeleteItem = async (id: number): Promise<boolean> => {
-    if (!window.confirm('정말 삭제하시겠습니까?')) return false;
+    const confirmMessage = activeSection === 'accounts'
+      ? '이 계좌를 삭제하시겠습니까?\n\n· 연결된 고정 수입/지출은 함께 삭제됩니다.\n· 기존 거래 내역은 계좌명과 함께 보존됩니다.'
+      : '정말 삭제하시겠습니까?';
+
+    if (!window.confirm(confirmMessage)) return false;
 
     try {
       if (activeSection === 'accounts') {
         await deleteAccount(id);
         await fetchAccounts();
+        await fetchFixedTransactions();
+        await fetchTransactions();
       } else if (activeSection === 'transactions') {
         await deleteTransaction(id);
         await fetchTransactions();
@@ -403,14 +406,23 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
 
     try {
       if (activeSection === 'accounts') {
+        const trimmedAccountName = formAccountName.trim();
+        const isDuplicateAccount = accounts.some(
+          (a) => a.accountName.trim() === trimmedAccountName && a.id !== selectedId
+        );
+        if (isDuplicateAccount) {
+          alert('이미 존재하는 계좌 이름입니다.');
+          return;
+        }
+
         if (modalMode === 'create') {
           await createAccount({
-            accountName: formAccountName,
+            accountName: trimmedAccountName,
             initialBalance: parseFloat(formInitialBalance) || 0,
           });
         } else if (selectedId !== null) {
           await updateAccount(selectedId, {
-            accountName: formAccountName,
+            accountName: trimmedAccountName,
             initialBalance: parseFloat(formInitialBalance) || 0,
           });
         }
@@ -459,8 +471,20 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
         }
         await fetchFixedTransactions();
       } else if (activeSection === 'categories') {
+        const trimmedCategoryName = formCategoryName.trim();
+        const isDuplicateCategory = categories.some(
+          (c) =>
+            c.name.trim() === trimmedCategoryName &&
+            c.type === formCategoryType &&
+            c.id !== selectedId
+        );
+        if (isDuplicateCategory) {
+          alert('이미 존재하는 카테고리 이름입니다.');
+          return;
+        }
+
         const request = {
-          name: formCategoryName,
+          name: trimmedCategoryName,
           type: formCategoryType,
         };
 
@@ -498,7 +522,8 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
       const matchDesc = (tx.description ?? '').toLowerCase().includes(q);
       const matchCat = tx.categoryName.toLowerCase().includes(q);
       const matchAcc = tx.accountName.toLowerCase().includes(q);
-      if (!matchDesc && !matchCat && !matchAcc) return false;
+      const matchTarget = (tx.targetAccountName ?? '').toLowerCase().includes(q);
+      if (!matchDesc && !matchCat && !matchAcc && !matchTarget) return false;
     }
     return true;
   });
@@ -512,11 +537,12 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
     }
   };
 
-  const getTxTypeLabel = (type: TransactionType) => {
+  const getTxTypeLabel = (type: TransactionType, fixedTransactionGenerated = false) => {
+    const prefix = fixedTransactionGenerated ? '고정 ' : '';
     switch (type) {
-      case 'INCOME': return '수입';
-      case 'EXPENSE': return '지출';
-      case 'TRANSFER': return '이체';
+      case 'INCOME': return `${prefix}수입`;
+      case 'EXPENSE': return `${prefix}지출`;
+      case 'TRANSFER': return `${prefix}이체`;
       default: return '';
     }
   };
@@ -543,6 +569,21 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
 
   const getAccountShortName = (name: string, maxLen = 4) =>
     name.length <= maxLen ? name : `${name.slice(0, maxLen)}…`;
+
+  const getTransferTargetName = (tx: Transaction) =>
+    tx.targetAccountName
+    ?? (tx.targetAccountId != null
+      ? accounts.find((a) => a.id === tx.targetAccountId)?.accountName
+      : undefined);
+
+  const formatAccountDisplayName = (name: string, archived?: boolean) =>
+    archived ? `${name} (삭제됨)` : name;
+
+  const formatTransferRoute = (tx: Transaction) => {
+    const targetName = getTransferTargetName(tx);
+    if (!targetName) return null;
+    return `${formatAccountDisplayName(tx.accountName, tx.accountArchived)} → ${formatAccountDisplayName(targetName, tx.targetAccountArchived)}`;
+  };
 
   const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
   const MONTHS = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
@@ -867,7 +908,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                       <Search size={16} className="search-icon" />
                       <input
                         type="text"
-                        placeholder="내용, 카테고리, 계좌 검색..."
+                        placeholder="내용, 카테고리, 계좌, 이체 대상 검색..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="search-input"
@@ -1101,18 +1142,22 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                           >
                             <div className="cal-detail-left">
                               <span className={`type-badge ${getTxTypeBadgeClass(tx.type)}`}>
-                                {getTxTypeLabel(tx.type)}
+                                {getTxTypeLabel(tx.type, tx.fixedTransactionGenerated)}
                               </span>
                               <div className="cal-detail-info">
                                 <span className="cal-detail-desc">{tx.description || '—'}</span>
                                 <span className="cal-detail-meta">
-                                  <span
-                                    className="cal-account-badge"
-                                    style={{ background: accountColor.bg, color: accountColor.dot }}
-                                  >
-                                    <span className="cal-account-dot" style={{ background: accountColor.dot }} />
-                                    {tx.accountName}
-                                  </span>
+                                  {tx.type === 'TRANSFER' && formatTransferRoute(tx) ? (
+                                    <span className="transfer-target-desc">{formatTransferRoute(tx)}</span>
+                                  ) : (
+                                    <span
+                                      className="cal-account-badge"
+                                      style={{ background: accountColor.bg, color: accountColor.dot }}
+                                    >
+                                      <span className="cal-account-dot" style={{ background: accountColor.dot }} />
+                                      {formatAccountDisplayName(tx.accountName, tx.accountArchived)}
+                                    </span>
+                                  )}
                                   · <span className="category-tag">{tx.categoryName}</span>
                                 </span>
                               </div>
@@ -1178,13 +1223,17 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                           onClick={() => handleOpenEditModal(tx.id)}
                         >
                           <td>{tx.transactionDate}</td>
-                          <td className="font-semibold text-primary-dark">{tx.accountName}</td>
+                          <td className="font-semibold text-primary-dark">
+                            {tx.type === 'TRANSFER' && formatTransferRoute(tx)
+                              ? formatTransferRoute(tx)
+                              : formatAccountDisplayName(tx.accountName, tx.accountArchived)}
+                          </td>
                           <td>
                             <span className="category-tag">{tx.categoryName}</span>
                           </td>
                           <td>
                             <span className={`type-badge ${getTxTypeBadgeClass(tx.type)}`}>
-                              {getTxTypeLabel(tx.type)}
+                              {getTxTypeLabel(tx.type, tx.fixedTransactionGenerated)}
                             </span>
                           </td>
                           <td>

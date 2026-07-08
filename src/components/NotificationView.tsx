@@ -48,6 +48,57 @@ const TYPE_CONFIG: Record<
   SYSTEM: { label: '시스템', icon: Info, color: 'var(--blue)', bg: 'var(--blue-bg)' }
 };
 
+const KNOWN_APP_TABS = new Set([
+  'dashboard',
+  'history',
+  'budget',
+  'analysis',
+  'comparison',
+  'locationComparison',
+  'groupbuy',
+  'knowhow',
+  'qa',
+  'groupbuyAdmin',
+  'notifications',
+  'settings',
+  'admin'
+]);
+
+function resolveNotificationTab(
+  redirectUrl: string | null,
+  type: NotificationType
+): string | null {
+  if (redirectUrl) {
+    const url = redirectUrl.trim();
+    const bareTab = url.replace(/^#\/?/, '').replace(/^\//, '');
+
+    if (KNOWN_APP_TABS.has(bareTab)) return bareTab;
+    if (bareTab === 'budget-page') return 'budget';
+    if (url.includes('budget-page') || /\/budget\/?$/.test(url)) return 'budget';
+    if (url.includes('group-purchase')) return 'groupbuy';
+  }
+
+  if (type === 'BUDGET') return 'budget';
+  if (type === 'INTEREST_CATEGORY') return 'groupbuy';
+  return null;
+}
+
+function resolveGroupPurchaseId(
+  redirectUrl: string | null,
+  referenceId: number | null,
+  type: NotificationType
+): number | undefined {
+  if (type !== 'INTEREST_CATEGORY') return undefined;
+  if (referenceId !== null) return referenceId;
+
+  if (redirectUrl) {
+    const match = redirectUrl.match(/group-purchase\/(\d+)/);
+    if (match) return Number(match[1]);
+  }
+
+  return undefined;
+}
+
 function formatRelativeTime(isoString: string): string {
   const date = new Date(isoString);
   const now = new Date();
@@ -66,9 +117,13 @@ function formatRelativeTime(isoString: string): string {
 
 interface NotificationViewProps {
   onUnreadCountChange?: (count: number) => void;
+  onNavigate?: (tab: string, options?: { groupPurchaseId?: number }) => void;
 }
 
-export const NotificationView: React.FC<NotificationViewProps> = ({ onUnreadCountChange }) => {
+export const NotificationView: React.FC<NotificationViewProps> = ({
+  onUnreadCountChange,
+  onNavigate
+}) => {
   const [notifications, setNotifications] = useState<NotificationResponse[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -263,6 +318,26 @@ export const NotificationView: React.FC<NotificationViewProps> = ({ onUnreadCoun
     }
     setSelectedIds(new Set());
     setActionLoading(false);
+  };
+
+  const handleGoToTarget = async (notification: NotificationResponse) => {
+    const tab = resolveNotificationTab(notification.redirectUrl, notification.type);
+    if (!tab || !onNavigate) return;
+
+    if (!notification.isRead) {
+      await handleMarkAsRead(notification.id);
+    }
+
+    const groupPurchaseId = resolveGroupPurchaseId(
+      notification.redirectUrl,
+      notification.referenceId,
+      notification.type
+    );
+
+    onNavigate(
+      tab,
+      groupPurchaseId !== undefined ? { groupPurchaseId } : undefined
+    );
   };
 
   const handleBulkDelete = async () => {
@@ -881,9 +956,11 @@ export const NotificationView: React.FC<NotificationViewProps> = ({ onUnreadCoun
                             읽음 처리
                           </button>
                         )}
-                        {notification.redirectUrl && (
-                          <a
-                            href={notification.redirectUrl}
+                        {resolveNotificationTab(notification.redirectUrl, notification.type) && (
+                          <button
+                            type="button"
+                            onClick={() => void handleGoToTarget(notification)}
+                            disabled={actionLoading}
                             style={{
                               display: 'flex',
                               alignItems: 'center',
@@ -895,12 +972,12 @@ export const NotificationView: React.FC<NotificationViewProps> = ({ onUnreadCoun
                               border: '1px solid var(--border)',
                               padding: '6px 12px',
                               borderRadius: '8px',
-                              textDecoration: 'none'
+                              cursor: actionLoading ? 'not-allowed' : 'pointer'
                             }}
                           >
                             <ExternalLink size={13} />
                             바로가기
-                          </a>
+                          </button>
                         )}
                       </div>
 
