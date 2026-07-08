@@ -406,14 +406,23 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
 
     try {
       if (activeSection === 'accounts') {
+        const trimmedAccountName = formAccountName.trim();
+        const isDuplicateAccount = accounts.some(
+          (a) => a.accountName.trim() === trimmedAccountName && a.id !== selectedId
+        );
+        if (isDuplicateAccount) {
+          alert('이미 존재하는 계좌 이름입니다.');
+          return;
+        }
+
         if (modalMode === 'create') {
           await createAccount({
-            accountName: formAccountName,
+            accountName: trimmedAccountName,
             initialBalance: parseFloat(formInitialBalance) || 0,
           });
         } else if (selectedId !== null) {
           await updateAccount(selectedId, {
-            accountName: formAccountName,
+            accountName: trimmedAccountName,
             initialBalance: parseFloat(formInitialBalance) || 0,
           });
         }
@@ -462,8 +471,20 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
         }
         await fetchFixedTransactions();
       } else if (activeSection === 'categories') {
+        const trimmedCategoryName = formCategoryName.trim();
+        const isDuplicateCategory = categories.some(
+          (c) =>
+            c.name.trim() === trimmedCategoryName &&
+            c.type === formCategoryType &&
+            c.id !== selectedId
+        );
+        if (isDuplicateCategory) {
+          alert('이미 존재하는 카테고리 이름입니다.');
+          return;
+        }
+
         const request = {
-          name: formCategoryName,
+          name: trimmedCategoryName,
           type: formCategoryType,
         };
 
