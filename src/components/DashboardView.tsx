@@ -7,6 +7,7 @@ import {
   ShoppingBag
 } from 'lucide-react';
 import { getAccounts, type AccountResponse } from '../api/accountApi';
+import { getCategories } from '../api/categoryApi';
 import { getAllUserTransactions, type TransactionResponse } from '../api/transactionApi';
 import { budgetApi, dashboardApi, groupPurchaseApi, groupPurchaseCategoryApi, portfolioApi } from '../api';
 import {
@@ -17,6 +18,7 @@ import {
 import type {
   BudgetSummaryResponse,
   CategoryAmountResponse,
+  CategoryResponse,
   DashboardResponse,
   GroupPurchaseCategoryResponse,
   MyPortfolioResponse
@@ -266,6 +268,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [groupBuys, setGroupBuys] = useState<DashboardGroupBuyItem[]>([]);
   const [groupBuyLoading, setGroupBuyLoading] = useState(true);
   const [monthTransactions, setMonthTransactions] = useState<TransactionResponse[]>([]);
+  const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const barChartRef = useRef<HTMLDivElement>(null);
 
   const yearMonth = formatYearMonth(selectedDate);
@@ -286,12 +289,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         const monthStart = `${yearMonth}-01`;
         const monthEnd = `${yearMonth}-${String(lastDay).padStart(2, '0')}`;
 
-        const [dashboardRes, portfolioRes, prevPortfolioRes, accounts, txPage] = await Promise.all([
+        const [dashboardRes, portfolioRes, prevPortfolioRes, accounts, txPage, categoryList] = await Promise.all([
           dashboardApi.getDashboard(yearMonth),
           portfolioApi.getMyPortfolio(yearMonth),
           portfolioApi.getMyPortfolio(prevYm),
           getAccounts().catch(() => []),
-          getAllUserTransactions(monthStart, monthEnd).catch(() => ({ content: [] }))
+          getAllUserTransactions(monthStart, monthEnd).catch(() => ({ content: [] })),
+          getCategories().catch(() => [])
         ]);
 
         if (cancelled) return;
@@ -328,6 +332,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         setPortfolio(portfolioRes.data);
         setPrevPortfolio(prevPortfolioRes.ok ? prevPortfolioRes.data : null);
         setAccounts(accounts);
+        setCategories(categoryList);
         setMonthTransactions(
           txPage.content.map((tx) => ({
             ...tx,
@@ -413,8 +418,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   );
 
   const monthlyAllocation = useMemo(
-    () => computeMonthlyAllocationSummary(monthTransactions, accounts, totalIncome),
-    [monthTransactions, accounts, totalIncome]
+    () => computeMonthlyAllocationSummary(monthTransactions, accounts, categories, totalIncome),
+    [monthTransactions, accounts, categories, totalIncome]
   );
 
   const accountBreakdown = useMemo(() => {
@@ -992,10 +997,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               )}
               </>
             )}
-
-            <p className="goal-prototype-hint">
-              저축률·투자율은 각 역할 계좌로의 순이체 ÷ 월 수입 기준 (프로토타입)
-            </p>
           </div>
 
           <div className="card">

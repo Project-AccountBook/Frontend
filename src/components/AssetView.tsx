@@ -17,7 +17,8 @@ import {
   ChevronRight,
   Target,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  SlidersHorizontal
 } from 'lucide-react';
 import {
   getAccounts,
@@ -30,6 +31,7 @@ import {
   getCategories,
   createCategory,
   updateCategory,
+  updateCategoryAllocation,
   deleteCategory,
   type CategoryResponse,
   type TransactionType
@@ -43,15 +45,9 @@ import {
   type TransactionResponse
 } from '../api/transactionApi';
 import {
-  getAccountGoalConfig,
-  saveAccountGoalConfig,
-  deleteAccountGoalConfig,
-  getTransferCategorySavingsFlag,
-  saveTransferCategorySavingsFlag,
-  getTransferCategoryInvestmentFlag,
-  saveTransferCategoryInvestmentFlag,
   ACCOUNT_ROLE_OPTIONS,
   ACCOUNT_ROLE_LABELS,
+  normalizeAccountRole,
   type AccountRole
 } from '../lib/accountGoalStorage';
 import {
@@ -166,6 +162,8 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
   const [showModal, setShowModal] = useState<boolean>(false);
+  const [showAllocationModal, setShowAllocationModal] = useState<boolean>(false);
+  const [allocationCategoryId, setAllocationCategoryId] = useState<number | null>(null);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
@@ -318,16 +316,6 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
     setShowModal(true);
   };
 
-  const buildAccountRolePayload = (accountId?: number, accountName?: string) => {
-    const existing =
-      accountId != null ? getAccountGoalConfig(accountId, accountName) : null;
-    return {
-      role: formAccountRole,
-      goalAmount: existing?.goalAmount ?? null,
-      goalDate: existing?.goalDate ?? null
-    };
-  };
-
   const handleCalendarDayAdd = (dateStr: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setSelectedCalendarDay(dateStr);
@@ -371,8 +359,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
       if (acc) {
         setFormAccountName(acc.accountName);
         setFormInitialBalance(acc.initialBalance.toString());
-        const goalConfig = getAccountGoalConfig(acc.id, acc.accountName);
-        setFormAccountRole(goalConfig.role);
+        setFormAccountRole(normalizeAccountRole(acc.role));
       }
     } else if (activeSection === 'categories') {
       const cat = categories.find(c => c.id === id);
@@ -380,12 +367,43 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
         setFormCategoryName(cat.name);
         setFormCategoryType(cat.type);
         if (cat.type === 'TRANSFER') {
-          setFormCategoryIncludeSavings(getTransferCategorySavingsFlag(cat.id, cat.name));
-          setFormCategoryIncludeInvestment(getTransferCategoryInvestmentFlag(cat.id, cat.name));
+          setFormCategoryIncludeSavings(cat.includeInSavingsRate);
+          setFormCategoryIncludeInvestment(cat.includeInInvestmentRate);
         }
       }
     }
     setShowModal(true);
+  };
+
+  const handleOpenAllocationModal = (category: Category) => {
+    setAllocationCategoryId(category.id);
+    setFormCategoryIncludeSavings(category.includeInSavingsRate);
+    setFormCategoryIncludeInvestment(category.includeInInvestmentRate);
+    setShowAllocationModal(true);
+  };
+
+  const handleCloseAllocationModal = () => {
+    setShowAllocationModal(false);
+    setAllocationCategoryId(null);
+  };
+
+  const handleSubmitAllocation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (allocationCategoryId == null) return;
+
+    setSubmitting(true);
+    try {
+      await updateCategoryAllocation(allocationCategoryId, {
+        includeInSavingsRate: formCategoryIncludeSavings,
+        includeInInvestmentRate: formCategoryIncludeInvestment
+      });
+      await fetchCategories();
+      handleCloseAllocationModal();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '저축률·투자율 설정에 실패했습니다.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleDeleteItem = async (id: number): Promise<boolean> => {
@@ -398,7 +416,6 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
     try {
       if (activeSection === 'accounts') {
         await deleteAccount(id);
-        deleteAccountGoalConfig(id);
         await fetchAccounts();
         await fetchFixedTransactions();
         await fetchTransactions();
@@ -459,17 +476,17 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
         }
 
         if (modalMode === 'create') {
-          const newId = await createAccount({
+          await createAccount({
             accountName: trimmedAccountName,
             initialBalance: parseFloat(formInitialBalance) || 0,
+            role: formAccountRole
           });
-          saveAccountGoalConfig(newId, buildAccountRolePayload());
         } else if (selectedId !== null) {
           await updateAccount(selectedId, {
             accountName: trimmedAccountName,
             initialBalance: parseFloat(formInitialBalance) || 0,
+            role: formAccountRole
           });
-          saveAccountGoalConfig(selectedId, buildAccountRolePayload(selectedId, trimmedAccountName));
         }
         await fetchAccounts();
         setShowModal(false);
@@ -531,20 +548,18 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
         const request = {
           name: trimmedCategoryName,
           type: formCategoryType,
+          ...(formCategoryType === 'TRANSFER'
+            ? {
+                includeInSavingsRate: formCategoryIncludeSavings,
+                includeInInvestmentRate: formCategoryIncludeInvestment
+              }
+            : {})
         };
 
         if (modalMode === 'create') {
-          const created = await createCategory(request);
-          if (formCategoryType === 'TRANSFER') {
-            saveTransferCategorySavingsFlag(created.id, formCategoryIncludeSavings);
-            saveTransferCategoryInvestmentFlag(created.id, formCategoryIncludeInvestment);
-          }
+          await createCategory(request);
         } else if (selectedId !== null) {
           await updateCategory(selectedId, request);
-          if (formCategoryType === 'TRANSFER') {
-            saveTransferCategorySavingsFlag(selectedId, formCategoryIncludeSavings);
-            saveTransferCategoryInvestmentFlag(selectedId, formCategoryIncludeInvestment);
-          }
         }
         await fetchCategories();
       }
@@ -1473,7 +1488,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
             {!accountsLoading && !accountsError && accounts.length > 0 && (
               <div className="accounts-grid">
                 {accounts.map(acc => {
-                  const goalConfig = getAccountGoalConfig(acc.id, acc.accountName);
+                  const role = normalizeAccountRole(acc.role);
 
                   return (
                   <div key={acc.id} className="account-card">
@@ -1493,7 +1508,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                     <div className="account-card-body">
                       <div className="account-title-row">
                         <h3 className="account-title">{acc.accountName}</h3>
-                        <span className="goal-role-badge">{ACCOUNT_ROLE_LABELS[goalConfig.role]}</span>
+                        <span className="goal-role-badge">{ACCOUNT_ROLE_LABELS[role]}</span>
                       </div>
                       <div className="balance-info-row">
                         <span className="balance-label">초기 잔고</span>
@@ -1623,22 +1638,32 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                     <div key={cat.id} className="category-item-row">
                       <span className="cat-name">{cat.name}</span>
                       <div className="cat-badges-actions">
-                        {getTransferCategorySavingsFlag(cat.id, cat.name) && (
+                        {cat.includeInSavingsRate && (
                           <span className="category-savings-flag">저축률</span>
                         )}
-                        {getTransferCategoryInvestmentFlag(cat.id, cat.name) && (
+                        {cat.includeInInvestmentRate && (
                           <span className="category-investment-flag">투자율</span>
                         )}
                         <span className={`cat-system-badge ${cat.isCustom ? 'custom' : 'default'}`}>
                           {cat.isCustom ? '사용자정의' : '기본'}
                         </span>
-                        {cat.isCustom && (
+                        {cat.isCustom ? (
                           <div className="cat-actions">
                             <button className="btn-cat-action" onClick={() => handleOpenEditModal(cat.id)}>
                               <Edit2 size={12} />
                             </button>
                             <button className="btn-cat-action delete" onClick={() => handleDeleteItem(cat.id)}>
                               <Trash2 size={12} />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="cat-actions">
+                            <button
+                              className="btn-cat-action"
+                              onClick={() => handleOpenAllocationModal(cat)}
+                              title="저축률·투자율 설정"
+                            >
+                              <SlidersHorizontal size={12} />
                             </button>
                           </div>
                         )}
@@ -2057,7 +2082,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                           <span>투자율 계산에 포함</span>
                         </label>
                         <p className="form-hint">
-                          입금 계좌 역할과 함께 이번 달 저축률·투자율 분자에 반영됩니다. (프로토타입)
+                          입금 계좌 역할과 함께 이번 달 저축률·투자율 분자에 반영됩니다.
                         </p>
                       </div>
                     </>
@@ -2097,6 +2122,66 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                 </div>
               </div>
 
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showAllocationModal && allocationCategoryId != null && (
+        <div className="asset-modal-overlay" onClick={handleCloseAllocationModal}>
+          <div className="asset-modal-content fade-in" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="modal-close-btn"
+              onClick={handleCloseAllocationModal}
+              aria-label="닫기"
+            >
+              <X size={18} />
+            </button>
+            <div className="modal-header">
+              <h3>이체 카테고리 저축률·투자율 설정</h3>
+            </div>
+            <form onSubmit={handleSubmitAllocation} className="modal-form">
+              <div className="form-group-grid" style={{ gridTemplateColumns: '1fr' }}>
+                <div className="form-item">
+                  <label className="form-label">카테고리</label>
+                  <div className="modal-readonly-value">
+                    {categories.find((cat) => cat.id === allocationCategoryId)?.name ?? ''}
+                  </div>
+                  <p className="form-hint">기본 카테고리는 이름·삭제를 변경할 수 없습니다.</p>
+                </div>
+                <div className="form-item">
+                  <label className="form-checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={formCategoryIncludeSavings}
+                      onChange={(e) => setFormCategoryIncludeSavings(e.target.checked)}
+                    />
+                    <span>저축률 계산에 포함</span>
+                  </label>
+                </div>
+                <div className="form-item">
+                  <label className="form-checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={formCategoryIncludeInvestment}
+                      onChange={(e) => setFormCategoryIncludeInvestment(e.target.checked)}
+                    />
+                    <span>투자율 계산에 포함</span>
+                  </label>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <span />
+                <div className="modal-footer-actions">
+                  <button type="button" className="btn-secondary" onClick={handleCloseAllocationModal}>
+                    취소
+                  </button>
+                  <button type="submit" className="btn-primary" disabled={submitting}>
+                    저장
+                  </button>
+                </div>
+              </div>
             </form>
           </div>
         </div>

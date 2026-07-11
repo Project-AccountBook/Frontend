@@ -1,6 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Target, Edit2, Plus, Wallet, Loader2, AlertCircle, X, Trash2 } from 'lucide-react';
-import type { AccountResponse } from '../api/accountApi';
+import {
+  updateAccount,
+  updateAccountGoal,
+  clearAccountGoal,
+  type AccountResponse
+} from '../api/accountApi';
+import { getCategories } from '../api/categoryApi';
 import { getAllUserTransactions } from '../api/transactionApi';
 import { portfolioApi } from '../api';
 import {
@@ -9,9 +15,8 @@ import {
   buildGoalProgressItems,
   computeMonthlyAllocationSummary,
   formatGoalDateLabel,
-  getAccountGoalConfig,
   isGoalEligibleRole,
-  saveAccountGoalConfig,
+  normalizeAccountRole,
   type AccountRole
 } from '../lib/accountGoalStorage';
 
@@ -47,7 +52,7 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
     investment: { net: 0, rate: 0, inflow: 0, outflow: 0 }
   });
   const [metricsLoading, setMetricsLoading] = useState(true);
-  const [settingsVersion, setSettingsVersion] = useState(0);
+  const [savingGoal, setSavingGoal] = useState(false);
 
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [editingAccountId, setEditingAccountId] = useState<number | null>(null);
@@ -66,9 +71,10 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
       const monthStart = `${yearMonth}-01`;
       const monthEnd = `${yearMonth}-${String(lastDay).padStart(2, '0')}`;
 
-      const [portfolioRes, txPage] = await Promise.all([
+      const [portfolioRes, txPage, categoryList] = await Promise.all([
         portfolioApi.getMyPortfolio(yearMonth),
-        getAllUserTransactions(monthStart, monthEnd).catch(() => ({ content: [] }))
+        getAllUserTransactions(monthStart, monthEnd).catch(() => ({ content: [] })),
+        getCategories().catch(() => [])
       ]);
 
       const income = portfolioRes.ok && portfolioRes.data ? Number(portfolioRes.data.totalIncome) : 0;
@@ -78,7 +84,9 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
         description: tx.description ?? ''
       }));
 
-      setAllocationSummary(computeMonthlyAllocationSummary(txs, accounts, income));
+      setAllocationSummary(
+        computeMonthlyAllocationSummary(txs, accounts, categoryList, income)
+      );
     } finally {
       setMetricsLoading(false);
     }
@@ -92,7 +100,7 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
 
   const goalProgressItems = useMemo(
     () => buildGoalProgressItems(accounts, CATEGORY_COLORS),
-    [accounts, settingsVersion]
+    [accounts]
   );
 
   const accountsWithGoalSet = goalProgressItems.length;
@@ -108,12 +116,11 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
     const account = accounts.find((acc) => acc.id === accountId);
     if (!account) return;
 
-    const config = getAccountGoalConfig(account.id, account.accountName);
     setEditingAccountId(accountId);
-    setFormRole(config.role);
-    setFormGoalAmount(config.goalAmount != null ? String(config.goalAmount) : '');
-    setFormGoalDate(config.goalDate ?? '');
-    setEditingHasGoal(config.goalAmount != null && config.goalAmount > 0);
+    setFormRole(normalizeAccountRole(account.role));
+    setFormGoalAmount(account.goalAmount != null ? String(account.goalAmount) : '');
+    setFormGoalDate(account.goalDate ?? '');
+    setEditingHasGoal(account.goalAmount != null && Number(account.goalAmount) > 0);
     setShowGoalModal(true);
   };
 
@@ -123,40 +130,69 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
     setEditingHasGoal(false);
   };
 
-  const handleSaveGoal = (e: React.FormEvent) => {
+  const handleSaveGoal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingAccountId == null) return;
 
-    const parsedGoal = formGoalAmount.trim() ? parseFloat(formGoalAmount) : null;
-    saveAccountGoalConfig(editingAccountId, {
-      role: formRole,
-      goalAmount:
-        parsedGoal != null && !Number.isNaN(parsedGoal) && parsedGoal > 0 ? parsedGoal : null,
-      goalDate: formGoalDate.trim() || null
-    });
+    const account = accounts.find((acc) => acc.id === editingAccountId);
+    if (!account) return;
 
-    closeGoalModal();
-    setSettingsVersion((version) => version + 1);
-    onRefreshAccounts();
-    loadMetrics();
+    const parsedGoal = formGoalAmount.trim() ? parseFloat(formGoalAmount) : null;
+    const hasValidGoal =
+      parsedGoal != null && !Number.isNaN(parsedGoal) && parsedGoal > 0;
+
+    setSavingGoal(true);
+    try {
+      await updateAccount(editingAccountId, {
+        accountName: account.accountName,
+        initialBalance: Number(account.initialBalance),
+        role: formRole
+      });
+
+      if (hasValidGoal) {
+        await updateAccountGoal(editingAccountId, {
+          goalAmount: parsedGoal,
+          goalDate: formGoalDate.trim() || null
+        });
+      } else if (editingHasGoal) {
+        await clearAccountGoal(editingAccountId);
+      }
+
+      closeGoalModal();
+      await onRefreshAccounts();
+      await loadMetrics();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '계좌 목표 저장에 실패했습니다.');
+    } finally {
+      setSavingGoal(false);
+    }
   };
 
-  const handleDeleteGoal = () => {
+  const handleDeleteGoal = async () => {
     if (editingAccountId == null) return;
     if (!window.confirm('이 계좌의 목표를 삭제하시겠습니까?\n\n계좌 역할 설정은 유지됩니다.')) {
       return;
     }
 
-    saveAccountGoalConfig(editingAccountId, {
-      role: formRole,
-      goalAmount: null,
-      goalDate: null
-    });
+    const account = accounts.find((acc) => acc.id === editingAccountId);
+    if (!account) return;
 
-    closeGoalModal();
-    setSettingsVersion((version) => version + 1);
-    onRefreshAccounts();
-    loadMetrics();
+    setSavingGoal(true);
+    try {
+      await updateAccount(editingAccountId, {
+        accountName: account.accountName,
+        initialBalance: Number(account.initialBalance),
+        role: formRole
+      });
+      await clearAccountGoal(editingAccountId);
+      closeGoalModal();
+      await onRefreshAccounts();
+      await loadMetrics();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '계좌 목표 삭제에 실패했습니다.');
+    } finally {
+      setSavingGoal(false);
+    }
   };
 
   const editingAccount = editingAccountId != null
@@ -236,16 +272,17 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
           </button>
         </div>
       ) : (
-        <div className="goal-account-list" key={settingsVersion}>
+        <div className="goal-account-list">
           {accounts.map((account, index) => {
-            const config = getAccountGoalConfig(account.id, account.accountName);
-            const hasGoal = config.goalAmount != null && config.goalAmount > 0;
+            const role = normalizeAccountRole(account.role);
+            const goalAmount = account.goalAmount != null ? Number(account.goalAmount) : null;
+            const hasGoal = goalAmount != null && goalAmount > 0;
             const progress = hasGoal
-              ? Math.min(100, Math.round((account.currentBalance / config.goalAmount!) * 100))
+              ? account.progressPercent ??
+                Math.min(100, Math.round((account.currentBalance / goalAmount!) * 100))
               : null;
             const color = CATEGORY_COLORS[index % CATEGORY_COLORS.length];
-
-            const isChecking = config.role === 'CHECKING';
+            const isChecking = role === 'CHECKING';
 
             return (
               <div key={account.id} className={`card goal-account-card${isChecking ? ' is-checking' : ''}`}>
@@ -253,7 +290,7 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
                   <div>
                     <div className="goal-progress-title-row">
                       <h3 className="goal-account-name">{account.accountName}</h3>
-                      <span className="goal-role-badge">{ACCOUNT_ROLE_LABELS[config.role]}</span>
+                      <span className="goal-role-badge">{ACCOUNT_ROLE_LABELS[role]}</span>
                     </div>
                     <span className="goal-account-balance">현재 {formatKRW(account.currentBalance)}원</span>
                   </div>
@@ -267,7 +304,7 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
                   </button>
                 </div>
 
-                {hasGoal && progress != null && config.goalAmount != null ? (
+                {hasGoal && progress != null && goalAmount != null ? (
                   <>
                     <div className="goal-account-progress-row">
                       <span>목표 달성</span>
@@ -284,10 +321,10 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
                     </div>
                     <div className="goal-progress-meta">
                       <span>
-                        {formatKRW(account.currentBalance)} / {formatKRW(config.goalAmount)}원
+                        {formatKRW(account.currentBalance)} / {formatKRW(goalAmount)}원
                       </span>
-                      {config.goalDate && (
-                        <span>목표일 {formatGoalDateLabel(config.goalDate)}</span>
+                      {account.goalDate && (
+                        <span>목표일 {formatGoalDateLabel(account.goalDate)}</span>
                       )}
                     </div>
                   </>
@@ -309,7 +346,7 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
         </div>
       )}
 
-      {accounts.some((acc) => isGoalEligibleRole(getAccountGoalConfig(acc.id, acc.accountName).role)) && (
+      {accounts.some((acc) => isGoalEligibleRole(normalizeAccountRole(acc.role))) && (
         <div className="card goal-savings-note" style={{ marginTop: '16px' }}>
           <div className="card-header-row">
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -411,6 +448,7 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
                     type="button"
                     className="btn-modal-delete"
                     onClick={handleDeleteGoal}
+                    disabled={savingGoal}
                   >
                     <Trash2 size={14} />
                     목표 삭제
@@ -422,7 +460,7 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
                   <button type="button" className="btn-secondary" onClick={closeGoalModal}>
                     취소
                   </button>
-                  <button type="submit" className="btn-primary">
+                  <button type="submit" className="btn-primary" disabled={savingGoal}>
                     {editingHasGoal ? '저장' : '등록'}
                   </button>
                 </div>

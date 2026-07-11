@@ -159,16 +159,27 @@ export interface NotificationResponse {
 
 export type TransactionType = 'INCOME' | 'EXPENSE' | 'TRANSFER';
 
+export type AccountRole = 'CHECKING' | 'SAVINGS' | 'INVESTMENT';
+
 export interface CategoryResponse {
   id: number;
   name: string;
   type: TransactionType;
   isCustom: boolean;
+  includeInSavingsRate: boolean;
+  includeInInvestmentRate: boolean;
 }
 
 export interface CategoryRequest {
   name: string;
   type: TransactionType;
+  includeInSavingsRate?: boolean | null;
+  includeInInvestmentRate?: boolean | null;
+}
+
+export interface CategoryAllocationRequest {
+  includeInSavingsRate: boolean;
+  includeInInvestmentRate: boolean;
 }
 
 export interface BudgetRequest {
