@@ -6,16 +6,14 @@ import {
   clearAccountGoal,
   type AccountResponse
 } from '../api/accountApi';
-import { getCategories } from '../api/categoryApi';
-import { getAllUserTransactions } from '../api/transactionApi';
-import { portfolioApi } from '../api';
+import { allocationApi } from '../api';
 import {
   ACCOUNT_ROLE_LABELS,
   ACCOUNT_ROLE_OPTIONS,
-  buildGoalProgressItems,
-  computeMonthlyAllocationSummary,
+  mapGoalProgressFromAccounts,
   formatGoalDateLabel,
   isGoalEligibleRole,
+  mapDashboardAllocation,
   normalizeAccountRole,
   type AccountRole
 } from '../lib/accountGoalStorage';
@@ -66,31 +64,14 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
   const loadMetrics = useCallback(async () => {
     setMetricsLoading(true);
     try {
-      const [y, m] = yearMonth.split('-').map(Number);
-      const lastDay = new Date(y, m, 0).getDate();
-      const monthStart = `${yearMonth}-01`;
-      const monthEnd = `${yearMonth}-${String(lastDay).padStart(2, '0')}`;
-
-      const [portfolioRes, txPage, categoryList] = await Promise.all([
-        portfolioApi.getMyPortfolio(yearMonth),
-        getAllUserTransactions(monthStart, monthEnd).catch(() => ({ content: [] })),
-        getCategories().catch(() => [])
-      ]);
-
-      const income = portfolioRes.ok && portfolioRes.data ? Number(portfolioRes.data.totalIncome) : 0;
-      const txs = txPage.content.map((tx) => ({
-        ...tx,
-        amount: Number(tx.amount),
-        description: tx.description ?? ''
-      }));
-
-      setAllocationSummary(
-        computeMonthlyAllocationSummary(txs, accounts, categoryList, income)
-      );
+      const allocationRes = await allocationApi.getMonthly(yearMonth);
+      if (allocationRes.ok && allocationRes.data) {
+        setAllocationSummary(mapDashboardAllocation(allocationRes.data));
+      }
     } finally {
       setMetricsLoading(false);
     }
-  }, [accounts, yearMonth]);
+  }, [yearMonth]);
 
   useEffect(() => {
     if (!accountsLoading) {
@@ -99,7 +80,7 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
   }, [accountsLoading, loadMetrics]);
 
   const goalProgressItems = useMemo(
-    () => buildGoalProgressItems(accounts, CATEGORY_COLORS),
+    () => mapGoalProgressFromAccounts(accounts, CATEGORY_COLORS),
     [accounts]
   );
 

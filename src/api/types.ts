@@ -225,11 +225,44 @@ export interface SummaryResponse {
   totalExpense: number;
 }
 
+export interface AllocationBucketResponse {
+  net: number;
+  rate: number;
+  inflow: number;
+  outflow: number;
+}
+
+export interface MonthlyAllocationResponse {
+  savings: AllocationBucketResponse;
+  investment: AllocationBucketResponse;
+}
+
+export interface MonthlyAllocationSummaryResponse {
+  yearMonth: string;
+  totalIncome: number;
+  savings: AllocationBucketResponse;
+  investment: AllocationBucketResponse;
+}
+
+export interface GoalProgressResponse {
+  accountId: number;
+  accountName: string;
+  role: AccountRole;
+  currentBalance: number;
+  goalAmount: number;
+  progressPercent: number;
+  goalDate: string | null;
+  dDay: number | null;
+}
+
 export interface DashboardResponse {
   categoryExpenses: Record<string, number>;
   trends: MonthlyTrendResponse[];
   budgetStatus: BudgetStatusResponse;
   summary: SummaryResponse;
+  allocation: MonthlyAllocationResponse;
+  goalProgress: GoalProgressResponse[];
+  totalAsset: number;
 }
 
 /** PortfolioController */

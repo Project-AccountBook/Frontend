@@ -7,18 +7,17 @@ import {
   ShoppingBag
 } from 'lucide-react';
 import { getAccounts, type AccountResponse } from '../api/accountApi';
-import { getCategories } from '../api/categoryApi';
 import { getAllUserTransactions, type TransactionResponse } from '../api/transactionApi';
 import { budgetApi, dashboardApi, groupPurchaseApi, groupPurchaseCategoryApi, portfolioApi } from '../api';
 import {
-  buildGoalProgressItems,
-  computeMonthlyAllocationSummary,
-  formatGoalDateLabel
+  mapGoalProgressFromAccounts,
+  formatGoalDateLabel,
+  mapDashboardAllocation,
+  mapGoalProgressFromApi
 } from '../lib/accountGoalStorage';
 import type {
   BudgetSummaryResponse,
   CategoryAmountResponse,
-  CategoryResponse,
   DashboardResponse,
   GroupPurchaseCategoryResponse,
   MyPortfolioResponse
@@ -235,6 +234,8 @@ function buildFallbackDashboard(
     categoryExpenses[cat.categoryName] = (categoryExpenses[cat.categoryName] ?? 0) + amount;
   }
 
+  const emptyBucket = { net: 0, rate: 0, inflow: 0, outflow: 0 };
+
   return {
     categoryExpenses,
     trends: [],
@@ -243,7 +244,13 @@ function buildFallbackDashboard(
       actualExpense: toNumber(summary.totalActualExpenseSum),
       remaining: toNumber(summary.totalRemainingBudget)
     },
-    summary: { totalExpense: toNumber(summary.totalActualExpenseSum) }
+    summary: { totalExpense: toNumber(summary.totalActualExpenseSum) },
+    allocation: {
+      savings: emptyBucket,
+      investment: emptyBucket
+    },
+    goalProgress: [],
+    totalAsset: 0
   };
 }
 
@@ -268,7 +275,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [groupBuys, setGroupBuys] = useState<DashboardGroupBuyItem[]>([]);
   const [groupBuyLoading, setGroupBuyLoading] = useState(true);
   const [monthTransactions, setMonthTransactions] = useState<TransactionResponse[]>([]);
-  const [categories, setCategories] = useState<CategoryResponse[]>([]);
+  const [monthlyAllocation, setMonthlyAllocation] = useState({
+    savings: { net: 0, rate: 0, inflow: 0, outflow: 0 },
+    investment: { net: 0, rate: 0, inflow: 0, outflow: 0 }
+  });
   const barChartRef = useRef<HTMLDivElement>(null);
 
   const yearMonth = formatYearMonth(selectedDate);
@@ -289,13 +299,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         const monthStart = `${yearMonth}-01`;
         const monthEnd = `${yearMonth}-${String(lastDay).padStart(2, '0')}`;
 
-        const [dashboardRes, portfolioRes, prevPortfolioRes, accounts, txPage, categoryList] = await Promise.all([
+        const [dashboardRes, portfolioRes, prevPortfolioRes, accounts, txPage] = await Promise.all([
           dashboardApi.getDashboard(yearMonth),
           portfolioApi.getMyPortfolio(yearMonth),
           portfolioApi.getMyPortfolio(prevYm),
           getAccounts().catch(() => []),
-          getAllUserTransactions(monthStart, monthEnd).catch(() => ({ content: [] })),
-          getCategories().catch(() => [])
+          getAllUserTransactions(monthStart, monthEnd).catch(() => ({ content: [] }))
         ]);
 
         if (cancelled) return;
@@ -332,7 +341,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         setPortfolio(portfolioRes.data);
         setPrevPortfolio(prevPortfolioRes.ok ? prevPortfolioRes.data : null);
         setAccounts(accounts);
-        setCategories(categoryList);
+        if (dashboardData.allocation) {
+          setMonthlyAllocation(mapDashboardAllocation(dashboardData.allocation));
+        }
         setMonthTransactions(
           txPage.content.map((tx) => ({
             ...tx,
@@ -407,20 +418,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const budgetRemaining = toNumber(dashboard?.budgetStatus.remaining);
   const budgetPlanned = toNumber(dashboard?.budgetStatus.totalPlanned);
 
-  const totalAsset = useMemo(
-    () => accounts.reduce((acc, account) => acc + toNumber(account.currentBalance), 0),
-    [accounts]
-  );
+  const totalAsset = useMemo(() => {
+    if (dashboard?.totalAsset != null) {
+      return toNumber(dashboard.totalAsset);
+    }
+    return accounts.reduce((acc, account) => acc + toNumber(account.currentBalance), 0);
+  }, [dashboard, accounts]);
 
-  const goalProgressItems = useMemo(
-    () => buildGoalProgressItems(accounts, CATEGORY_COLORS),
-    [accounts]
-  );
-
-  const monthlyAllocation = useMemo(
-    () => computeMonthlyAllocationSummary(monthTransactions, accounts, categories, totalIncome),
-    [monthTransactions, accounts, categories, totalIncome]
-  );
+  const goalProgressItems = useMemo(() => {
+    if (dashboard?.goalProgress?.length) {
+      return mapGoalProgressFromApi(dashboard.goalProgress, CATEGORY_COLORS);
+    }
+    return mapGoalProgressFromAccounts(accounts, CATEGORY_COLORS);
+  }, [dashboard, accounts]);
 
   const accountBreakdown = useMemo(() => {
     const items = accounts

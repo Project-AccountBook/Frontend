@@ -1,6 +1,5 @@
 import type { AccountResponse } from '../api/accountApi';
-import type { CategoryResponse } from '../api/types';
-import type { TransactionResponse } from '../api/transactionApi';
+import type { GoalProgressResponse, MonthlyAllocationSummaryResponse } from '../api/types';
 
 export type AccountRole = 'CHECKING' | 'SAVINGS' | 'INVESTMENT';
 
@@ -47,72 +46,49 @@ export function normalizeAccountRole(role: string | AccountRole | null | undefin
   return 'CHECKING';
 }
 
-function buildBucketSummary(
-  inflow: number,
-  outflow: number,
-  totalIncome: number
-): AllocationBucketSummary {
-  const net = inflow - outflow;
-  const rate = totalIncome > 0 ? (net / totalIncome) * 100 : 0;
-  return { net, rate, inflow, outflow };
-}
-
-function getCategoryAllocationFlags(
-  categories: CategoryResponse[],
-  categoryId: number
-): { savings: boolean; investment: boolean } {
-  const category = categories.find((item) => item.id === categoryId);
-  return {
-    savings: category?.includeInSavingsRate ?? false,
-    investment: category?.includeInInvestmentRate ?? false
-  };
-}
-
-export function computeMonthlyAllocationSummary(
-  transactions: TransactionResponse[],
-  accounts: AccountResponse[],
-  categories: CategoryResponse[],
-  totalIncome: number
+export function mapDashboardAllocation(
+  allocation: {
+    savings: { net: number; rate: number; inflow: number; outflow: number };
+    investment: { net: number; rate: number; inflow: number; outflow: number };
+  } | MonthlyAllocationSummaryResponse
 ): MonthlyAllocationSummary {
-  const roleMap = new Map<number, AccountRole>();
-  for (const account of accounts) {
-    roleMap.set(account.id, normalizeAccountRole(account.role));
-  }
-
-  let savingsInflow = 0;
-  let savingsOutflow = 0;
-  let investmentInflow = 0;
-  let investmentOutflow = 0;
-
-  for (const tx of transactions) {
-    if (tx.type !== 'TRANSFER') continue;
-
-    const amount = Math.abs(Number(tx.amount));
-    if (amount <= 0) continue;
-
-    const sourceRole = roleMap.get(tx.accountId) ?? 'CHECKING';
-    const targetRole =
-      tx.targetAccountId != null ? roleMap.get(tx.targetAccountId) ?? 'CHECKING' : 'CHECKING';
-    const categoryFlags = getCategoryAllocationFlags(categories, tx.categoryId);
-
-    if (targetRole === 'SAVINGS') {
-      savingsInflow += amount;
-    } else if (targetRole === 'INVESTMENT') {
-      investmentInflow += amount;
-    } else if (categoryFlags.savings) {
-      savingsInflow += amount;
-    } else if (categoryFlags.investment) {
-      investmentInflow += amount;
-    }
-
-    if (sourceRole === 'SAVINGS') savingsOutflow += amount;
-    if (sourceRole === 'INVESTMENT') investmentOutflow += amount;
-  }
+  const toBucket = (bucket: {
+    net: number;
+    rate: number;
+    inflow: number;
+    outflow: number;
+  }): AllocationBucketSummary => ({
+    net: Number(bucket.net),
+    rate: Number(bucket.rate),
+    inflow: Number(bucket.inflow),
+    outflow: Number(bucket.outflow)
+  });
 
   return {
-    savings: buildBucketSummary(savingsInflow, savingsOutflow, totalIncome),
-    investment: buildBucketSummary(investmentInflow, investmentOutflow, totalIncome)
+    savings: toBucket(allocation.savings),
+    investment: toBucket(allocation.investment)
   };
+}
+
+export function mapGoalProgressFromApi(
+  items: GoalProgressResponse[],
+  colors: string[]
+): GoalProgressItem[] {
+  return items.map((item, index) => {
+    const role = normalizeAccountRole(item.role);
+    return {
+      accountId: item.accountId,
+      name: item.accountName,
+      balance: Number(item.currentBalance),
+      goalAmount: Number(item.goalAmount),
+      progressPercent: Number(item.progressPercent),
+      role,
+      roleLabel: ACCOUNT_ROLE_LABELS[role],
+      goalDate: item.goalDate,
+      dDay: item.dDay,
+      color: colors[index % colors.length]
+    };
+  });
 }
 
 function calcDDay(goalDate: string | null): number | null {
@@ -125,38 +101,33 @@ function calcDDay(goalDate: string | null): number | null {
   return Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-export function buildGoalProgressItems(
+/** 계좌 API 응답을 목표 진행 UI 모델로 변환 (대시보드 goalProgress fallback 등) */
+export function mapGoalProgressFromAccounts(
   accounts: AccountResponse[],
   colors: string[]
 ): GoalProgressItem[] {
-  const items: GoalProgressItem[] = [];
-
-  accounts.forEach((account, index) => {
-    const goalAmount = account.goalAmount != null ? Number(account.goalAmount) : null;
-    if (goalAmount == null || goalAmount <= 0) return;
-
-    const balance = Number(account.currentBalance) || 0;
-    const progressPercent =
-      account.progressPercent != null
-        ? account.progressPercent
-        : Math.min(100, Math.round((balance / goalAmount) * 100));
-    const role = normalizeAccountRole(account.role);
-
-    items.push({
+  const items: GoalProgressResponse[] = accounts
+    .filter((account) => account.goalAmount != null && account.goalAmount > 0)
+    .map((account) => ({
       accountId: account.id,
-      name: account.accountName,
-      balance,
-      goalAmount,
-      progressPercent,
-      role,
-      roleLabel: ACCOUNT_ROLE_LABELS[role],
+      accountName: account.accountName,
+      role: normalizeAccountRole(account.role),
+      currentBalance: Number(account.currentBalance) || 0,
+      goalAmount: Number(account.goalAmount),
+      progressPercent:
+        account.progressPercent != null
+          ? account.progressPercent
+          : Math.min(
+              100,
+              Math.round((Number(account.currentBalance) / Number(account.goalAmount)) * 100)
+            ),
       goalDate: account.goalDate ?? null,
-      dDay: calcDDay(account.goalDate ?? null),
-      color: colors[index % colors.length]
-    });
-  });
+      dDay: calcDDay(account.goalDate ?? null)
+    }));
 
-  return items.sort((a, b) => b.progressPercent - a.progressPercent);
+  return mapGoalProgressFromApi(items, colors).sort(
+    (a, b) => b.progressPercent - a.progressPercent
+  );
 }
 
 export function formatGoalDateLabel(goalDate: string | null): string | null {
