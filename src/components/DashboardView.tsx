@@ -7,7 +7,13 @@ import {
   ShoppingBag
 } from 'lucide-react';
 import { getAccounts, type AccountResponse } from '../api/accountApi';
+import { getAllUserTransactions, type TransactionResponse } from '../api/transactionApi';
 import { budgetApi, dashboardApi, groupPurchaseApi, groupPurchaseCategoryApi, portfolioApi } from '../api';
+import {
+  buildGoalProgressItems,
+  computeMonthlyAllocationSummary,
+  formatGoalDateLabel
+} from '../lib/accountGoalStorage';
 import type {
   BudgetSummaryResponse,
   CategoryAmountResponse,
@@ -42,6 +48,7 @@ interface MonthlyFlowRow {
 
 interface DashboardViewProps {
   onViewAllGroupBuys?: () => void;
+  onGoToGoalSettings?: () => void;
 }
 
 const DASHBOARD_GROUP_BUY_LIMIT = 3;
@@ -56,8 +63,6 @@ const CATEGORY_COLORS = [
   '#ec4899',
   '#64748b'
 ];
-
-const SAVINGS_KEYWORDS = ['저축', '적금', '연금', '청약'];
 
 function toNumber(value: number | string | null | undefined): number {
   if (value == null) return 0;
@@ -88,13 +93,6 @@ function formatKRW(value: number): string {
 function formatDiffLabel(diff: number): string {
   const sign = diff >= 0 ? '+' : '';
   return `전월 대비 ${sign}${formatKRW(diff)}원`;
-}
-
-function formatPercentChange(current: number, previous: number): string | null {
-  if (previous === 0) return null;
-  const pct = ((current - previous) / Math.abs(previous)) * 100;
-  const sign = pct >= 0 ? '+' : '';
-  return `${sign}${pct.toFixed(1)}%`;
 }
 
 function mergeCategoryAmounts(items: CategoryAmountResponse[]): { name: string; value: number }[] {
@@ -129,18 +127,17 @@ function mapExpensesToCategoryData(expenses: Record<string, number>): CategoryDa
   return mapToCategoryData(items);
 }
 
-function buildSavingsCategories(
-  expenseItems: { name: string; value: number }[],
-  netSavings: number
-): CategoryData[] {
-  const savingsItems = expenseItems.filter((item) =>
-    SAVINGS_KEYWORDS.some((keyword) => item.name.includes(keyword))
-  );
-  if (savingsItems.length > 0) return mapToCategoryData(savingsItems);
-  if (netSavings > 0) {
-    return [{ name: '이달 남은 금액', value: netSavings, percent: 100, color: '#10b981' }];
+function buildTransferCategoryItems(transactions: TransactionResponse[]): { name: string; value: number }[] {
+  const map = new Map<string, number>();
+  for (const tx of transactions) {
+    if (tx.type !== 'TRANSFER') continue;
+    const amount = Math.abs(toNumber(tx.amount));
+    if (amount <= 0) continue;
+    map.set(tx.categoryName, (map.get(tx.categoryName) ?? 0) + amount);
   }
-  return [];
+  return Array.from(map.entries())
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
 }
 
 function buildMonthlyFlowRows(trends: DashboardResponse['trends']): MonthlyFlowRow[] {
@@ -248,7 +245,10 @@ function buildFallbackDashboard(
   };
 }
 
-export const DashboardView: React.FC<DashboardViewProps> = ({ onViewAllGroupBuys }) => {
+export const DashboardView: React.FC<DashboardViewProps> = ({
+  onViewAllGroupBuys,
+  onGoToGoalSettings
+}) => {
   const [activeCategoryTab, setActiveCategoryTab] = useState('지출');
   const [hoveredDonutSlice, setHoveredDonutSlice] = useState<number | null>(null);
   const [hoveredSubSlice, setHoveredSubSlice] = useState<number | null>(null);
@@ -265,6 +265,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onViewAllGroupBuys
   const [hoveredFlowIndex, setHoveredFlowIndex] = useState<number | null>(null);
   const [groupBuys, setGroupBuys] = useState<DashboardGroupBuyItem[]>([]);
   const [groupBuyLoading, setGroupBuyLoading] = useState(true);
+  const [monthTransactions, setMonthTransactions] = useState<TransactionResponse[]>([]);
   const barChartRef = useRef<HTMLDivElement>(null);
 
   const yearMonth = formatYearMonth(selectedDate);
@@ -280,11 +281,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onViewAllGroupBuys
       const prevYm = shiftYearMonth(yearMonth, -1);
 
       try {
-        const [dashboardRes, portfolioRes, prevPortfolioRes, accounts] = await Promise.all([
+        const [y, m] = yearMonth.split('-').map(Number);
+        const lastDay = new Date(y, m, 0).getDate();
+        const monthStart = `${yearMonth}-01`;
+        const monthEnd = `${yearMonth}-${String(lastDay).padStart(2, '0')}`;
+
+        const [dashboardRes, portfolioRes, prevPortfolioRes, accounts, txPage] = await Promise.all([
           dashboardApi.getDashboard(yearMonth),
           portfolioApi.getMyPortfolio(yearMonth),
           portfolioApi.getMyPortfolio(prevYm),
-          getAccounts().catch(() => [])
+          getAccounts().catch(() => []),
+          getAllUserTransactions(monthStart, monthEnd).catch(() => ({ content: [] }))
         ]);
 
         if (cancelled) return;
@@ -321,6 +328,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onViewAllGroupBuys
         setPortfolio(portfolioRes.data);
         setPrevPortfolio(prevPortfolioRes.ok ? prevPortfolioRes.data : null);
         setAccounts(accounts);
+        setMonthTransactions(
+          txPage.content.map((tx) => ({
+            ...tx,
+            amount: Number(tx.amount),
+            description: tx.description ?? ''
+          }))
+        );
         setLoading(false);
       } catch {
         if (!cancelled) {
@@ -384,7 +398,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onViewAllGroupBuys
   const prevExpense = toNumber(prevPortfolio?.totalExpense);
   const incomeDiff = totalIncome - prevIncome;
   const expenseDiff = totalExpense - prevExpense;
-  const netSavings = Math.max(0, totalIncome - totalExpense);
 
   const budgetRemaining = toNumber(dashboard?.budgetStatus.remaining);
   const budgetPlanned = toNumber(dashboard?.budgetStatus.totalPlanned);
@@ -392,6 +405,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onViewAllGroupBuys
   const totalAsset = useMemo(
     () => accounts.reduce((acc, account) => acc + toNumber(account.currentBalance), 0),
     [accounts]
+  );
+
+  const goalProgressItems = useMemo(
+    () => buildGoalProgressItems(accounts, CATEGORY_COLORS),
+    [accounts]
+  );
+
+  const monthlyAllocation = useMemo(
+    () => computeMonthlyAllocationSummary(monthTransactions, accounts, totalIncome),
+    [monthTransactions, accounts, totalIncome]
   );
 
   const accountBreakdown = useMemo(() => {
@@ -428,6 +451,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onViewAllGroupBuys
     ]);
   }, [portfolio]);
 
+  const transferCategoryItems = useMemo(
+    () => buildTransferCategoryItems(monthTransactions),
+    [monthTransactions]
+  );
+
   const categoryData = useMemo<Record<string, CategoryData[]>>(() => {
     const expenseFromDashboard = dashboard
       ? mapExpensesToCategoryData(dashboard.categoryExpenses)
@@ -436,9 +464,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onViewAllGroupBuys
     return {
       지출: expenseFromDashboard.length > 0 ? expenseFromDashboard : mapToCategoryData(expenseCategoryItems),
       수입: mapToCategoryData(incomeCategoryItems),
-      '남은 금액': buildSavingsCategories(expenseCategoryItems, netSavings)
+      이체: mapToCategoryData(transferCategoryItems)
     };
-  }, [dashboard, expenseCategoryItems, incomeCategoryItems, netSavings]);
+  }, [dashboard, expenseCategoryItems, incomeCategoryItems, transferCategoryItems]);
 
   const subCategories: SubCategoryItem[] = useMemo(() => {
     const topFive = dashboard?.categoryExpenses
@@ -606,7 +634,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onViewAllGroupBuys
             <div className="card-header-row">
               <span className="card-title">카테고리 비율</span>
               <div className="sub-tabs-container" style={{ marginBottom: 0 }}>
-                {['수입', '지출', '남은 금액'].map((tab) => (
+                {['수입', '지출', '이체'].map((tab) => (
                   <button
                     key={tab}
                     onClick={() => {
@@ -880,6 +908,98 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onViewAllGroupBuys
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           <div className="card">
             <div className="card-header-row">
+              <span className="card-title">목표 달성률</span>
+              <div className="goal-rate-badges">
+                <span className="goal-savings-rate-badge">
+                  저축률 {monthlyAllocation.savings.rate.toFixed(1)}%
+                </span>
+                <span className="goal-investment-rate-badge">
+                  투자율 {monthlyAllocation.investment.rate.toFixed(1)}%
+                </span>
+              </div>
+            </div>
+
+            <div className="goal-summary-strip">
+              <div className="goal-summary-item">
+                <span className="goal-summary-label">순저축</span>
+                <span className="goal-summary-value">{formatKRW(monthlyAllocation.savings.net)}원</span>
+              </div>
+              <div className="goal-summary-item">
+                <span className="goal-summary-label">순투자</span>
+                <span className="goal-summary-value">{formatKRW(monthlyAllocation.investment.net)}원</span>
+              </div>
+              <div className="goal-summary-item">
+                <span className="goal-summary-label">월 수입</span>
+                <span className="goal-summary-value muted">{formatKRW(totalIncome)}원</span>
+              </div>
+            </div>
+
+            {goalProgressItems.length === 0 ? (
+              <div className="goal-empty-state">
+                <p>목표가 설정된 계좌가 없습니다.</p>
+                <span className="goal-empty-hint">내역 및 자산 관리 &gt; 계좌 목표에서 설정할 수 있습니다.</span>
+                {onGoToGoalSettings && (
+                  <button type="button" className="btn-goal-settings-link" onClick={onGoToGoalSettings}>
+                    계좌 목표 설정하기
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
+              <div className="asset-progress-list goal-progress-list">
+                {goalProgressItems.map((goal) => (
+                  <div key={goal.accountId} className="asset-progress-item">
+                    <div className="asset-progress-header">
+                      <div className="goal-progress-title-row">
+                        <span className="asset-progress-name">{goal.name}</span>
+                        <span className="goal-role-badge">{goal.roleLabel}</span>
+                      </div>
+                      <span className="asset-progress-val goal-progress-percent">
+                        {goal.progressPercent}%
+                      </span>
+                    </div>
+                    <div className="progress-bar-container">
+                      <div
+                        className="progress-bar-fill"
+                        style={{
+                          width: `${Math.max(goal.progressPercent, goal.balance > 0 ? 4 : 0)}%`,
+                          backgroundColor: goal.color
+                        }}
+                      />
+                    </div>
+                    <div className="goal-progress-meta">
+                      <span>
+                        {formatKRW(goal.balance)}원 / {formatKRW(goal.goalAmount)}원
+                      </span>
+                      {goal.goalDate && (
+                        <span>
+                          목표일 {formatGoalDateLabel(goal.goalDate)}
+                          {goal.dDay != null && (
+                            <span className={goal.dDay >= 0 ? 'goal-dday' : 'goal-dday overdue'}>
+                              {goal.dDay >= 0 ? ` · D-${goal.dDay}` : ` · ${Math.abs(goal.dDay)}일 초과`}
+                            </span>
+                          )}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {onGoToGoalSettings && (
+                <button type="button" className="btn-goal-settings-link subtle" onClick={onGoToGoalSettings}>
+                  계좌 목표 관리
+                </button>
+              )}
+              </>
+            )}
+
+            <p className="goal-prototype-hint">
+              저축률·투자율은 각 역할 계좌로의 순이체 ÷ 월 수입 기준 (프로토타입)
+            </p>
+          </div>
+
+          <div className="card">
+            <div className="card-header-row">
               <span className="card-title">자산 현황</span>
               <span className="stat-label">계좌별 구성</span>
             </div>
@@ -919,26 +1039,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onViewAllGroupBuys
                 ))}
               </div>
             )}
-          </div>
-
-          <div className="card">
-            <div className="card-header-row">
-              <span className="card-title">상세 내역</span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid var(--border)', padding: '14px 16px', borderRadius: '12px' }}>
-                <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-secondary)' }}>전월 대비 수입</span>
-                <span style={{ fontSize: '12px', fontWeight: '700', color: incomeDiff >= 0 ? '#10b981' : '#ef4444', background: incomeDiff >= 0 ? '#ecfdf5' : '#fef2f2', padding: '4px 10px', borderRadius: '20px' }}>
-                  {formatPercentChange(totalIncome, prevIncome) ?? '—'}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid var(--border)', padding: '14px 16px', borderRadius: '12px' }}>
-                <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-secondary)' }}>전월 대비 지출</span>
-                <span style={{ fontSize: '12px', fontWeight: '700', color: expenseDiff <= 0 ? '#10b981' : '#ef4444', background: expenseDiff <= 0 ? '#ecfdf5' : '#fef2f2', padding: '4px 10px', borderRadius: '20px' }}>
-                  {formatPercentChange(totalExpense, prevExpense) ?? '—'}
-                </span>
-              </div>
-            </div>
           </div>
         </div>
       </div>

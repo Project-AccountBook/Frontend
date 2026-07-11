@@ -163,6 +163,16 @@ function App() {
     writeTabToUrl('history');
   };
 
+  const goToGoalSettings = () => {
+    setKnowhowMode('list');
+    setKnowhowPostId(null);
+    setQnaMode('list');
+    setQnaPostId(null);
+    setAssetInitialSection('goals');
+    setActiveTab('history');
+    writeTabToUrl('history');
+  };
+
   const renderKnowhow = () => {
     if (knowhowMode === 'write') {
       return (
@@ -228,7 +238,12 @@ function App() {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <DashboardView onViewAllGroupBuys={() => handleTabChange('groupbuy')} />;
+        return (
+          <DashboardView
+            onViewAllGroupBuys={() => handleTabChange('groupbuy')}
+            onGoToGoalSettings={goToGoalSettings}
+          />
+        );
       case 'history':
         return <AssetView initialSection={assetInitialSection} />;
       case 'budget':
