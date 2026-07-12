@@ -70,6 +70,7 @@ export interface UserProfileResponse {
   isPortfolioPublic: boolean;
   isBudgetAlertEnabled: boolean;
   isInterestCategoryEnabled: boolean;
+  isGoalAlertEnabled: boolean;
   isSystemAlertEnabled: boolean;
 }
 
@@ -81,6 +82,7 @@ export interface UpdateProfileRequest {
   isPortfolioPublic: boolean;
   isBudgetAlertEnabled: boolean;
   isInterestCategoryEnabled: boolean;
+  isGoalAlertEnabled: boolean;
   isSystemAlertEnabled: boolean;
 }
 
@@ -144,7 +146,7 @@ export interface PageResponse<T> {
   empty: boolean;
 }
 
-export type NotificationType = 'BUDGET' | 'INTEREST_CATEGORY' | 'SYSTEM';
+export type NotificationType = 'BUDGET' | 'INTEREST_CATEGORY' | 'GOAL' | 'SYSTEM';
 
 export interface NotificationResponse {
   id: number;

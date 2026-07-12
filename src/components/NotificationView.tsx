@@ -8,6 +8,7 @@ import {
   ExternalLink,
   PiggyBank,
   ShoppingBag,
+  Target,
   Trash2,
   Info
 } from 'lucide-react';
@@ -30,6 +31,7 @@ type FilterTab = (typeof FILTER_TABS)[number]['id'];
 const CATEGORY_TABS: { id: 'all' | NotificationType; label: string }[] = [
   { id: 'all', label: '전체' },
   { id: 'BUDGET', label: '예산' },
+  { id: 'GOAL', label: '목표' },
   { id: 'INTEREST_CATEGORY', label: '공동구매' },
   { id: 'SYSTEM', label: '시스템' }
 ];
@@ -39,6 +41,7 @@ const TYPE_CONFIG: Record<
   { label: string; icon: React.ElementType; color: string; bg: string }
 > = {
   BUDGET: { label: '예산', icon: PiggyBank, color: 'var(--red)', bg: 'var(--red-bg)' },
+  GOAL: { label: '목표', icon: Target, color: 'var(--green)', bg: 'var(--green-bg)' },
   INTEREST_CATEGORY: {
     label: '공동구매',
     icon: ShoppingBag,
@@ -79,6 +82,7 @@ function resolveNotificationTab(
   }
 
   if (type === 'BUDGET') return 'budget';
+  if (type === 'GOAL') return 'dashboard';
   if (type === 'INTEREST_CATEGORY') return 'groupbuy';
   return null;
 }

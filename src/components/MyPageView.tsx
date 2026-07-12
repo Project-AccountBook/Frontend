@@ -236,6 +236,7 @@ export const MyPageView: React.FC = () => {
         isPortfolioPublic: editForm.isPortfolioPublic ?? false,
         isBudgetAlertEnabled: editForm.isBudgetAlertEnabled ?? true,
         isInterestCategoryEnabled: editForm.isInterestCategoryEnabled ?? true,
+        isGoalAlertEnabled: editForm.isGoalAlertEnabled ?? true,
         isSystemAlertEnabled: editForm.isSystemAlertEnabled ?? true,
       });
       if (result.ok) {
@@ -291,6 +292,7 @@ export const MyPageView: React.FC = () => {
         isPortfolioPublic: profile.isPortfolioPublic,
         isBudgetAlertEnabled: profile.isBudgetAlertEnabled,
         isInterestCategoryEnabled: profile.isInterestCategoryEnabled,
+        isGoalAlertEnabled: profile.isGoalAlertEnabled,
         isSystemAlertEnabled: profile.isSystemAlertEnabled,
       });
       if (result.ok) {
@@ -790,6 +792,13 @@ export const MyPageView: React.FC = () => {
                   onChange={(v) => setProfile({ ...profile, isInterestCategoryEnabled: v })}
                   label="관심 카테고리 알림"
                   description="내가 등록한 관심 카테고리에 새 글이 올라오면 알려드립니다"
+                />
+
+                <ToggleSwitch
+                  checked={profile.isGoalAlertEnabled}
+                  onChange={(v) => setProfile({ ...profile, isGoalAlertEnabled: v })}
+                  label="계좌 목표 달성 알림"
+                  description="계좌 목표 금액에 도달하면 알려드립니다"
                 />
 
                 <ToggleSwitch
