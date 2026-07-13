@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   ReceiptText,
   Calendar as CalendarIcon,
@@ -18,7 +18,9 @@ import {
   Target,
   Loader2,
   AlertCircle,
-  SlidersHorizontal
+  SlidersHorizontal,
+  ArrowUpRight,
+  ArrowDownRight
 } from 'lucide-react';
 import {
   getAccounts,
@@ -37,7 +39,7 @@ import {
   type TransactionType
 } from '../api/categoryApi';
 import {
-  getAllUserTransactions,
+  fetchAllUserTransactionsInRange,
   createTransaction,
   updateTransaction,
   deleteTransaction,
@@ -81,6 +83,19 @@ const getMonthRange = (year: number, month: number) => {
     end: `${year}-${mm}-${String(lastDay).padStart(2, '0')}`,
   };
 };
+
+const TRANSACTION_LIST_PAGE_SIZE = 20;
+
+function getListPageNumbers(currentPage: number, totalPages: number): number[] {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const pages = new Set<number>([1, totalPages, currentPage, currentPage - 1, currentPage + 1]);
+  return Array.from(pages)
+    .filter((page) => page >= 1 && page <= totalPages)
+    .sort((a, b) => a - b);
+}
 
 const ACCOUNT_COLOR_PALETTE = [
   { dot: '#6366f1', bg: 'rgba(99, 102, 241, 0.14)' },
@@ -160,6 +175,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
   const [startDate, setStartDate] = useState(initialMonthRange.start);
   const [endDate, setEndDate] = useState(initialMonthRange.end);
   const [searchQuery, setSearchQuery] = useState('');
+  const [listPage, setListPage] = useState(1);
 
   const [showModal, setShowModal] = useState<boolean>(false);
   const [showAllocationModal, setShowAllocationModal] = useState<boolean>(false);
@@ -237,7 +253,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
     setTransactionsLoading(true);
     setTransactionsError(null);
     try {
-      const page = await getAllUserTransactions(range.start, range.end);
+      const page = await fetchAllUserTransactionsInRange(range.start, range.end);
       setTransactions(page.content.map((tx) => ({
         ...tx,
         amount: Number(tx.amount),
@@ -260,6 +276,10 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
   useEffect(() => {
     fetchTransactions();
   }, [fetchTransactions]);
+
+  useEffect(() => {
+    setListPage(1);
+  }, [filterAccount, filterType, startDate, endDate, searchQuery, viewMode]);
 
   useEffect(() => {
     if (!showModal || (activeSection !== 'transactions' && activeSection !== 'fixed')) return;
@@ -581,20 +601,73 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
     }
   };
 
-  const filteredTransactions = transactions.filter(tx => {
-    if (filterAccount !== 'all' && tx.accountId !== filterAccount) return false;
-    if (filterType !== 'all' && tx.type !== filterType) return false;
-    if (viewMode === 'list' && (tx.transactionDate < startDate || tx.transactionDate > endDate)) return false;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      const matchDesc = (tx.description ?? '').toLowerCase().includes(q);
-      const matchCat = tx.categoryName.toLowerCase().includes(q);
-      const matchAcc = tx.accountName.toLowerCase().includes(q);
-      const matchTarget = (tx.targetAccountName ?? '').toLowerCase().includes(q);
-      if (!matchDesc && !matchCat && !matchAcc && !matchTarget) return false;
+  const filteredTransactions = useMemo(() => {
+    return transactions
+      .filter((tx) => {
+        if (filterAccount !== 'all' && tx.accountId !== filterAccount) return false;
+        if (filterType !== 'all' && tx.type !== filterType) return false;
+        if (viewMode === 'list' && (tx.transactionDate < startDate || tx.transactionDate > endDate)) return false;
+        if (searchQuery) {
+          const q = searchQuery.toLowerCase();
+          const matchDesc = (tx.description ?? '').toLowerCase().includes(q);
+          const matchCat = tx.categoryName.toLowerCase().includes(q);
+          const matchAcc = tx.accountName.toLowerCase().includes(q);
+          const matchTarget = (tx.targetAccountName ?? '').toLowerCase().includes(q);
+          if (!matchDesc && !matchCat && !matchAcc && !matchTarget) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        const dateCompare = b.transactionDate.localeCompare(a.transactionDate);
+        if (dateCompare !== 0) return dateCompare;
+        return b.id - a.id;
+      });
+  }, [transactions, filterAccount, filterType, startDate, endDate, searchQuery, viewMode]);
+
+  const listTotalPages = Math.max(1, Math.ceil(filteredTransactions.length / TRANSACTION_LIST_PAGE_SIZE));
+  const listCurrentPage = Math.min(listPage, listTotalPages);
+
+  const paginatedTransactions = useMemo(() => {
+    const start = (listCurrentPage - 1) * TRANSACTION_LIST_PAGE_SIZE;
+    return filteredTransactions.slice(start, start + TRANSACTION_LIST_PAGE_SIZE);
+  }, [filteredTransactions, listCurrentPage]);
+
+  const listPageNumbers = useMemo(
+    () => getListPageNumbers(listCurrentPage, listTotalPages),
+    [listCurrentPage, listTotalPages]
+  );
+
+  const periodSummaryLabel = useMemo(() => {
+    if (viewMode === 'calendar') {
+      return `${calendarYear}년 ${calendarMonth + 1}월`;
     }
-    return true;
-  });
+
+    const [startYear, startMonth] = startDate.split('-').map(Number);
+    const [endYear, endMonth] = endDate.split('-').map(Number);
+    if (startYear === endYear && startMonth === endMonth) {
+      return `${startYear}년 ${startMonth}월`;
+    }
+    return '선택 기간';
+  }, [viewMode, calendarYear, calendarMonth, startDate, endDate]);
+
+  const periodTotals = useMemo(() => {
+    const scoped = filterAccount === 'all'
+      ? transactions
+      : transactions.filter((tx) => tx.accountId === filterAccount);
+
+    const income = scoped
+      .filter((tx) => tx.type === 'INCOME')
+      .reduce((sum, tx) => sum + tx.amount, 0);
+    const expense = scoped
+      .filter((tx) => tx.type === 'EXPENSE')
+      .reduce((sum, tx) => sum + tx.amount, 0);
+
+    return { income, expense };
+  }, [transactions, filterAccount]);
+
+  const periodAccountLabel = filterAccount === 'all'
+    ? '전체 계좌'
+    : accounts.find((acc) => acc.id === filterAccount)?.accountName ?? '선택 계좌';
 
   const getTxTypeBadgeClass = (type: TransactionType) => {
     switch (type) {
@@ -755,6 +828,9 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
     return acc;
   }, {});
 
+  const filterTxsByAccount = (txs: Transaction[]) =>
+    filterAccount === 'all' ? txs : txs.filter((tx) => tx.accountId === filterAccount);
+
   const getDayAccountSummaries = (dateStr: string): DayAccountSummary[] => {
     const txs = txByDate[dateStr] || [];
     const byAccount = new Map<number, DayAccountSummary>();
@@ -784,7 +860,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
   };
 
   const getDaySummary = (dateStr: string) => {
-    const txs = txByDate[dateStr] || [];
+    const txs = filterTxsByAccount(txByDate[dateStr] || []);
     const income = txs.filter(t => t.type === 'INCOME').reduce((s, t) => s + t.amount, 0);
     const expense = txs.filter(t => t.type === 'EXPENSE').reduce((s, t) => s + t.amount, 0);
     const transferTxs = txs.filter(t => t.type === 'TRANSFER');
@@ -793,7 +869,9 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
     return { txs, income, expense, transfer, transferAmount };
   };
 
-  const selectedDayTxs = selectedCalendarDay ? (txByDate[selectedCalendarDay] || []) : [];
+  const selectedDayTxs = selectedCalendarDay
+    ? filterTxsByAccount(txByDate[selectedCalendarDay] || [])
+    : [];
   const todayStr = today.toISOString().split('T')[0];
 
   return (
@@ -926,83 +1004,109 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                 )}
               </div>
 
-              {viewMode === 'list' && (
-                <div className="filters-wrapper">
-                  <div className="filter-row">
-                    <div className="filter-group">
-                      <label>계좌 필터</label>
-                      <select
-                        value={filterAccount}
-                        onChange={(e) => setFilterAccount(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
-                        className="filter-select"
-                      >
-                        <option value="all">전체 계좌</option>
-                        {accounts.map(acc => (
-                          <option key={acc.id} value={acc.id}>{acc.accountName}</option>
-                        ))}
-                      </select>
-                    </div>
+            </div>
 
-                    <div className="filter-group">
-                      <label>거래 유형</label>
-                      <select
-                        value={filterType}
-                        onChange={(e) => setFilterType(e.target.value as any)}
-                        className="filter-select"
-                      >
-                        <option value="all">전체 유형</option>
-                        <option value="INCOME">수입</option>
-                        <option value="EXPENSE">지출</option>
-                        <option value="TRANSFER">이체</option>
-                      </select>
+            {!transactionsLoading && !transactionsError && (
+              <div className="tx-period-summary">
+                <div className="tx-period-summary-header">
+                  <span className="tx-period-summary-title">{periodSummaryLabel} 합계</span>
+                  <span className="tx-period-summary-scope">{periodAccountLabel}</span>
+                </div>
+                <div className="tx-period-summary-grid">
+                  <div className="tx-period-summary-item income">
+                    <div className="tx-period-summary-label">
+                      <ArrowUpRight size={14} />
+                      <span>총 수입</span>
                     </div>
-
-                    <div className="filter-group">
-                      <label>시작일</label>
-                      <input
-                        type="date"
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
-                        className="filter-input-date"
-                      />
-                    </div>
-
-                    <div className="filter-group">
-                      <label>종료일</label>
-                      <input
-                        type="date"
-                        value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
-                        className="filter-input-date"
-                      />
-                    </div>
+                    <span className="tx-period-summary-value">+{formatCurrency(periodTotals.income)}</span>
                   </div>
-
-                  <div className="filter-search-row">
-                    <div className="search-input-wrapper">
-                      <Search size={16} className="search-icon" />
-                      <input
-                        type="text"
-                        placeholder="내용, 카테고리, 계좌, 이체 대상 검색..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="search-input"
-                      />
-                      {searchQuery && (
-                        <button className="btn-clear-search" onClick={() => setSearchQuery('')}>
-                          <X size={14} />
-                        </button>
-                      )}
+                  <div className="tx-period-summary-item expense">
+                    <div className="tx-period-summary-label">
+                      <ArrowDownRight size={14} />
+                      <span>총 지출</span>
                     </div>
-
-                    <button className="btn-export" onClick={handleExportCsv} title="엑셀로 내보내기">
-                      <Download size={16} />
-                      <span>내보내기</span>
-                    </button>
+                    <span className="tx-period-summary-value">-{formatCurrency(periodTotals.expense)}</span>
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+
+            {viewMode === 'list' && (
+              <div className="filters-wrapper">
+                <div className="filter-row">
+                  <div className="filter-group">
+                    <label>계좌 필터</label>
+                    <select
+                      value={filterAccount}
+                      onChange={(e) => setFilterAccount(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
+                      className="filter-select"
+                    >
+                      <option value="all">전체 계좌</option>
+                      {accounts.map(acc => (
+                        <option key={acc.id} value={acc.id}>{acc.accountName}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="filter-group">
+                    <label>거래 유형</label>
+                    <select
+                      value={filterType}
+                      onChange={(e) => setFilterType(e.target.value as any)}
+                      className="filter-select"
+                    >
+                      <option value="all">전체 유형</option>
+                      <option value="INCOME">수입</option>
+                      <option value="EXPENSE">지출</option>
+                      <option value="TRANSFER">이체</option>
+                    </select>
+                  </div>
+
+                  <div className="filter-group">
+                    <label>시작일</label>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="filter-input-date"
+                    />
+                  </div>
+
+                  <div className="filter-group">
+                    <label>종료일</label>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="filter-input-date"
+                    />
+                  </div>
+                </div>
+
+                <div className="filter-search-row">
+                  <div className="search-input-wrapper">
+                    <Search size={16} className="search-icon" />
+                    <input
+                      type="text"
+                      placeholder="내용, 카테고리, 계좌, 이체 대상 검색..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="search-input"
+                    />
+                    {searchQuery && (
+                      <button className="btn-clear-search" onClick={() => setSearchQuery('')}>
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+
+                  <button className="btn-export" onClick={handleExportCsv} title="엑셀로보내기">
+                    <Download size={16} />
+                    <span>내보내기</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* ── CALENDAR VIEW ── */}
             {viewMode === 'calendar' && (
@@ -1171,6 +1275,9 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                       <h4 className="cal-detail-title">
                         <CalendarIcon size={15} />
                         {selectedCalendarDay} 거래 내역
+                        {filterAccount !== 'all' && (
+                          <span className="cal-detail-account-label">· {periodAccountLabel}</span>
+                        )}
                       </h4>
                       <div className="cal-detail-header-actions">
                         {selectedDayTxs.length > 0 && (
@@ -1291,7 +1398,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                         </td>
                       </tr>
                     ) : (
-                      filteredTransactions.map(tx => (
+                      paginatedTransactions.map(tx => (
                         <tr
                           key={tx.id}
                           className="hover-row tx-row-clickable"
@@ -1337,6 +1444,50 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                     )}
                   </tbody>
                 </table>
+
+                {listTotalPages > 1 && (
+                  <div className="tx-list-pagination">
+                    <div className="tx-list-pagination-controls">
+                      <button
+                        type="button"
+                        className="tx-list-pagination-btn"
+                        onClick={() => setListPage((page) => Math.max(1, page - 1))}
+                        disabled={listCurrentPage === 1}
+                        aria-label="이전 페이지"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+
+                      {listPageNumbers.map((pageNumber, index) => {
+                        const prevPage = listPageNumbers[index - 1];
+                        const showEllipsis = prevPage != null && pageNumber - prevPage > 1;
+
+                        return (
+                          <React.Fragment key={pageNumber}>
+                            {showEllipsis && <span className="tx-list-pagination-ellipsis">…</span>}
+                            <button
+                              type="button"
+                              className={`tx-list-pagination-page${listCurrentPage === pageNumber ? ' active' : ''}`}
+                              onClick={() => setListPage(pageNumber)}
+                            >
+                              {pageNumber}
+                            </button>
+                          </React.Fragment>
+                        );
+                      })}
+
+                      <button
+                        type="button"
+                        className="tx-list-pagination-btn"
+                        onClick={() => setListPage((page) => Math.min(listTotalPages, page + 1))}
+                        disabled={listCurrentPage === listTotalPages}
+                        aria-label="다음 페이지"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

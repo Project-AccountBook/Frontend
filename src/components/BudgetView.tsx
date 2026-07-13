@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { budgetApi, categoryApi } from '../api';
 import type { BudgetResponse, BudgetSummaryResponse, CategoryResponse } from '../api';
-import { getAllUserTransactions, type TransactionResponse } from '../api/transactionApi';
+import { fetchAllUserTransactionsInRange, type TransactionResponse } from '../api/transactionApi';
 import { MonthYearNavigator } from './MonthYearNavigator';
 
 interface BudgetItem {
@@ -1263,7 +1263,7 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
     try {
       const [data, txPage] = await Promise.all([
         fetchMonthData(yearMonth),
-        getAllUserTransactions(monthStart, monthEnd).catch(() => ({ content: [] as TransactionResponse[] }))
+        fetchAllUserTransactionsInRange(monthStart, monthEnd).catch(() => ({ content: [] as TransactionResponse[] }))
       ]);
       setBudgets(data.budgets);
       setSummary(data.summary);

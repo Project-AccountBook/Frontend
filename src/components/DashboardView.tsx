@@ -7,7 +7,7 @@ import {
   ShoppingBag
 } from 'lucide-react';
 import { getAccounts, type AccountResponse } from '../api/accountApi';
-import { getAllUserTransactions, type TransactionResponse } from '../api/transactionApi';
+import { fetchAllUserTransactionsInRange, type TransactionResponse } from '../api/transactionApi';
 import { budgetApi, dashboardApi, groupPurchaseApi, groupPurchaseCategoryApi, portfolioApi } from '../api';
 import {
   mapGoalProgressFromAccounts,
@@ -317,7 +317,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           portfolioApi.getMyPortfolio(yearMonth),
           portfolioApi.getMyPortfolio(prevYm),
           getAccounts().catch(() => []),
-          getAllUserTransactions(monthStart, monthEnd).catch(() => ({ content: [] }))
+          fetchAllUserTransactionsInRange(monthStart, monthEnd).catch(() => ({ content: [] }))
         ]);
 
         if (cancelled) return;
