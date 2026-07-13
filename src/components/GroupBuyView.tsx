@@ -12,6 +12,7 @@ import {
   Bell,
   BellOff,
   Loader2,
+  AlertCircle
 } from 'lucide-react';
 import {
   interestCategoryApi,
@@ -48,6 +49,7 @@ interface GroupBuyItem {
   description: string;
   deadline: string;
   imageColor: string;
+  imageUrl?: string;
 }
 
 interface Comment {
@@ -168,7 +170,7 @@ export const GroupBuyView: React.FC<{
 }> = ({ initialGroupPurchaseId = null, onInitialGroupPurchaseHandled }) => {
   const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
     const headers = new Headers(options.headers);
-    if (!headers.has('Content-Type')) {
+    if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
       headers.set('Content-Type', 'application/json');
     }
 
@@ -206,6 +208,11 @@ export const GroupBuyView: React.FC<{
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Report States
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+
   // Form states for Suggestion modal
   const [formType, setFormType] = useState<'request' | 'suggest'>('request');
   const [formTitle, setFormTitle] = useState('');
@@ -226,6 +233,34 @@ export const GroupBuyView: React.FC<{
     pickupLocation: '',
     imageUrl: ''
   });
+
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const res = await fetchWithAuth('/api/files/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (res.url) {
+        setCreateForm(prev => ({...prev, imageUrl: res.url}));
+        triggerToast('이미지가 성공적으로 업로드되었습니다.');
+      }
+    } catch (err: any) {
+      console.error("Failed to upload image:", err);
+      alert(err.message || '이미지 업로드에 실패했습니다.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   // Comment Board States
   const [comments, setComments] = useState<Record<number, Comment[]>>({});
@@ -396,7 +431,8 @@ export const GroupBuyView: React.FC<{
       distance: '0.8km',
       description: bp.content,
       deadline: deadlineStr,
-      imageColor: imageColor
+      imageColor: imageColor,
+      imageUrl: bp.imageUrl
     };
   };
 
@@ -690,6 +726,37 @@ export const GroupBuyView: React.FC<{
     }
   };
 
+  // Report Submit Handler
+  const handleReportSubmit = async () => {
+    if (!selectedItem) return;
+    if (reportReason.trim().length < 5) {
+      alert("신고 사유를 5자 이상 입력해주세요.");
+      return;
+    }
+
+    setIsSubmittingReport(true);
+    try {
+      const res = await fetchWithAuth(`/api/v1/reports`, {
+        method: 'POST',
+        body: JSON.stringify({
+          targetType: "GROUP_PURCHASE",
+          targetId: selectedItem.id,
+          reason: reportReason
+        })
+      });
+      if (res.success || res.data) {
+        setShowReportModal(false);
+        setReportReason('');
+        triggerToast('신고가 정상적으로 접수되었습니다.');
+      }
+    } catch (err: any) {
+      console.error("Failed to submit report:", err);
+      alert(err.message || '신고 접수에 실패했습니다.');
+    } finally {
+      setIsSubmittingReport(false);
+    }
+  };
+
   // Filter logic
   const filteredItems = items
     .filter(item => {
@@ -949,7 +1016,16 @@ export const GroupBuyView: React.FC<{
         <div className="modal-overlay" onClick={() => setSelectedItem(null)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <span className="modal-title">공동구매 상세 정보</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="modal-title">공동구매 상세 정보</span>
+                <button 
+                  onClick={() => setShowReportModal(true)}
+                  style={{ background: '#fef2f2', border: '1px solid #fee2e2', color: '#ef4444', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                >
+                  <AlertCircle size={14} />
+                  신고
+                </button>
+              </div>
               <X size={20} className="modal-close-btn" onClick={() => setSelectedItem(null)} />
             </div>
             
@@ -957,10 +1033,16 @@ export const GroupBuyView: React.FC<{
               <div className="detail-modal-layout">
                 {/* Left Col: Visuals & details */}
                 <div>
-                  <div className="detail-img-box" style={{ background: selectedItem.imageColor }}>
-                    <ShoppingBag size={48} />
-                    <span style={{ fontWeight: '700', fontSize: '16px' }}>{selectedItem.title}</span>
-                  </div>
+                  {selectedItem.imageUrl ? (
+                    <div className="detail-img-box" style={{ background: 'transparent', padding: 0, overflow: 'hidden' }}>
+                      <img src={selectedItem.imageUrl} alt={selectedItem.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </div>
+                  ) : (
+                    <div className="detail-img-box" style={{ background: selectedItem.imageColor }}>
+                      <ShoppingBag size={48} />
+                      <span style={{ fontWeight: '700', fontSize: '16px' }}>{selectedItem.title}</span>
+                    </div>
+                  )}
 
                   <div className="detail-creator-row">
                     <div className="detail-creator-info">
@@ -1304,69 +1386,139 @@ export const GroupBuyView: React.FC<{
       {/* 6.6 Create Modal */}
       {isCreateModalOpen && (
         <div className="modal-overlay" onClick={() => setIsCreateModalOpen(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto' }}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '700px', maxHeight: '90vh', overflowY: 'auto' }}>
             <div className="modal-header">
               <h3>공동구매 글쓰기</h3>
               <X size={20} className="modal-close-btn" onClick={() => setIsCreateModalOpen(false)} />
             </div>
-            <form onSubmit={handleCreateSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px' }}>
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>제목 <span style={{color:'red'}}>*</span></label>
-                <input type="text" placeholder="어떤 물건을 함께 사고 싶으신가요?" value={createForm.title} onChange={e => setCreateForm({...createForm, title: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }} required />
-              </div>
-              
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>카테고리 <span style={{color:'red'}}>*</span></label>
-                <select value={createForm.categoryId} onChange={e => setCreateForm({...createForm, categoryId: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }} required>
-                  <option value="">카테고리 선택</option>
-                  {categories.map(cat => (
-                    <option key={cat.id} value={cat.id}>{cat.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>설명 <span style={{color:'red'}}>*</span></label>
-                <textarea rows={4} placeholder="물건에 대한 설명이나 거래 방식 등을 자유롭게 적어주세요." value={createForm.content} onChange={e => setCreateForm({...createForm, content: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', resize: 'vertical' }} required />
-              </div>
-
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>예상 금액(1인당) <span style={{color:'red'}}>*</span></label>
-                  <input type="number" placeholder="예: 15000" value={createForm.price} onChange={e => setCreateForm({...createForm, price: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }} required />
+            <form onSubmit={handleCreateSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', padding: '20px' }}>
+              {/* 왼쪽 단 */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div>
+                  <label style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>제목 <span style={{color:'red'}}>*</span></label>
+                  <input type="text" placeholder="어떤 물건을 함께 사고 싶으신가요?" value={createForm.title} onChange={e => setCreateForm({...createForm, title: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }} required />
                 </div>
-                <div style={{ flex: 1 }}>
+                
+                <div>
+                  <label style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>카테고리 <span style={{color:'red'}}>*</span></label>
+                  <select value={createForm.categoryId} onChange={e => setCreateForm({...createForm, categoryId: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }} required>
+                    <option value="">카테고리 선택</option>
+                    {categories.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>설명 <span style={{color:'red'}}>*</span></label>
+                  <textarea placeholder="물건에 대한 설명이나 거래 방식 등을 자유롭게 적어주세요." value={createForm.content} onChange={e => setCreateForm({...createForm, content: e.target.value})} style={{ width: '100%', flex: 1, minHeight: '120px', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', resize: 'none' }} required />
+                </div>
+              </div>
+
+              {/* 오른쪽 단 */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div>
+                  <label style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>이미지 파일 (선택)</label>
+                  <label style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    width: '100%', height: '140px', border: '2px dashed #cbd5e1', borderRadius: '12px',
+                    backgroundColor: '#f8fafc', cursor: isUploading ? 'not-allowed' : 'pointer', transition: 'all 0.2s',
+                    position: 'relative', overflow: 'hidden'
+                  }}>
+                    <input type="file" accept="image/*" onChange={handleImageUpload} disabled={isUploading} style={{ display: 'none' }} />
+                    {isUploading ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', color: '#64748b' }}>
+                        <Loader2 size={28} style={{ animation: 'spin 1s linear infinite' }} />
+                        <span style={{ fontSize: '13px', fontWeight: '600' }}>업로드 중...</span>
+                      </div>
+                    ) : createForm.imageUrl ? (
+                      <>
+                        <img src={createForm.imageUrl} alt="미리보기" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s' }} 
+                             onMouseEnter={e => e.currentTarget.style.opacity = '1'} 
+                             onMouseLeave={e => e.currentTarget.style.opacity = '0'}>
+                          <span style={{ color: 'white', fontSize: '13px', fontWeight: 'bold', pointerEvents: 'none' }}>사진 변경하기</span>
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', color: '#94a3b8' }}>
+                        <div style={{ padding: '12px', backgroundColor: '#f1f5f9', borderRadius: '50%' }}>
+                          <Plus size={24} color="#64748b" />
+                        </div>
+                        <span style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>클릭하여 이미지 업로드</span>
+                        <span style={{ fontSize: '11px' }}>JPG, PNG 등 이미지 파일 지원</span>
+                      </div>
+                    )}
+                  </label>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>예상 금액(1인당) <span style={{color:'red'}}>*</span></label>
+                  <div style={{ position: 'relative' }}>
+                    <input type="number" placeholder="15000" value={createForm.price} onChange={e => setCreateForm({...createForm, price: e.target.value})} style={{ width: '100%', padding: '12px', paddingRight: '40px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '16px', fontWeight: 'bold', letterSpacing: '1px' }} required />
+                    <span style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', color: '#64748b', fontWeight: 'bold' }}>원</span>
+                  </div>
+                </div>
+
+                <div>
                   <label style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>마감 기한 <span style={{color:'red'}}>*</span></label>
                   <input type="datetime-local" value={createForm.deadline} onChange={e => setCreateForm({...createForm, deadline: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }} required />
                 </div>
-              </div>
 
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>최소 인원</label>
-                  <input type="number" min="1" value={createForm.minParticipants} onChange={e => setCreateForm({...createForm, minParticipants: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }} />
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>최소 인원</label>
+                    <input type="number" min="1" value={createForm.minParticipants} onChange={e => setCreateForm({...createForm, minParticipants: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>최대 인원</label>
+                    <input type="number" min="1" value={createForm.maxParticipants} onChange={e => setCreateForm({...createForm, maxParticipants: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }} />
+                  </div>
                 </div>
-                <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>최대 인원</label>
-                  <input type="number" min="1" value={createForm.maxParticipants} onChange={e => setCreateForm({...createForm, maxParticipants: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }} />
+
+                <div>
+                  <label style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>수령 장소 <span style={{color:'red'}}>*</span></label>
+                  <input type="text" placeholder="예: 서교동 123-45 (CU 편의점 앞)" value={createForm.pickupLocation} onChange={e => setCreateForm({...createForm, pickupLocation: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }} required />
                 </div>
               </div>
 
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>수령 장소 <span style={{color:'red'}}>*</span></label>
-                <input type="text" placeholder="예: 서교동 123-45 (CU 편의점 앞)" value={createForm.pickupLocation} onChange={e => setCreateForm({...createForm, pickupLocation: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }} required />
-              </div>
-
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>이미지 URL (선택)</label>
-                <input type="url" placeholder="https://..." value={createForm.imageUrl} onChange={e => setCreateForm({...createForm, imageUrl: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }} />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px', borderTop: '1px solid #f1f5f9', paddingTop: '16px' }}>
                 <button type="button" onClick={() => setIsCreateModalOpen(false)} style={{ background: '#f1f5f9', color: '#475569', padding: '10px 20px', borderRadius: '8px', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}>취소</button>
                 <button type="submit" style={{ background: '#ff7e36', color: 'white', padding: '10px 20px', borderRadius: '8px', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}>등록하기</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 8. REPORT MODAL */}
+      {showReportModal && (
+        <div className="modal-overlay" onClick={() => setShowReportModal(false)} style={{ zIndex: 10000 }}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+            <div className="modal-header" style={{ borderBottom: 'none', paddingBottom: 0 }}>
+              <span className="modal-title" style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <AlertCircle size={20} />
+                게시글 신고하기
+              </span>
+              <X size={20} className="modal-close-btn" onClick={() => setShowReportModal(false)} />
+            </div>
+            <div className="modal-body" style={{ paddingTop: '16px' }}>
+              <p style={{ fontSize: '14px', color: '#475569', marginBottom: '16px' }}>
+                부적절한 내용이나 허위 정보를 포함한 게시글인가요? 신고 사유를 상세히 적어주시면 관리자가 확인 후 조치하겠습니다.
+              </p>
+              <textarea
+                value={reportReason}
+                onChange={e => setReportReason(e.target.value)}
+                placeholder="신고 사유를 입력해주세요 (최소 5자 이상)"
+                style={{ width: '100%', height: '100px', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0', resize: 'none', fontSize: '14px', fontFamily: 'inherit' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '20px' }}>
+                <button onClick={() => setShowReportModal(false)} style={{ padding: '10px 16px', background: '#f1f5f9', color: '#475569', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>취소</button>
+                <button onClick={handleReportSubmit} disabled={isSubmittingReport} style={{ padding: '10px 16px', background: '#ef4444', color: 'white', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>
+                  {isSubmittingReport ? '접수 중...' : '신고 접수'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
