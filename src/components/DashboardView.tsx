@@ -53,6 +53,7 @@ interface DashboardViewProps {
 }
 
 const DASHBOARD_GROUP_BUY_LIMIT = 3;
+const MONTHLY_FLOW_CHART_SLOTS = 6;
 
 const CATEGORY_COLORS = [
   '#3b82f6',
@@ -154,6 +155,18 @@ function buildMonthlyFlowRows(trends: DashboardResponse['trends']): MonthlyFlowR
       savings
     };
   });
+}
+
+interface MonthlyFlowChartSlot {
+  data: MonthlyFlowRow | null;
+  dataIndex: number | null;
+}
+
+function buildMonthlyFlowChartSlots(rows: MonthlyFlowRow[]): MonthlyFlowChartSlot[] {
+  return Array.from({ length: MONTHLY_FLOW_CHART_SLOTS }, (_, slotIndex) => ({
+    data: rows[slotIndex] ?? null,
+    dataIndex: rows[slotIndex] != null ? slotIndex : null
+  }));
 }
 
 interface ChartTooltipItem {
@@ -507,6 +520,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     [dashboard]
   );
 
+  const monthlyFlowChartSlots = useMemo(
+    () => buildMonthlyFlowChartSlots(monthlyFlowData),
+    [monthlyFlowData]
+  );
+
   const avgIncome = useMemo(() => {
     if (monthlyFlowData.length === 0) return 0;
     return monthlyFlowData.reduce((acc, row) => acc + row.income, 0) / monthlyFlowData.length;
@@ -841,18 +859,34 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   ref={barChartRef}
                   onMouseLeave={clearChartTooltip}
                 >
-                  {monthlyFlowData.map((data, index) => {
+                  {monthlyFlowChartSlots.map((slot, slotIndex) => {
+                    const data = slot.data;
+                    const dataIndex = slot.dataIndex;
+                    const isHovered = dataIndex !== null && hoveredFlowIndex === dataIndex;
+
+                    if (!data || dataIndex === null) {
+                      return (
+                        <div
+                          key={`empty-${slotIndex}`}
+                          className="svg-bar-group is-empty"
+                          aria-hidden="true"
+                        >
+                          <div className="svg-bar-bars" />
+                          <span className="svg-bar-label" />
+                        </div>
+                      );
+                    }
+
                     const incHeight = Math.max(5, (data.income / barChartMax) * 100);
                     const expHeight = Math.max(5, (data.expense / barChartMax) * 100);
                     const savHeight = Math.max(5, (data.savings / barChartMax) * 100);
-                    const isHovered = hoveredFlowIndex === index;
 
                     return (
                       <div
                         key={data.yearMonth}
                         className={`svg-bar-group${isHovered ? ' is-hovered' : ''}`}
-                        onMouseEnter={(event) => handleFlowHover(index, event, barChartRef)}
-                        onMouseMove={(event) => handleFlowHover(index, event, barChartRef)}
+                        onMouseEnter={(event) => handleFlowHover(dataIndex, event, barChartRef)}
+                        onMouseMove={(event) => handleFlowHover(dataIndex, event, barChartRef)}
                       >
                         <div className="svg-bar-bars">
                           <div className="svg-bar blue" style={{ height: `${incHeight}%` }} />

@@ -1047,9 +1047,9 @@ a {
 .svg-bar-chart-container {
   height: 200px;
   position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
   align-items: flex-end;
-  justify-content: space-between;
   padding: 0 10px 24px 10px;
   border-bottom: 1px solid var(--border);
   margin-top: 10px;
@@ -1059,13 +1059,16 @@ a {
   display: flex;
   flex-direction: column;
   align-items: center;
-  flex-grow: 1;
-  max-width: 60px;
   height: 100%;
   justify-content: flex-end;
   cursor: pointer;
   border-radius: 8px;
   transition: background-color 0.15s ease;
+}
+
+.svg-bar-group.is-empty {
+  cursor: default;
+  pointer-events: none;
 }
 
 .svg-bar-group.is-hovered {
