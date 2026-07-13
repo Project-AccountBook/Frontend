@@ -142,10 +142,16 @@ function App() {
     setGroupBuyFocusId(null);
   }, []);
 
-  const handleTabChange = (tab: string, options?: { groupPurchaseId?: number }) => {
+  const handleTabChange = (
+    tab: string,
+    options?: { groupPurchaseId?: number; assetSection?: AssetActiveSection }
+  ) => {
     setActiveTab(tab);
     writeTabToUrl(tab);
-    setAssetInitialSection(undefined);
+    if (tab === 'notifications') {
+      refreshUnreadCount();
+    }
+    setAssetInitialSection(options?.assetSection);
     setKnowhowMode('list');
     setKnowhowPostId(null);
     setQnaMode('list');
@@ -159,6 +165,16 @@ function App() {
     setQnaMode('list');
     setQnaPostId(null);
     setAssetInitialSection('categories');
+    setActiveTab('history');
+    writeTabToUrl('history');
+  };
+
+  const goToGoalSettings = () => {
+    setKnowhowMode('list');
+    setKnowhowPostId(null);
+    setQnaMode('list');
+    setQnaPostId(null);
+    setAssetInitialSection('goals');
     setActiveTab('history');
     writeTabToUrl('history');
   };
@@ -228,7 +244,12 @@ function App() {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <DashboardView onViewAllGroupBuys={() => handleTabChange('groupbuy')} />;
+        return (
+          <DashboardView
+            onViewAllGroupBuys={() => handleTabChange('groupbuy')}
+            onGoToGoalSettings={goToGoalSettings}
+          />
+        );
       case 'history':
         return <AssetView initialSection={assetInitialSection} />;
       case 'budget':

@@ -373,7 +373,7 @@ export const GroupBuyView: React.FC<{
   };
 
   const mapBackendItemToFrontend = (bp: any, catList: { id: number; name: string }[]): GroupBuyItem => {
-    const categoryName = catList.find(c => c.id === bp.categoryId)?.name || '기타';
+    const categoryName = catList.find(c => c.id === bp.categoryId)?.name ?? '';
     
     let statusText = '모집중';
     let statusType: 'blue' | 'red' | 'grey' = 'blue';
