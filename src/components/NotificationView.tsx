@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { notificationApi } from '../api';
 import type { NotificationResponse, NotificationType } from '../api/types';
+import type { AssetActiveSection } from './AssetView';
 
 export type { NotificationType };
 export type NotificationItem = NotificationResponse;
@@ -75,6 +76,7 @@ function resolveNotificationTab(
     const url = redirectUrl.trim();
     const bareTab = url.replace(/^#\/?/, '').replace(/^\//, '');
 
+    if (bareTab === 'goals' || bareTab === 'history/goals') return 'history';
     if (KNOWN_APP_TABS.has(bareTab)) return bareTab;
     if (bareTab === 'budget-page') return 'budget';
     if (url.includes('budget-page') || /\/budget\/?$/.test(url)) return 'budget';
@@ -82,9 +84,24 @@ function resolveNotificationTab(
   }
 
   if (type === 'BUDGET') return 'budget';
-  if (type === 'GOAL') return 'dashboard';
+  if (type === 'GOAL') return 'history';
   if (type === 'INTEREST_CATEGORY') return 'groupbuy';
   return null;
+}
+
+function resolveAssetSection(
+  redirectUrl: string | null,
+  type: NotificationType
+): AssetActiveSection | undefined {
+  if (redirectUrl) {
+    const url = redirectUrl.trim().replace(/^#\/?/, '').replace(/^\//, '');
+    if (url === 'goals' || url === 'history/goals' || url.endsWith('/goals')) {
+      return 'goals';
+    }
+  }
+
+  if (type === 'GOAL') return 'goals';
+  return undefined;
 }
 
 function resolveGroupPurchaseId(
@@ -121,7 +138,10 @@ function formatRelativeTime(isoString: string): string {
 
 interface NotificationViewProps {
   onUnreadCountChange?: (count: number) => void;
-  onNavigate?: (tab: string, options?: { groupPurchaseId?: number }) => void;
+  onNavigate?: (
+    tab: string,
+    options?: { groupPurchaseId?: number; assetSection?: AssetActiveSection }
+  ) => void;
 }
 
 export const NotificationView: React.FC<NotificationViewProps> = ({
@@ -337,10 +357,14 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
       notification.referenceId,
       notification.type
     );
+    const assetSection = resolveAssetSection(notification.redirectUrl, notification.type);
 
     onNavigate(
       tab,
-      groupPurchaseId !== undefined ? { groupPurchaseId } : undefined
+      {
+        ...(groupPurchaseId !== undefined ? { groupPurchaseId } : {}),
+        ...(assetSection ? { assetSection } : {})
+      }
     );
   };
 

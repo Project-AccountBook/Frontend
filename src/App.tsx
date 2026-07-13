@@ -142,10 +142,16 @@ function App() {
     setGroupBuyFocusId(null);
   }, []);
 
-  const handleTabChange = (tab: string, options?: { groupPurchaseId?: number }) => {
+  const handleTabChange = (
+    tab: string,
+    options?: { groupPurchaseId?: number; assetSection?: AssetActiveSection }
+  ) => {
     setActiveTab(tab);
     writeTabToUrl(tab);
-    setAssetInitialSection(undefined);
+    if (tab === 'notifications') {
+      refreshUnreadCount();
+    }
+    setAssetInitialSection(options?.assetSection);
     setKnowhowMode('list');
     setKnowhowPostId(null);
     setQnaMode('list');

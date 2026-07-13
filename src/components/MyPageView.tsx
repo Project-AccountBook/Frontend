@@ -86,8 +86,14 @@ export const MyPageView: React.FC = () => {
       try {
         const result = await userApi.getMyProfile();
         if (result.ok && result.data) {
-          setProfile(result.data);
-          setEditForm(result.data);
+          setProfile({
+            ...result.data,
+            isGoalAlertEnabled: result.data.isGoalAlertEnabled ?? true,
+          });
+          setEditForm({
+            ...result.data,
+            isGoalAlertEnabled: result.data.isGoalAlertEnabled ?? true,
+          });
         } else {
           setProfileError(result.error ?? '프로필을 불러오는 데 실패했습니다.');
         }
