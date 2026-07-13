@@ -62,23 +62,18 @@ interface Product {
 }
 
 export const GroupBuyAdminView: React.FC = () => {
-  // --- Active Tab State ---
   const [activeAdminSubTab, setActiveAdminSubTab] = useState<'dashboard' | 'posts' | 'categories' | 'reports' | 'products'>('dashboard');
 
-  // --- Search & Filters State ---
   const [postFilterStatus, setPostFilterStatus] = useState<string>('전체');
   const [postSearchQuery, setPostSearchQuery] = useState<string>('');
   
   const [productSearchQuery, setProductSearchQuery] = useState<string>('');
 
-  // --- Modal / Form State ---
-  // Category Modal
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [categoryModalMode, setCategoryModalMode] = useState<'add' | 'edit'>('add');
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [categoryForm, setCategoryForm] = useState({ name: '', description: '' });
 
-  // Product Modal
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [productModalMode, setProductModalMode] = useState<'add' | 'edit'>('add');
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
@@ -90,7 +85,6 @@ export const GroupBuyAdminView: React.FC = () => {
     description: ''
   });
 
-  // --- Loading / Error / API States ---
   const [, setLoading] = useState(false);
   const [, setError] = useState<string | null>(null);
 
@@ -115,7 +109,6 @@ export const GroupBuyAdminView: React.FC = () => {
 
   const stats = dashboardStats;
 
-  // --- API Call Helper ---
   const fetchWithAuth = useCallback(async (url: string, options: RequestInit = {}) => {
     const token = tokenStorage.getAccessToken();
     const headers = {
@@ -150,7 +143,6 @@ export const GroupBuyAdminView: React.FC = () => {
     return 'BLIND';
   };
 
-  // --- API Loaders ---
   const loadDashboardStats = useCallback(async () => {
     try {
       const res = await fetchWithAuth('/api/v1/admin/group-purchases/summary');
