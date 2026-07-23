@@ -19,6 +19,7 @@ import {
   incomeCompareApi,
   portfolioApi,
   portfolioCompareApi,
+  userApi,
 } from '../api';
 import type {
   BudgetCompareResponse,
@@ -236,6 +237,17 @@ export const ComparisonView: React.FC = () => {
   );
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [myUserId, setMyUserId] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    userApi.getMyProfile().then((res) => {
+      if (!cancelled && res.ok && res.data) setMyUserId(res.data.id);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
   const activeMetric: MetricKey | null =
@@ -424,7 +436,9 @@ export const ComparisonView: React.FC = () => {
     const publicUsers = usersFor(config.key);
     const compare = compareFor(config.key);
 
-    const filteredPublicUsers = publicUsers.filter((b) => b.yearMonth === yearMonth);
+    const filteredPublicUsers = publicUsers.filter(
+      (b) => b.yearMonth === yearMonth && b.userId !== myUserId
+    );
     const sumPublic = filteredPublicUsers.reduce((s, b) => s + b.total, 0);
     const avgPublic = filteredPublicUsers.length
       ? Math.round(sumPublic / filteredPublicUsers.length)
@@ -716,9 +730,6 @@ export const ComparisonView: React.FC = () => {
               </div>
               <span className="card-title">공개 {config.label} 필터</span>
             </div>
-            <span className="stat-label" style={{ marginTop: 0 }}>
-              공개 설정한 사용자만 조회 (isPortfolioPublic=true)
-            </span>
           </div>
 
           <div
@@ -1217,7 +1228,9 @@ export const ComparisonView: React.FC = () => {
 
   const renderOverallTab = () => {
     if (!myBudget || !myExpense || !myIncome) return null;
-    const filteredOverall = overallUsers.filter((u) => u.yearMonth === yearMonth);
+    const filteredOverall = overallUsers.filter(
+      (u) => u.yearMonth === yearMonth && u.userId !== myUserId
+    );
     const avgOf = (arr: number[]) =>
       arr.length === 0 ? 0 : Math.round(arr.reduce((s, v) => s + v, 0) / arr.length);
     const avgBudget = avgOf(filteredOverall.map((u) => u.totalBudget));
@@ -1387,9 +1400,6 @@ export const ComparisonView: React.FC = () => {
               </div>
               <span className="card-title">공개 사용자 필터</span>
             </div>
-            <span className="stat-label" style={{ marginTop: 0 }}>
-              공개 설정한 사용자만 조회 (isPortfolioPublic=true)
-            </span>
           </div>
 
           <div
