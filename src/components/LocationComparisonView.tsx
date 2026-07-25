@@ -21,6 +21,7 @@ import {
   locationApi,
   portfolioApi,
   portfolioCompareApi,
+  userApi,
 } from '../api';
 import type {
   BudgetCompareResponse,
@@ -237,6 +238,17 @@ export const LocationComparisonView: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [locationMissing, setLocationMissing] = useState<boolean>(false);
+  const [myUserId, setMyUserId] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    userApi.getMyProfile().then((res) => {
+      if (!cancelled && res.ok && res.data) setMyUserId(res.data.id);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
   const activeMetric: MetricKey | null =
@@ -464,7 +476,7 @@ export const LocationComparisonView: React.FC = () => {
     const compare = compareFor(config.key);
 
     const filteredPublicUsers = publicUsers.filter(
-      (b) => b.yearMonth === yearMonth && b.distanceKm <= radiusKm
+      (b) => b.yearMonth === yearMonth && b.distanceKm <= radiusKm && b.userId !== myUserId
     );
     const sumPublic = filteredPublicUsers.reduce((s, b) => s + b.total, 0);
     const avgPublic = filteredPublicUsers.length
@@ -1245,7 +1257,7 @@ export const LocationComparisonView: React.FC = () => {
   const renderOverallTab = () => {
     if (!myBudget || !myExpense || !myIncome) return null;
     const filteredOverall = overallUsers.filter(
-      (u) => u.yearMonth === yearMonth && u.distanceKm <= radiusKm
+      (u) => u.yearMonth === yearMonth && u.distanceKm <= radiusKm && u.userId !== myUserId
     );
     const avgOf = (arr: number[]) =>
       arr.length === 0 ? 0 : Math.round(arr.reduce((s, v) => s + v, 0) / arr.length);
