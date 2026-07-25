@@ -3283,6 +3283,10 @@ a {
   margin-top: 4px;
 }
 
+.tx-period-summary + .calendar-wrapper {
+  margin-top: 4px;
+}
+
 /* 섹션별 공통 액션 바 */
 .section-action-bar {
   display: flex;
@@ -3633,6 +3637,10 @@ a {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.calendar-wrapper > .calendar-header:first-child {
+  margin-top: 16px;
 }
 
 .cal-toolbar {
