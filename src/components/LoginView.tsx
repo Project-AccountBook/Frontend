@@ -3,6 +3,7 @@ import { Mail, Lock, AlertCircle, Loader2, User, Calendar, MapPin, CheckCircle, 
 import { authApi, tokenStorage, userApi } from '../api';
 import { API_BASE_URL } from '../api/config';
 import { openAddressSearch } from '../utils/daumPostcode';
+import modiLogo from '../assets/modi-logo.png';
 
 interface LoginViewProps {
   onLoginSuccess: () => void;
@@ -341,7 +342,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
         {/* Header Section */}
         <div className="login-header">
-          <h1 className="login-title" style={{ fontSize: '28px', fontWeight: '800', marginBottom: '8px', color: 'var(--navy)' }}>Joint Living</h1>
+          <img src={modiLogo} alt="MODI" className="login-logo" />
           <p className="login-subtitle">
             {mode === 'login' && '함께하면 즐겁고 가벼워지는 공동생활 가계부'}
             {mode === 'signup' && '똑똑한 자산 관리의 시작, 공동생활 가계부 회원가입'}

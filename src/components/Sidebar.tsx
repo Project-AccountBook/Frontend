@@ -7,12 +7,12 @@ import {
   Lightbulb,
   ShoppingBag,
   Settings,
-  Wallet,
   Shield,
   PiggyBank,
   LogOut,
   MapPin
 } from 'lucide-react';
+import modiLogo from '../assets/modi-logo.png';
 
 interface SidebarProps {
   activeTab: string;
@@ -38,10 +38,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLog
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <div className="sidebar-logo-icon">
-          <Wallet size={18} />
-        </div>
-        <span className="sidebar-logo-text">Joint Living</span>
+        <img src={modiLogo} alt="MODI" className="sidebar-logo-img" />
       </div>
 
       <nav className="sidebar-menu">
