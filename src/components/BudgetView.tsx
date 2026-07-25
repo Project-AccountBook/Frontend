@@ -12,10 +12,12 @@ import {
   Tag,
   X,
   Calendar,
-  ArrowRight
+  ArrowRight,
+  Activity
 } from 'lucide-react';
 import { budgetApi, categoryApi } from '../api';
 import type { BudgetResponse, BudgetSummaryResponse, CategoryResponse } from '../api';
+import { fetchAllUserTransactionsInRange, type TransactionResponse } from '../api/transactionApi';
 import { MonthYearNavigator } from './MonthYearNavigator';
 
 interface BudgetItem {
@@ -93,6 +95,396 @@ const getCategoryColor = (categoryId: number, categories: ExpenseCategory[]) => 
 };
 
 const buildFilterTabs = (categoryNames: string[]) => ['전체', ...categoryNames];
+
+interface WeekBucket {
+  weekIndex: number;
+  label: string;
+  rangeLabel: string;
+  startDay: number;
+  endDay: number;
+  expense: number;
+  isCurrentWeek: boolean;
+}
+
+type PaceStatus = 'fast' | 'normal' | 'slow' | 'over';
+
+interface WeeklyPaceData {
+  weeks: WeekBucket[];
+  recommendedWeekly: number;
+  currentWeekExpense: number;
+  proratedRecommended: number;
+  paceStatus: PaceStatus;
+  projectedMonthEnd: number;
+  projectedOverrun: number;
+  remainingWeeks: number;
+  isCurrentMonth: boolean;
+  isPastMonth: boolean;
+}
+
+const getMonthDateRange = (yearMonth: string) => {
+  const [y, m] = yearMonth.split('-').map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  return {
+    year: y,
+    month: m,
+    lastDay,
+    monthStart: `${yearMonth}-01`,
+    monthEnd: `${yearMonth}-${String(lastDay).padStart(2, '0')}`
+  };
+};
+
+const buildWeekBuckets = (
+  yearMonth: string,
+  transactions: TransactionResponse[],
+  referenceDate: Date
+): WeekBucket[] => {
+  const { year, month, lastDay } = getMonthDateRange(yearMonth);
+  const buckets: WeekBucket[] = [];
+  const isCurrentMonth =
+    referenceDate.getFullYear() === year && referenceDate.getMonth() + 1 === month;
+  const today = referenceDate.getDate();
+
+  let weekStart = 1;
+  let weekIndex = 1;
+  while (weekStart <= lastDay) {
+    const weekEnd = Math.min(weekStart + 6, lastDay);
+    buckets.push({
+      weekIndex,
+      label: `${weekIndex}주차`,
+      rangeLabel: `${month}/${weekStart}~${month}/${weekEnd}`,
+      startDay: weekStart,
+      endDay: weekEnd,
+      expense: 0,
+      isCurrentWeek: isCurrentMonth && today >= weekStart && today <= weekEnd
+    });
+    weekStart = weekEnd + 1;
+    weekIndex += 1;
+  }
+
+  for (const tx of transactions) {
+    if (tx.type !== 'EXPENSE') continue;
+    const day = Number(tx.transactionDate.split('-')[2]);
+    const bucket = buckets.find((b) => day >= b.startDay && day <= b.endDay);
+    if (bucket) bucket.expense += Math.abs(Number(tx.amount));
+  }
+
+  return buckets;
+};
+
+const computeWeeklyPace = (
+  yearMonth: string,
+  weeks: WeekBucket[],
+  totalPlanned: number,
+  totalActual: number,
+  remainingBudget: number,
+  referenceDate: Date
+): WeeklyPaceData => {
+  const { year, month, lastDay } = getMonthDateRange(yearMonth);
+  const isCurrentMonth =
+    referenceDate.getFullYear() === year && referenceDate.getMonth() + 1 === month;
+  const isPastMonth =
+    referenceDate.getFullYear() > year ||
+    (referenceDate.getFullYear() === year && referenceDate.getMonth() + 1 > month);
+  const today = referenceDate.getDate();
+
+  const currentWeek = weeks.find((w) => w.isCurrentWeek);
+  const currentWeekExpense = currentWeek?.expense ?? 0;
+
+  const remainingDays = isCurrentMonth ? lastDay - today + 1 : isPastMonth ? 0 : lastDay;
+  const remainingWeeks = isCurrentMonth ? Math.max(1, Math.ceil(remainingDays / 7)) : 0;
+  const recommendedWeekly =
+    isCurrentMonth && remainingBudget > 0 ? remainingBudget / remainingWeeks : 0;
+
+  const daysElapsedInWeek =
+    isCurrentMonth && currentWeek ? today - currentWeek.startDay + 1 : 7;
+  const weekLength = currentWeek ? currentWeek.endDay - currentWeek.startDay + 1 : 7;
+  const proratedRecommended =
+    recommendedWeekly > 0 ? (recommendedWeekly * daysElapsedInWeek) / weekLength : 0;
+
+  let paceStatus: PaceStatus = 'normal';
+  if (remainingBudget < 0) {
+    paceStatus = 'over';
+  } else if (isCurrentMonth && recommendedWeekly > 0) {
+    const ratio = proratedRecommended > 0 ? currentWeekExpense / proratedRecommended : 0;
+    if (ratio > 1.15) paceStatus = 'fast';
+    else if (ratio < 0.75) paceStatus = 'slow';
+  }
+
+  const daysElapsed = isCurrentMonth ? today : isPastMonth ? lastDay : 0;
+  const projectedMonthEnd =
+    daysElapsed > 0 && totalPlanned > 0 ? (totalActual / daysElapsed) * lastDay : totalActual;
+  const projectedOverrun = projectedMonthEnd - totalPlanned;
+
+  return {
+    weeks,
+    recommendedWeekly,
+    currentWeekExpense,
+    proratedRecommended,
+    paceStatus,
+    projectedMonthEnd,
+    projectedOverrun,
+    remainingWeeks,
+    isCurrentMonth,
+    isPastMonth
+  };
+};
+
+const PaceInlineStat: React.FC<{
+  label: string;
+  value: string;
+  sub?: string;
+  valueColor?: string;
+}> = ({ label, value, sub, valueColor }) => (
+  <div style={{ flex: 1, minWidth: 0, padding: '0 14px' }}>
+    <div
+      style={{
+        fontSize: '11px',
+        fontWeight: '600',
+        color: 'var(--text-muted)',
+        marginBottom: '4px'
+      }}
+    >
+      {label}
+    </div>
+    <div
+      style={{
+        fontSize: '15px',
+        fontWeight: '700',
+        color: valueColor ?? 'var(--text-primary)',
+        letterSpacing: '-0.2px',
+        lineHeight: 1.3
+      }}
+    >
+      {value}
+    </div>
+    {sub && (
+      <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '3px', fontWeight: '500' }}>
+        {sub}
+      </div>
+    )}
+  </div>
+);
+
+const WeeklyPacePanel: React.FC<{
+  pace: WeeklyPaceData;
+  totalPlanned: number;
+  loading?: boolean;
+}> = ({ pace, totalPlanned, loading }) => {
+  const maxWeekExpense = Math.max(...pace.weeks.map((w) => w.expense), 1);
+  const weeklyTarget =
+    pace.isCurrentMonth && pace.recommendedWeekly > 0
+      ? pace.recommendedWeekly
+      : totalPlanned > 0
+        ? totalPlanned / Math.max(pace.weeks.length, 1)
+        : 0;
+  const barTarget = Math.max(maxWeekExpense, weeklyTarget, 1);
+
+  if (loading) {
+    return (
+      <div className="card" style={{ marginBottom: '20px', padding: '16px 20px' }}>
+        <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-secondary)', fontSize: '13px' }}>
+          주별 소비 데이터를 불러오는 중...
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card" style={{ marginBottom: '20px', padding: '16px 20px' }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          marginBottom: '14px',
+          flexWrap: 'wrap'
+        }}
+      >
+        <Activity size={16} color="var(--blue)" />
+        <span className="card-title" style={{ fontSize: '15px' }}>
+          주별 소비 페이스
+        </span>
+        <span
+          style={{
+            fontSize: '11px',
+            color: 'var(--text-muted)',
+            fontWeight: '500',
+            marginLeft: 'auto'
+          }}
+        >
+          월 예산 기준 · 주차별 실제 지출
+        </span>
+      </div>
+
+      {totalPlanned <= 0 ? (
+        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', textAlign: 'center', padding: '20px 0' }}>
+          예산을 등록하면 주별 소비 페이스를 확인할 수 있습니다.
+        </p>
+      ) : (
+        <>
+          {pace.isCurrentMonth && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'stretch',
+                padding: '12px 0',
+                marginBottom: '16px',
+                borderRadius: '10px',
+                background: '#f8fafc',
+                border: '1px solid var(--border)'
+              }}
+            >
+              <PaceInlineStat
+                label="권장 주간 지출"
+                value={`${formatKRW(Math.round(pace.recommendedWeekly))}원`}
+                sub={`남은 ${pace.remainingWeeks}주 기준`}
+              />
+              <div style={{ width: '1px', background: 'var(--border)', flexShrink: 0 }} />
+              <PaceInlineStat
+                label="이번 주 지출"
+                value={`${formatKRW(pace.currentWeekExpense)}원`}
+                sub={
+                  pace.proratedRecommended > 0
+                    ? `권장 대비 ${Math.round((pace.currentWeekExpense / pace.proratedRecommended) * 100)}%`
+                    : '이번 주 누적'
+                }
+                valueColor={
+                  pace.paceStatus === 'fast' || pace.paceStatus === 'over'
+                    ? 'var(--red)'
+                    : pace.paceStatus === 'slow'
+                      ? 'var(--blue)'
+                      : undefined
+                }
+              />
+              <div style={{ width: '1px', background: 'var(--border)', flexShrink: 0 }} />
+              <PaceInlineStat
+                label="월말 예상 지출"
+                value={`${formatKRW(Math.round(pace.projectedMonthEnd))}원`}
+                sub={
+                  pace.projectedOverrun > 0
+                    ? `예산 대비 +${formatKRW(Math.round(pace.projectedOverrun))}원 예상`
+                    : '현재 페이스 유지 시'
+                }
+                valueColor={pace.projectedOverrun > 0 ? 'var(--red)' : undefined}
+              />
+            </div>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {pace.weeks.map((week) => {
+              const widthPct = Math.min((week.expense / barTarget) * 100, 100);
+              const targetPct =
+                weeklyTarget > 0 ? Math.min((weeklyTarget / barTarget) * 100, 100) : 0;
+              const isOverTarget = weeklyTarget > 0 && week.expense > weeklyTarget;
+
+              return (
+                <div key={week.weekIndex}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: '6px',
+                      gap: '8px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                      <span
+                        style={{
+                          fontSize: '12px',
+                          fontWeight: '800',
+                          color: week.isCurrentWeek ? 'var(--blue)' : 'var(--text-primary)'
+                        }}
+                      >
+                        {week.label}
+                      </span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                        {week.rangeLabel}
+                      </span>
+                      {week.isCurrentWeek && (
+                        <span
+                          style={{
+                            fontSize: '10px',
+                            fontWeight: '700',
+                            padding: '2px 7px',
+                            borderRadius: '20px',
+                            background: 'var(--blue-bg)',
+                            color: 'var(--blue)',
+                            border: '1px solid var(--blue-border)',
+                            flexShrink: 0
+                          }}
+                        >
+                          이번 주
+                        </span>
+                      )}
+                    </div>
+                    <span
+                      style={{
+                        fontSize: '12px',
+                        fontWeight: '700',
+                        color: isOverTarget ? 'var(--red)' : 'var(--text-primary)',
+                        flexShrink: 0
+                      }}
+                    >
+                      {formatKRW(week.expense)}원
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      position: 'relative',
+                      height: '10px',
+                      borderRadius: '6px',
+                      background: '#f1f5f9',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    {weeklyTarget > 0 && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          left: `${targetPct}%`,
+                          top: 0,
+                          bottom: 0,
+                          width: '2px',
+                          background: '#94a3b8',
+                          zIndex: 1
+                        }}
+                        title={`주간 권장 ${formatKRW(Math.round(weeklyTarget))}원`}
+                      />
+                    )}
+                    <div
+                      style={{
+                        height: '100%',
+                        width: `${widthPct}%`,
+                        borderRadius: '6px',
+                        background: isOverTarget
+                          ? 'var(--red)'
+                          : week.isCurrentWeek
+                            ? 'var(--blue)'
+                            : '#64748b',
+                        transition: 'width 0.3s ease'
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {weeklyTarget > 0 && (
+            <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '12px' }}>
+              막대 끝 세로선 = 주간 권장 지출 (
+              {pace.isCurrentMonth
+                ? `남은 예산 ÷ ${pace.remainingWeeks}주`
+                : `월 예산 ÷ ${pace.weeks.length}주`}
+              )
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
 
 interface CircularRingProps {
   percent: number;
@@ -810,6 +1202,8 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
   const [budgets, setBudgets] = useState<BudgetItem[]>([]);
   const [summary, setSummary] = useState<BudgetSummaryResponse | null>(null);
+  const [monthTransactions, setMonthTransactions] = useState<TransactionResponse[]>([]);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
   const [modalBudgets, setModalBudgets] = useState<BudgetItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -863,16 +1257,25 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
   const loadCurrentMonth = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setTransactionsLoading(true);
+    const { monthStart, monthEnd } = getMonthDateRange(yearMonth);
+
     try {
-      const data = await fetchMonthData(yearMonth);
+      const [data, txPage] = await Promise.all([
+        fetchMonthData(yearMonth),
+        fetchAllUserTransactionsInRange(monthStart, monthEnd).catch(() => ({ content: [] as TransactionResponse[] }))
+      ]);
       setBudgets(data.budgets);
       setSummary(data.summary);
+      setMonthTransactions(txPage.content ?? []);
     } catch (err) {
       setBudgets([]);
       setSummary(null);
+      setMonthTransactions([]);
       setError(err instanceof Error ? err.message : '예산 데이터를 불러오지 못했습니다.');
     } finally {
       setLoading(false);
+      setTransactionsLoading(false);
     }
   }, [fetchMonthData, yearMonth]);
 
@@ -977,6 +1380,18 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
           (summaryValues.totalActualExpenseSum / summaryValues.totalPlannedBudgetSum) * 100
         )
       : 0;
+
+  const weeklyPace = useMemo(() => {
+    const weeks = buildWeekBuckets(yearMonth, monthTransactions, new Date());
+    return computeWeeklyPace(
+      yearMonth,
+      weeks,
+      summaryValues.totalPlannedBudgetSum,
+      summaryValues.totalActualExpenseSum,
+      summaryValues.totalRemainingBudget,
+      new Date()
+    );
+  }, [yearMonth, monthTransactions, summaryValues]);
 
   const overBudgetItems = budgets.filter((b) => b.remainingBudget < 0);
 
@@ -1087,7 +1502,7 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
               예산 관리
             </h1>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-              월별 예산을 설정하고 카테고리별 지출 현황을 확인하세요
+              월별 예산을 설정하고 주별 소비 페이스를 확인하세요
             </p>
           </div>
         </div>
@@ -1169,6 +1584,12 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
         </div>
       </div>
 
+      <WeeklyPacePanel
+        pace={weeklyPace}
+        totalPlanned={summaryValues.totalPlannedBudgetSum}
+        loading={loading || transactionsLoading}
+      />
+
       {overBudgetItems.length > 0 && (
         <div className="card" style={{ marginBottom: '20px', padding: '16px 18px' }}>
           <div className="card-header-row" style={{ marginBottom: '12px' }}>
@@ -1201,97 +1622,18 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
         </div>
       )}
 
-      <div className="card" style={{ marginBottom: '20px', padding: '16px 18px' }}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: '12px',
-            flexWrap: 'wrap',
-            marginBottom: '12px'
-          }}
-        >
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-            {filterTabs.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className={`dashboard-tab-btn ${activeCategory === cat ? 'active' : ''}`}
-                style={{ padding: '6px 12px', fontSize: '12px' }}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              background: '#f8fafc',
-              border: '1px solid var(--border)',
-              padding: '6px 12px',
-              borderRadius: '8px',
-              minWidth: '200px'
-            }}
-          >
-            <Search size={14} color="var(--text-secondary)" />
-            <input
-              type="text"
-              placeholder="카테고리 검색"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{
-                border: 'none',
-                background: 'transparent',
-                outline: 'none',
-                fontSize: '12px',
-                width: '100%',
-                fontFamily: 'inherit',
-                color: 'var(--text-primary)'
-              }}
-            />
-          </div>
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            paddingTop: '12px',
-            borderTop: '1px solid var(--border)'
-          }}
-        >
-          <div className="sub-tabs-container" style={{ marginBottom: 0 }}>
-            {STATUS_TABS.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveStatus(tab.id)}
-                className={`sub-tab-btn ${activeStatus === tab.id ? 'active' : ''}`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-            {filtered.length}개 항목
-          </span>
-        </div>
-      </div>
-
-      {/* Progress */}
+      {/* Category budget */}
       <div className="card" style={{ marginBottom: '20px', padding: '18px' }}>
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: '10px',
-            marginBottom: '16px',
+            marginBottom: '14px',
             flexWrap: 'wrap'
           }}
         >
-          <span className="card-title">카테고리별 예산 진행률</span>
+          <span className="card-title">카테고리별 예산</span>
           {budgets.length > 0 && (
             <span
               style={{
@@ -1309,28 +1651,92 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
           )}
         </div>
 
+        {budgets.length > 0 && (
+          <div style={{ marginBottom: '16px' }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: '12px',
+                flexWrap: 'wrap',
+                marginBottom: '12px'
+              }}
+            >
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {filterTabs.map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setActiveCategory(cat)}
+                    className={`dashboard-tab-btn ${activeCategory === cat ? 'active' : ''}`}
+                    style={{ padding: '6px 12px', fontSize: '12px' }}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  background: '#f8fafc',
+                  border: '1px solid var(--border)',
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  minWidth: '200px'
+                }}
+              >
+                <Search size={14} color="var(--text-secondary)" />
+                <input
+                  type="text"
+                  placeholder="카테고리 검색"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    outline: 'none',
+                    fontSize: '12px',
+                    width: '100%',
+                    fontFamily: 'inherit',
+                    color: 'var(--text-primary)'
+                  }}
+                />
+              </div>
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                paddingTop: '12px',
+                borderTop: '1px solid var(--border)'
+              }}
+            >
+              <div className="sub-tabs-container" style={{ marginBottom: 0 }}>
+                {STATUS_TABS.map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveStatus(tab.id)}
+                    className={`sub-tab-btn ${activeStatus === tab.id ? 'active' : ''}`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                {filtered.length}개 항목
+              </span>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div style={{ textAlign: 'center', padding: '40px 16px', color: 'var(--text-secondary)' }}>
             예산 데이터를 불러오는 중...
           </div>
-        ) : filtered.length > 0 ? (
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
-              gap: '12px'
-            }}
-          >
-            {filtered.map((item) => (
-              <CategoryProgressCard
-                key={item.id}
-                item={item}
-                categories={expenseCategories}
-                onClick={() => openEditModal(item)}
-              />
-            ))}
-          </div>
-        ) : (
+        ) : budgets.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 16px' }}>
             <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
               {yearMonthLabel}에 등록된 예산이 없습니다.
@@ -1344,124 +1750,152 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
               <span>예산 등록하기</span>
             </button>
           </div>
+        ) : filtered.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px 16px', color: 'var(--text-secondary)', fontSize: '14px' }}>
+            조건에 맞는 예산이 없습니다.
+          </div>
+        ) : (
+          <>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+                gap: '12px'
+              }}
+            >
+              {filtered.map((item) => (
+                <CategoryProgressCard
+                  key={item.id}
+                  item={item}
+                  categories={expenseCategories}
+                  onClick={() => openEditModal(item)}
+                />
+              ))}
+            </div>
+
+            <div
+              style={{
+                marginTop: '28px',
+                paddingTop: '22px',
+                borderTop: '1px solid var(--border)'
+              }}
+            >
+              <div className="card-header-row" style={{ marginBottom: '14px' }}>
+                <span className="card-title" style={{ fontSize: '14px' }}>
+                  예산 설정 상세
+                </span>
+              </div>
+              <div className="budget-detail-table-wrap">
+                <div className="custom-table-container">
+                  <table className="custom-table">
+                  <thead>
+                    <tr>
+                      <th>카테고리</th>
+                      <th>기본 예산</th>
+                      <th>추가 예상</th>
+                      <th>계획 합계</th>
+                      <th>실제 지출</th>
+                      <th>잔액</th>
+                      <th>진척도</th>
+                      <th>상태</th>
+                      <th>관리</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((item) => {
+                      const isOver = item.remainingBudget < 0;
+                      const color = getCategoryColor(item.categoryId, expenseCategories);
+
+                      return (
+                        <tr
+                          key={item.id}
+                          onClick={() => openEditModal(item)}
+                          title="클릭하여 예산 수정"
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <td>
+                            <span
+                              className="group-buy-category"
+                              style={{ borderColor: `${color}33`, color }}
+                            >
+                              {item.categoryName}
+                            </span>
+                          </td>
+                          <td>{formatKRW(item.totalBudget)}원</td>
+                          <td>{formatKRW(item.expectedExpense)}원</td>
+                          <td style={{ fontWeight: '700' }}>{formatKRW(item.totalPlannedBudget)}원</td>
+                          <td>{formatKRW(item.actualExpense)}원</td>
+                          <td style={{ color: isOver ? 'var(--red)' : '#10b981', fontWeight: 700 }}>
+                            {isOver ? '-' : ''}
+                            {formatKRW(Math.abs(item.remainingBudget))}원
+                          </td>
+                          <td>{item.progress}%</td>
+                          <td>
+                            <span
+                              style={{
+                                fontSize: '11px',
+                                fontWeight: '700',
+                                padding: '3px 8px',
+                                borderRadius: '6px',
+                                background: isOver ? 'var(--red-bg)' : '#ecfdf5',
+                                color: isOver ? 'var(--red)' : '#10b981'
+                              }}
+                            >
+                              {isOver ? '초과' : '정상'}
+                            </span>
+                          </td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
+                              <button
+                                onClick={() => openEditModal(item)}
+                                aria-label="예산 수정"
+                                style={{
+                                  width: '30px',
+                                  height: '30px',
+                                  borderRadius: '7px',
+                                  border: '1px solid var(--border)',
+                                  background: 'white',
+                                  color: 'var(--text-secondary)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center'
+                                }}
+                              >
+                                <Pencil size={13} />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteTarget(item);
+                                }}
+                                aria-label="예산 삭제"
+                                style={{
+                                  width: '30px',
+                                  height: '30px',
+                                  borderRadius: '7px',
+                                  border: '1px solid var(--red-border)',
+                                  background: 'var(--red-bg)',
+                                  color: 'var(--red)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center'
+                                }}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                </div>
+              </div>
+            </div>
+          </>
         )}
       </div>
-
-      {filtered.length > 0 && (
-        <div className="card">
-          <div className="card-header-row">
-            <span className="card-title">예산 설정 내역</span>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '500' }}>
-              행을 클릭하면 수정할 수 있습니다
-            </span>
-          </div>
-          <div className="custom-table-container">
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th>카테고리</th>
-                  <th>기본 예산</th>
-                  <th>추가 예상</th>
-                  <th>계획 합계</th>
-                  <th>실제 지출</th>
-                  <th>잔액</th>
-                  <th>진척도</th>
-                  <th>상태</th>
-                  <th style={{ textAlign: 'center' }}>관리</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((item) => {
-                  const isOver = item.remainingBudget < 0;
-                  const color = getCategoryColor(item.categoryId, expenseCategories);
-
-                  return (
-                    <tr
-                      key={item.id}
-                      onClick={() => openEditModal(item)}
-                      title="클릭하여 예산 수정"
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <td>
-                        <span
-                          className="group-buy-category"
-                          style={{ borderColor: `${color}33`, color }}
-                        >
-                          {item.categoryName}
-                        </span>
-                      </td>
-                      <td>{formatKRW(item.totalBudget)}원</td>
-                      <td>{formatKRW(item.expectedExpense)}원</td>
-                      <td style={{ fontWeight: '700' }}>{formatKRW(item.totalPlannedBudget)}원</td>
-                      <td>{formatKRW(item.actualExpense)}원</td>
-                      <td style={{ color: isOver ? 'var(--red)' : '#10b981', fontWeight: 700 }}>
-                        {isOver ? '-' : ''}
-                        {formatKRW(Math.abs(item.remainingBudget))}원
-                      </td>
-                      <td>{item.progress}%</td>
-                      <td>
-                        <span
-                          style={{
-                            fontSize: '11px',
-                            fontWeight: '700',
-                            padding: '3px 8px',
-                            borderRadius: '6px',
-                            background: isOver ? 'var(--red-bg)' : '#ecfdf5',
-                            color: isOver ? 'var(--red)' : '#10b981'
-                          }}
-                        >
-                          {isOver ? '초과' : '정상'}
-                        </span>
-                      </td>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
-                          <button
-                            onClick={() => openEditModal(item)}
-                            aria-label="예산 수정"
-                            style={{
-                              width: '30px',
-                              height: '30px',
-                              borderRadius: '7px',
-                              border: '1px solid var(--border)',
-                              background: 'white',
-                              color: 'var(--text-secondary)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center'
-                            }}
-                          >
-                            <Pencil size={13} />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeleteTarget(item);
-                            }}
-                            aria-label="예산 삭제"
-                            style={{
-                              width: '30px',
-                              height: '30px',
-                              borderRadius: '7px',
-                              border: '1px solid var(--red-border)',
-                              background: 'var(--red-bg)',
-                              color: 'var(--red)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center'
-                            }}
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
 
       <BudgetModal
         open={modalOpen}

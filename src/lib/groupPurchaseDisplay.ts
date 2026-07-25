@@ -53,7 +53,7 @@ export function mapToDashboardGroupBuyItem(
   item: GroupPurchaseResponse,
   categories: Pick<GroupPurchaseCategoryResponse, 'id' | 'name'>[]
 ): DashboardGroupBuyItem {
-  const categoryName = categories.find((cat) => cat.id === item.categoryId)?.name ?? '기타';
+  const categoryName = categories.find((cat) => cat.id === item.categoryId)?.name ?? '';
   const { status, statusType } = mapGroupPurchaseStatus(item.status, item.deadline);
 
   return {

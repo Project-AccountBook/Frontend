@@ -131,12 +131,13 @@ export async function exportTransactions(startDate: string, endDate: string): Pr
   URL.revokeObjectURL(url);
 }
 
-/** GET /api/v1/transactions/all — 삭제된 계좌 거래 포함 전체 조회 */
-export async function getAllUserTransactions(
+const ALL_TRANSACTIONS_PAGE_SIZE = 500;
+
+async function fetchUserTransactionsPage(
   startDate: string,
   endDate: string,
-  page = 0,
-  size = 500
+  page: number,
+  size: number
 ): Promise<SpringPage<TransactionResponse>> {
   const search = new URLSearchParams({
     startDate,
@@ -154,6 +155,47 @@ export async function getAllUserTransactions(
   return data.data;
 }
 
+/** GET /api/v1/transactions/all — 단일 페이지 조회 */
+export async function getAllUserTransactions(
+  startDate: string,
+  endDate: string,
+  page = 0,
+  size = ALL_TRANSACTIONS_PAGE_SIZE
+): Promise<SpringPage<TransactionResponse>> {
+  return fetchUserTransactionsPage(startDate, endDate, page, size);
+}
+
+/** GET /api/v1/transactions/all — 기간 내 전체 거래 내역 조회 (모든 페이지 순회) */
+export async function fetchAllUserTransactionsInRange(
+  startDate: string,
+  endDate: string,
+  pageSize = ALL_TRANSACTIONS_PAGE_SIZE
+): Promise<SpringPage<TransactionResponse>> {
+  const firstPage = await fetchUserTransactionsPage(startDate, endDate, 0, pageSize);
+  if (firstPage.totalPages <= 1) {
+    return firstPage;
+  }
+
+  const restPages = await Promise.all(
+    Array.from({ length: firstPage.totalPages - 1 }, (_, index) =>
+      fetchUserTransactionsPage(startDate, endDate, index + 1, pageSize)
+    )
+  );
+
+  const content = [
+    ...firstPage.content,
+    ...restPages.flatMap((page) => page.content),
+  ];
+
+  return {
+    ...firstPage,
+    content,
+    number: 0,
+    size: content.length,
+    totalPages: 1,
+  };
+}
+
 /** 여러 계좌의 거래 내역을 병합 조회 */
 export async function getTransactionsForAccounts(
   accountIds: number[],
@@ -162,7 +204,7 @@ export async function getTransactionsForAccounts(
 ): Promise<TransactionResponse[]> {
   if (accountIds.length === 0) return [];
 
-  const page = await getAllUserTransactions(startDate, endDate);
+  const page = await fetchAllUserTransactionsInRange(startDate, endDate);
   const accountIdSet = new Set(accountIds);
 
   return page.content

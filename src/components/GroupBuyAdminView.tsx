@@ -256,7 +256,7 @@ export const GroupBuyAdminView: React.FC = () => {
         const mapped = res.data.map((prod: any) => ({
           id: prod.id,
           name: prod.name,
-          category: catList.find(c => c.id === prod.categoryId)?.name || '기타',
+          category: catList.find(c => c.id === prod.categoryId)?.name ?? '',
           price: prod.price,
           stock: 100,
           description: prod.description || '상품 설명이 없습니다.',

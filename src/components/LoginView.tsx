@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Mail, Lock, AlertCircle, Loader2, User, Calendar, MapPin, CheckCircle, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { authApi, tokenStorage, userApi } from '../api';
+import { API_BASE_URL } from '../api/config';
 import { openAddressSearch } from '../utils/daumPostcode';
 
 interface LoginViewProps {
@@ -181,7 +182,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   // --- Login Submit ---
   const handleSocialLogin = (provider: 'kakao' | 'naver' | 'google') => {
     tokenStorage.setPendingRememberMe(rememberMe);
-    window.location.href = `http://localhost:8000/oauth2/authorization/${provider}`;
+    window.location.href = `${API_BASE_URL}/oauth2/authorization/${provider}`;
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -445,7 +446,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
             <div className="social-login-icons-row">
               <a
-                href="http://localhost:8000/oauth2/authorization/kakao"
+                href={`${API_BASE_URL}/oauth2/authorization/kakao`}
                 className="social-icon-btn kakao"
                 title="카카오 로그인"
                 onClick={(e) => {
@@ -458,7 +459,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 </svg>
               </a>
               <a
-                href="http://localhost:8000/oauth2/authorization/naver"
+                href={`${API_BASE_URL}/oauth2/authorization/naver`}
                 className="social-icon-btn naver"
                 title="네이버 로그인"
                 onClick={(e) => {
@@ -471,7 +472,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 </svg>
               </a>
               <a
-                href="http://localhost:8000/oauth2/authorization/google"
+                href={`${API_BASE_URL}/oauth2/authorization/google`}
                 className="social-icon-btn google"
                 title="구글 로그인"
                 onClick={(e) => {

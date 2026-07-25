@@ -26,13 +26,11 @@ import {
   userApi,
   interestCategoryApi,
   groupPurchaseCategoryApi,
-  locationApi,
   type UserProfileResponse,
   type InterestCategoryResponse,
   type GroupPurchaseCategoryResponse,
 } from '../api';
 import { openAddressSearch } from '../utils/daumPostcode';
-import { geocodeAddress } from '../utils/kakaoGeocoder';
 
 type UserProfile = UserProfileResponse;
 
@@ -86,8 +84,14 @@ export const MyPageView: React.FC = () => {
       try {
         const result = await userApi.getMyProfile();
         if (result.ok && result.data) {
-          setProfile(result.data);
-          setEditForm(result.data);
+          setProfile({
+            ...result.data,
+            isGoalAlertEnabled: result.data.isGoalAlertEnabled ?? true,
+          });
+          setEditForm({
+            ...result.data,
+            isGoalAlertEnabled: result.data.isGoalAlertEnabled ?? true,
+          });
         } else {
           setProfileError(result.error ?? '프로필을 불러오는 데 실패했습니다.');
         }
@@ -236,6 +240,7 @@ export const MyPageView: React.FC = () => {
         isPortfolioPublic: editForm.isPortfolioPublic ?? false,
         isBudgetAlertEnabled: editForm.isBudgetAlertEnabled ?? true,
         isInterestCategoryEnabled: editForm.isInterestCategoryEnabled ?? true,
+        isGoalAlertEnabled: editForm.isGoalAlertEnabled ?? true,
         isSystemAlertEnabled: editForm.isSystemAlertEnabled ?? true,
       });
       if (result.ok) {
@@ -243,28 +248,7 @@ export const MyPageView: React.FC = () => {
         setEditing(false);
         setEditBaseAddress('');
         setEditDetailAddress('');
-
-        const addressChanged = fullAddress && fullAddress !== (profile?.address ?? null);
-        if (addressChanged) {
-          try {
-            const coords = await geocodeAddress(fullAddress!);
-            if (coords) {
-              const locResult = await locationApi.update(coords);
-              if (locResult.ok) {
-                setProfileSuccess('프로필과 위치가 저장되었습니다.');
-              } else {
-                setProfileSuccess('프로필은 저장했지만 위치 등록에 실패했습니다.');
-              }
-            } else {
-              setProfileSuccess('프로필은 저장했지만 주소를 좌표로 변환하지 못했습니다.');
-            }
-          } catch (err) {
-            console.error(err);
-            setProfileSuccess('프로필은 저장했지만 위치 등록 중 오류가 발생했습니다.');
-          }
-        } else {
-          setProfileSuccess('프로필이 성공적으로 저장되었습니다.');
-        }
+        setProfileSuccess('프로필이 성공적으로 저장되었습니다.');
         setTimeout(() => setProfileSuccess(null), 3000);
       } else {
         setProfileError(result.error ?? '저장에 실패했습니다.');
@@ -291,6 +275,7 @@ export const MyPageView: React.FC = () => {
         isPortfolioPublic: profile.isPortfolioPublic,
         isBudgetAlertEnabled: profile.isBudgetAlertEnabled,
         isInterestCategoryEnabled: profile.isInterestCategoryEnabled,
+        isGoalAlertEnabled: profile.isGoalAlertEnabled,
         isSystemAlertEnabled: profile.isSystemAlertEnabled,
       });
       if (result.ok) {
@@ -790,6 +775,13 @@ export const MyPageView: React.FC = () => {
                   onChange={(v) => setProfile({ ...profile, isInterestCategoryEnabled: v })}
                   label="관심 카테고리 알림"
                   description="내가 등록한 관심 카테고리에 새 글이 올라오면 알려드립니다"
+                />
+
+                <ToggleSwitch
+                  checked={profile.isGoalAlertEnabled}
+                  onChange={(v) => setProfile({ ...profile, isGoalAlertEnabled: v })}
+                  label="계좌 목표 달성 알림"
+                  description="계좌 목표 금액에 도달하면 알려드립니다"
                 />
 
                 <ToggleSwitch

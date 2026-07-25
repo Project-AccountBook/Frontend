@@ -1,15 +1,28 @@
 import { authFetch } from './client';
+import type { AccountRole } from '../lib/accountGoalStorage';
+
+export type { AccountRole };
 
 export interface AccountResponse {
   id: number;
   accountName: string;
   initialBalance: number;
   currentBalance: number;
+  role: AccountRole;
+  goalAmount: number | null;
+  goalDate: string | null;
+  progressPercent: number | null;
 }
 
 export interface AccountRequest {
   accountName: string;
   initialBalance: number;
+  role?: AccountRole;
+}
+
+export interface AccountGoalRequest {
+  goalAmount: number;
+  goalDate?: string | null;
 }
 
 interface ApiResponse<T> {
@@ -54,6 +67,30 @@ export async function updateAccount(accountId: number, request: AccountRequest):
   const data: ApiResponse<null> = await res.json();
   if (!res.ok || !data.success) {
     throw new Error(data.error ?? '계좌 수정에 실패했습니다.');
+  }
+}
+
+/** PATCH /api/v1/account/{accountId}/goal */
+export async function updateAccountGoal(accountId: number, request: AccountGoalRequest): Promise<void> {
+  const res = await authFetch(`/api/v1/account/${accountId}/goal`, {
+    method: 'PATCH',
+    headers: jsonHeaders,
+    body: JSON.stringify(request),
+  });
+  const data: ApiResponse<null> = await res.json();
+  if (!res.ok || !data.success) {
+    throw new Error(data.error ?? '계좌 목표 수정에 실패했습니다.');
+  }
+}
+
+/** DELETE /api/v1/account/{accountId}/goal */
+export async function clearAccountGoal(accountId: number): Promise<void> {
+  const res = await authFetch(`/api/v1/account/${accountId}/goal`, {
+    method: 'DELETE',
+  });
+  const data: ApiResponse<null> = await res.json();
+  if (!res.ok || !data.success) {
+    throw new Error(data.error ?? '계좌 목표 삭제에 실패했습니다.');
   }
 }
 

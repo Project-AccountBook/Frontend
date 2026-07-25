@@ -7,6 +7,7 @@ export { groupPurchaseApi } from './groupPurchaseApi';
 export { budgetApi } from './budgetApi';
 export { categoryApi } from './categoryApi';
 export { dashboardApi } from './dashboardApi';
+export { allocationApi } from './allocationApi';
 export { portfolioApi } from './portfolioApi';
 export {
   budgetCompareApi,

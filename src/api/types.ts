@@ -70,6 +70,7 @@ export interface UserProfileResponse {
   isPortfolioPublic: boolean;
   isBudgetAlertEnabled: boolean;
   isInterestCategoryEnabled: boolean;
+  isGoalAlertEnabled: boolean;
   isSystemAlertEnabled: boolean;
 }
 
@@ -81,6 +82,7 @@ export interface UpdateProfileRequest {
   isPortfolioPublic: boolean;
   isBudgetAlertEnabled: boolean;
   isInterestCategoryEnabled: boolean;
+  isGoalAlertEnabled: boolean;
   isSystemAlertEnabled: boolean;
 }
 
@@ -144,7 +146,7 @@ export interface PageResponse<T> {
   empty: boolean;
 }
 
-export type NotificationType = 'BUDGET' | 'INTEREST_CATEGORY' | 'SYSTEM';
+export type NotificationType = 'BUDGET' | 'INTEREST_CATEGORY' | 'GOAL' | 'SYSTEM';
 
 export interface NotificationResponse {
   id: number;
@@ -159,16 +161,27 @@ export interface NotificationResponse {
 
 export type TransactionType = 'INCOME' | 'EXPENSE' | 'TRANSFER';
 
+export type AccountRole = 'CHECKING' | 'SAVINGS' | 'INVESTMENT';
+
 export interface CategoryResponse {
   id: number;
   name: string;
   type: TransactionType;
   isCustom: boolean;
+  includeInSavingsRate: boolean;
+  includeInInvestmentRate: boolean;
 }
 
 export interface CategoryRequest {
   name: string;
   type: TransactionType;
+  includeInSavingsRate?: boolean | null;
+  includeInInvestmentRate?: boolean | null;
+}
+
+export interface CategoryAllocationRequest {
+  includeInSavingsRate: boolean;
+  includeInInvestmentRate: boolean;
 }
 
 export interface BudgetRequest {
@@ -214,11 +227,44 @@ export interface SummaryResponse {
   totalExpense: number;
 }
 
+export interface AllocationBucketResponse {
+  net: number;
+  rate: number;
+  inflow: number;
+  outflow: number;
+}
+
+export interface MonthlyAllocationResponse {
+  savings: AllocationBucketResponse;
+  investment: AllocationBucketResponse;
+}
+
+export interface MonthlyAllocationSummaryResponse {
+  yearMonth: string;
+  totalIncome: number;
+  savings: AllocationBucketResponse;
+  investment: AllocationBucketResponse;
+}
+
+export interface GoalProgressResponse {
+  accountId: number;
+  accountName: string;
+  role: AccountRole;
+  currentBalance: number;
+  goalAmount: number;
+  progressPercent: number;
+  goalDate: string | null;
+  dDay: number | null;
+}
+
 export interface DashboardResponse {
   categoryExpenses: Record<string, number>;
   trends: MonthlyTrendResponse[];
   budgetStatus: BudgetStatusResponse;
   summary: SummaryResponse;
+  allocation: MonthlyAllocationResponse;
+  goalProgress: GoalProgressResponse[];
+  totalAsset: number;
 }
 
 /** PortfolioController */

@@ -8,11 +8,13 @@ import {
   ExternalLink,
   PiggyBank,
   ShoppingBag,
+  Target,
   Trash2,
   Info
 } from 'lucide-react';
 import { notificationApi } from '../api';
 import type { NotificationResponse, NotificationType } from '../api/types';
+import type { AssetActiveSection } from './AssetView';
 
 export type { NotificationType };
 export type NotificationItem = NotificationResponse;
@@ -30,6 +32,7 @@ type FilterTab = (typeof FILTER_TABS)[number]['id'];
 const CATEGORY_TABS: { id: 'all' | NotificationType; label: string }[] = [
   { id: 'all', label: '전체' },
   { id: 'BUDGET', label: '예산' },
+  { id: 'GOAL', label: '목표' },
   { id: 'INTEREST_CATEGORY', label: '공동구매' },
   { id: 'SYSTEM', label: '시스템' }
 ];
@@ -39,6 +42,7 @@ const TYPE_CONFIG: Record<
   { label: string; icon: React.ElementType; color: string; bg: string }
 > = {
   BUDGET: { label: '예산', icon: PiggyBank, color: 'var(--red)', bg: 'var(--red-bg)' },
+  GOAL: { label: '목표', icon: Target, color: 'var(--green)', bg: 'var(--green-bg)' },
   INTEREST_CATEGORY: {
     label: '공동구매',
     icon: ShoppingBag,
@@ -72,6 +76,7 @@ function resolveNotificationTab(
     const url = redirectUrl.trim();
     const bareTab = url.replace(/^#\/?/, '').replace(/^\//, '');
 
+    if (bareTab === 'goals' || bareTab === 'history/goals') return 'history';
     if (KNOWN_APP_TABS.has(bareTab)) return bareTab;
     if (bareTab === 'budget-page') return 'budget';
     if (url.includes('budget-page') || /\/budget\/?$/.test(url)) return 'budget';
@@ -79,8 +84,24 @@ function resolveNotificationTab(
   }
 
   if (type === 'BUDGET') return 'budget';
+  if (type === 'GOAL') return 'history';
   if (type === 'INTEREST_CATEGORY') return 'groupbuy';
   return null;
+}
+
+function resolveAssetSection(
+  redirectUrl: string | null,
+  type: NotificationType
+): AssetActiveSection | undefined {
+  if (redirectUrl) {
+    const url = redirectUrl.trim().replace(/^#\/?/, '').replace(/^\//, '');
+    if (url === 'goals' || url === 'history/goals' || url.endsWith('/goals')) {
+      return 'goals';
+    }
+  }
+
+  if (type === 'GOAL') return 'goals';
+  return undefined;
 }
 
 function resolveGroupPurchaseId(
@@ -117,7 +138,10 @@ function formatRelativeTime(isoString: string): string {
 
 interface NotificationViewProps {
   onUnreadCountChange?: (count: number) => void;
-  onNavigate?: (tab: string, options?: { groupPurchaseId?: number }) => void;
+  onNavigate?: (
+    tab: string,
+    options?: { groupPurchaseId?: number; assetSection?: AssetActiveSection }
+  ) => void;
 }
 
 export const NotificationView: React.FC<NotificationViewProps> = ({
@@ -333,10 +357,14 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
       notification.referenceId,
       notification.type
     );
+    const assetSection = resolveAssetSection(notification.redirectUrl, notification.type);
 
     onNavigate(
       tab,
-      groupPurchaseId !== undefined ? { groupPurchaseId } : undefined
+      {
+        ...(groupPurchaseId !== undefined ? { groupPurchaseId } : {}),
+        ...(assetSection ? { assetSection } : {})
+      }
     );
   };
 
