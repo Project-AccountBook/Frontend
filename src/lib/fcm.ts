@@ -35,6 +35,11 @@ export function setPushEnabledInApp(enabled: boolean): void {
   window.dispatchEvent(new Event(PUSH_PREFERENCE_CHANGED_EVENT));
 }
 
+export function resetPushSettingsInApp(): void {
+  localStorage.removeItem(PUSH_ENABLED_KEY);
+  window.dispatchEvent(new Event(PUSH_PREFERENCE_CHANGED_EVENT));
+}
+
 export function getPushPermissionStatus(): PushPermissionStatus {
   if (!isFirebaseConfigured()) return 'not-configured';
   if (typeof Notification === 'undefined') return 'unsupported';

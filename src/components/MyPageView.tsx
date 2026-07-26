@@ -38,6 +38,7 @@ import {
   getPushPermissionStatus,
   isPushEnabledInApp,
   requestPushNotifications,
+  resetPushSettingsInApp,
   setPushEnabledInApp,
   type PushPermissionStatus,
 } from '../lib/fcm';
@@ -549,8 +550,14 @@ export const MyPageView: React.FC = () => {
     setWithdrawLoading(true);
     setWithdrawError(null);
     try {
+      try {
+        await disablePushNotifications();
+      } catch {
+        // 탈퇴는 푸시 해제 실패와 무관하게 진행
+      }
       const result = await userApi.withdraw();
       if (result.ok) {
+        resetPushSettingsInApp();
         tokenStorage.clear();
         window.location.reload();
       } else {
