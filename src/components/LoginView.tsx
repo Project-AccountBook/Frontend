@@ -231,7 +231,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     if (!password) {
       errors.password = '비밀번호를 입력해 주세요.';
     } else if (!/(?=.*[0-9])(?=.*[a-zA-Z])(?=.*\W)(?=\S+$).{8,16}/.test(password)) {
-      errors.password = '비밀번호는 8~16자 영문 대소문자, 숫자, 특수문자 조합이어야 합니다.';
+      errors.password = '비밀번호는 8~16자 영문, 숫자, 특수문자 조합이어야 합니다.';
     }
     if (password !== signupConfirmPassword) {
       errors.signupConfirmPassword = '비밀번호가 일치하지 않습니다.';
@@ -300,7 +300,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     if (!newPassword) {
       errors.newPassword = '새 비밀번호를 입력해 주세요.';
     } else if (!/(?=.*[0-9])(?=.*[a-zA-Z])(?=.*\W)(?=\S+$).{8,16}/.test(newPassword)) {
-      errors.newPassword = '비밀번호는 8~16자 영문 대소문자, 숫자, 특수문자 조합이어야 합니다.';
+      errors.newPassword = '비밀번호는 8~16자 영문, 숫자, 특수문자 조합이어야 합니다.';
     }
     if (newPassword !== confirmPassword) {
       errors.confirmPassword = '새 비밀번호와 일치하지 않습니다.';
@@ -600,7 +600,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                     <input
                       type={showPassword ? 'text' : 'password'}
                       className="form-input"
-                      placeholder="8~16자 영문 대소문자, 숫자, 특수문자 조합"
+                      placeholder="8~16자 영문, 숫자, 특수문자 조합"
                       value={password}
                       disabled={!isEmailVerified}
                       onChange={(e) => {
@@ -829,7 +829,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                     <input
                       type={showNewPassword ? 'text' : 'password'}
                       className="form-input"
-                      placeholder="8~16자 영문 대소문자, 숫자, 특수문자 조합"
+                      placeholder="8~16자 영문, 숫자, 특수문자 조합"
                       value={newPassword}
                       disabled={!isResetEmailVerified}
                       onChange={(e) => {

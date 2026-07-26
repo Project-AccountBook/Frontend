@@ -508,7 +508,7 @@ export const MyPageView: React.FC = () => {
     setPwSuccess(null);
     if (!newPassword) { setPwError('새 비밀번호를 입력해 주세요.'); return; }
     if (!/(?=.*[0-9])(?=.*[a-zA-Z])(?=.*\W)(?=\S+$).{8,16}/.test(newPassword)) {
-      setPwError('비밀번호는 8~16자 영문 대소문자, 숫자, 특수문자 조합이어야 합니다.');
+      setPwError('비밀번호는 8~16자 영문, 숫자, 특수문자 조합이어야 합니다.');
       return;
     }
     if (newPassword !== confirmPassword) { setPwError('새 비밀번호가 일치하지 않습니다.'); return; }
@@ -813,7 +813,7 @@ export const MyPageView: React.FC = () => {
                       <input
                         type={showNewPw ? 'text' : 'password'}
                         className="mypage-input"
-                        placeholder="8~16자 영문 대소문자, 숫자, 특수문자 조합"
+                        placeholder="8~16자 영문, 숫자, 특수문자 조합"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                       />
@@ -878,7 +878,7 @@ export const MyPageView: React.FC = () => {
                       <input
                         type={showNewPw ? 'text' : 'password'}
                         className="mypage-input"
-                        placeholder="8~16자 영문 대소문자, 숫자, 특수문자 조합"
+                        placeholder="8~16자 영문, 숫자, 특수문자 조합"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                       />
