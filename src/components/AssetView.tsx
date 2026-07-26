@@ -1876,7 +1876,9 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                     </div>
 
                     <div className="form-item">
-                      <label className="form-label">출금 계좌</label>
+                      <label className="form-label">
+                        {formType === 'INCOME' ? '입금 계좌' : '출금 계좌'}
+                      </label>
                       <select
                         value={formAccount}
                         onChange={(e) => setFormAccount(e.target.value)}
