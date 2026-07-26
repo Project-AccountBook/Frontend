@@ -4587,6 +4587,19 @@ a {
   transform: translateX(20px);
 }
 
+.mypage-notification-group + .mypage-notification-group {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+
+.mypage-notification-group-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
 /* Budget threshold slider */
 .mypage-threshold-row {
   padding: 16px 20px;
@@ -4616,8 +4629,58 @@ a {
   font-size: 16px;
   font-weight: 800;
   color: var(--blue);
-  min-width: 40px;
+  min-width: 52px;
   text-align: right;
+}
+
+.mypage-range-value-btn {
+  border: none;
+  background: transparent;
+  padding: 4px 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.mypage-range-value-btn:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.mypage-range-value-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.mypage-threshold-value-input-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 52px;
+  justify-content: flex-end;
+}
+
+.mypage-threshold-value-input {
+  width: 52px;
+  padding: 4px 6px;
+  border: 1px solid var(--blue-border);
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--blue);
+  text-align: right;
+  background: white;
+}
+
+.mypage-threshold-value-input:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.mypage-threshold-value-suffix {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--blue);
 }
 
 /* Withdraw */

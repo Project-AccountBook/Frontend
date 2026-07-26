@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   User,
   Lock,
@@ -31,6 +31,16 @@ import {
   type GroupPurchaseCategoryResponse,
 } from '../api';
 import { openAddressSearch } from '../utils/daumPostcode';
+import { isFirebaseConfigured } from '../config/firebase';
+import {
+  disablePushNotifications,
+  enablePushNotifications,
+  getPushPermissionStatus,
+  isPushEnabledInApp,
+  requestPushNotifications,
+  setPushEnabledInApp,
+  type PushPermissionStatus,
+} from '../lib/fcm';
 
 type UserProfile = UserProfileResponse;
 
@@ -75,6 +85,29 @@ export const MyPageView: React.FC = () => {
   const [interestCategorySuccess, setInterestCategorySuccess] = useState<string | null>(null);
   const [interestActionId, setInterestActionId] = useState<number | null>(null);
   const [addingCategoryId, setAddingCategoryId] = useState<number | null>(null);
+
+  const [pushPermission, setPushPermission] = useState<PushPermissionStatus>(() => getPushPermissionStatus());
+  const [pushEnabledInApp, setPushEnabledInAppState] = useState<boolean>(() => isPushEnabledInApp());
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushFeedback, setPushFeedback] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const [savingNotifications, setSavingNotifications] = useState(false);
+  const [notificationFeedback, setNotificationFeedback] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const thresholdSaveTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (activeTab === 'notifications') {
+      setPushPermission(getPushPermissionStatus());
+      setPushEnabledInAppState(isPushEnabledInApp());
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    return () => {
+      if (thresholdSaveTimer.current !== null) {
+        window.clearTimeout(thresholdSaveTimer.current);
+      }
+    };
+  }, []);
 
   // 프로필 불러오기
   useEffect(() => {
@@ -260,36 +293,179 @@ export const MyPageView: React.FC = () => {
     }
   };
 
-  // 알림 설정
-  const handleSaveNotifications = async () => {
-    if (!profile) return;
-    setSavingProfile(true);
-    setProfileSuccess(null);
-    setProfileError(null);
+  const buildNotificationSettingsPayload = (source: UserProfile) => ({
+    username: source.username,
+    birthDate: source.birthDate ?? null,
+    address: source.address ?? null,
+    budgetAlertThreshold: source.budgetAlertThreshold,
+    isPortfolioPublic: source.isPortfolioPublic,
+    isBudgetAlertEnabled: source.isBudgetAlertEnabled,
+    isInterestCategoryEnabled: source.isInterestCategoryEnabled,
+    isGoalAlertEnabled: source.isGoalAlertEnabled,
+    isSystemAlertEnabled: source.isSystemAlertEnabled,
+  });
+
+  const persistNotificationSettings = async (
+    nextProfile: UserProfile,
+    revertOnFailure?: UserProfile
+  ): Promise<boolean> => {
+    setSavingNotifications(true);
+    setNotificationFeedback(null);
+    setProfile(nextProfile);
+
     try {
-      const result = await userApi.updateMyProfile({
-        username: profile.username,
-        birthDate: profile.birthDate ?? null,
-        address: profile.address ?? null,
-        budgetAlertThreshold: profile.budgetAlertThreshold,
-        isPortfolioPublic: profile.isPortfolioPublic,
-        isBudgetAlertEnabled: profile.isBudgetAlertEnabled,
-        isInterestCategoryEnabled: profile.isInterestCategoryEnabled,
-        isGoalAlertEnabled: profile.isGoalAlertEnabled,
-        isSystemAlertEnabled: profile.isSystemAlertEnabled,
+      const result = await userApi.updateMyProfile(buildNotificationSettingsPayload(nextProfile));
+      if (result.ok) return true;
+
+      if (revertOnFailure) setProfile(revertOnFailure);
+      setNotificationFeedback({
+        msg: result.error ?? '알림 설정 저장에 실패했습니다.',
+        type: 'error',
       });
-      if (result.ok) {
-        setProfileSuccess('알림 설정이 저장되었습니다.');
-        setTimeout(() => setProfileSuccess(null), 3000);
-      } else {
-        setProfileError(result.error ?? '저장에 실패했습니다.');
-      }
+      return false;
     } catch {
-      setProfileError('서버와 통신 중 오류가 발생했습니다.');
+      if (revertOnFailure) setProfile(revertOnFailure);
+      setNotificationFeedback({
+        msg: '서버와 통신 중 오류가 발생했습니다.',
+        type: 'error',
+      });
+      return false;
     } finally {
-      setSavingProfile(false);
+      setSavingNotifications(false);
     }
   };
+
+  const handleNotificationToggle = async (
+    key: 'isBudgetAlertEnabled' | 'isInterestCategoryEnabled' | 'isGoalAlertEnabled' | 'isSystemAlertEnabled',
+    value: boolean
+  ) => {
+    if (!profile || savingNotifications) return;
+    const previous = profile;
+    await persistNotificationSettings({ ...profile, [key]: value }, previous);
+  };
+
+  const handleBudgetThresholdChange = (value: number, immediate = false) => {
+    if (!profile || savingNotifications) return;
+
+    const clamped = Math.min(100, Math.max(0, Math.round(value)));
+    const previous = profile;
+    const next = { ...profile, budgetAlertThreshold: clamped };
+    setProfile(next);
+
+    if (thresholdSaveTimer.current !== null) {
+      window.clearTimeout(thresholdSaveTimer.current);
+      thresholdSaveTimer.current = null;
+    }
+
+    if (immediate) {
+      void persistNotificationSettings(next, previous);
+      return;
+    }
+
+    thresholdSaveTimer.current = window.setTimeout(() => {
+      void persistNotificationSettings(next, previous);
+    }, 400);
+  };
+
+  const [editingBudgetThreshold, setEditingBudgetThreshold] = useState(false);
+  const [budgetThresholdDraft, setBudgetThresholdDraft] = useState('');
+  const budgetThresholdInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editingBudgetThreshold) {
+      budgetThresholdInputRef.current?.focus();
+      budgetThresholdInputRef.current?.select();
+    }
+  }, [editingBudgetThreshold]);
+
+  const startEditingBudgetThreshold = () => {
+    if (!profile || savingNotifications) return;
+    setBudgetThresholdDraft(String(profile.budgetAlertThreshold));
+    setEditingBudgetThreshold(true);
+  };
+
+  const cancelBudgetThresholdInput = () => {
+    setEditingBudgetThreshold(false);
+  };
+
+  const commitBudgetThresholdInput = () => {
+    if (!profile) return;
+
+    const trimmed = budgetThresholdDraft.trim();
+    if (trimmed === '') {
+      cancelBudgetThresholdInput();
+      return;
+    }
+
+    const parsed = Number(trimmed);
+    if (Number.isNaN(parsed)) {
+      cancelBudgetThresholdInput();
+      return;
+    }
+
+    handleBudgetThresholdChange(parsed, true);
+    setEditingBudgetThreshold(false);
+  };
+
+  const handlePushToggle = async (enabled: boolean) => {
+    if (!isFirebaseConfigured()) return;
+
+    setPushLoading(true);
+    setPushFeedback(null);
+    try {
+      if (enabled) {
+        if (pushPermission === 'denied') {
+          setPushFeedback({ msg: '브라우저 설정에서 알림을 허용한 뒤 다시 시도해 주세요.', type: 'error' });
+          return;
+        }
+
+        if (pushPermission === 'default') {
+          const result = await requestPushNotifications();
+          setPushPermission(getPushPermissionStatus());
+          if (!result.ok) {
+            setPushFeedback({ msg: result.error ?? '푸시 알림 설정에 실패했습니다.', type: 'error' });
+            return;
+          }
+        } else {
+          setPushEnabledInApp(true);
+          await enablePushNotifications();
+        }
+
+        setPushEnabledInAppState(true);
+      } else {
+        await disablePushNotifications();
+        setPushEnabledInAppState(false);
+      }
+    } catch (err) {
+      setPushFeedback({
+        msg: err instanceof Error ? err.message : '푸시 알림 설정에 실패했습니다.',
+        type: 'error',
+      });
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  const pushToggleChecked =
+    pushEnabledInApp &&
+    pushPermission === 'granted' &&
+    isFirebaseConfigured();
+
+  const pushToggleDescription = (() => {
+    if (!isFirebaseConfigured()) {
+      return 'Firebase 설정이 없어 푸시 알림을 사용할 수 없습니다.';
+    }
+    if (pushPermission === 'denied') {
+      return '브라우저에서 알림이 차단되어 있습니다. 주소창 옆 자물쇠/설정에서 허용해 주세요.';
+    }
+    if (pushPermission === 'default') {
+      return '켜면 탭을 닫아도 OS 알림을 받을 수 있습니다. 처음 켤 때 브라우저 권한을 묻습니다.';
+    }
+    if (pushToggleChecked) {
+      return '탭을 닫아도 OS 알림을 받습니다. 앱 사용 중에도 알림 팝업과 배지가 갱신됩니다.';
+    }
+    return '꺼두면 OS 푸시는 받지 않습니다. 앱 사용 중에는 탭 전환 시 배지가 갱신됩니다.';
+  })();
 
   // 현재 비밀번호 확인
   const handleVerifyCurrentPassword = async (e: React.FormEvent) => {
@@ -410,13 +586,15 @@ export const MyPageView: React.FC = () => {
     onChange,
     label,
     description,
+    disabled = false,
   }: {
     checked: boolean;
     onChange: (v: boolean) => void;
     label: string;
     description?: string;
+    disabled?: boolean;
   }) => (
-    <div className="mypage-toggle-row">
+    <div className="mypage-toggle-row" style={{ opacity: disabled ? 0.7 : 1 }}>
       <div className="mypage-toggle-info">
         <span className="mypage-toggle-label">{label}</span>
         {description && <span className="mypage-toggle-desc">{description}</span>}
@@ -427,6 +605,7 @@ export const MyPageView: React.FC = () => {
         className={`mypage-toggle-btn ${checked ? 'active' : ''}`}
         aria-checked={checked}
         role="switch"
+        disabled={disabled}
       >
         <span className="mypage-toggle-knob" />
       </button>
@@ -738,19 +917,48 @@ export const MyPageView: React.FC = () => {
               <div className="mypage-section-head">
                 <div>
                   <h2 className="mypage-section-title">알림 설정</h2>
-                  <p className="mypage-section-desc">앱 내 알림 및 서비스 수신 여부를 설정합니다</p>
+                  <p className="mypage-section-desc">변경 사항은 즉시 저장됩니다</p>
                 </div>
               </div>
 
-              {profileSuccess && <Feedback msg={profileSuccess} type="success" />}
-              {profileError && <Feedback msg={profileError} type="error" />}
+              {pushFeedback && <Feedback msg={pushFeedback.msg} type={pushFeedback.type} />}
+              {notificationFeedback && (
+                <Feedback msg={notificationFeedback.msg} type={notificationFeedback.type} />
+              )}
 
-              <div className="mypage-toggles-list">
+              {isFirebaseConfigured() && pushPermission !== 'unsupported' && (
+                <div className="mypage-notification-group">
+                  <h3 className="mypage-notification-group-label">푸시 수신</h3>
+                  <div className="mypage-toggles-list">
+                    <div className="mypage-toggle-row" style={{ opacity: pushLoading ? 0.7 : 1 }}>
+                      <div className="mypage-toggle-info">
+                        <span className="mypage-toggle-label">브라우저 푸시 알림</span>
+                        <span className="mypage-toggle-desc">{pushToggleDescription}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handlePushToggle(!pushToggleChecked)}
+                        className={`mypage-toggle-btn ${pushToggleChecked ? 'active' : ''}`}
+                        aria-checked={pushToggleChecked}
+                        role="switch"
+                        disabled={pushLoading || pushPermission === 'denied'}
+                      >
+                        <span className="mypage-toggle-knob" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="mypage-notification-group">
+                <h3 className="mypage-notification-group-label">알림 종류</h3>
+                <div className="mypage-toggles-list">
                 <ToggleSwitch
                   checked={profile.isBudgetAlertEnabled}
-                  onChange={(v) => setProfile({ ...profile, isBudgetAlertEnabled: v })}
+                  onChange={(v) => void handleNotificationToggle('isBudgetAlertEnabled', v)}
                   label="예산 초과 알림"
                   description="설정한 예산 기준(%) 초과 시 알림을 받습니다"
+                  disabled={savingNotifications}
                 />
 
                 {profile.isBudgetAlertEnabled && (
@@ -762,41 +970,74 @@ export const MyPageView: React.FC = () => {
                         min={0}
                         max={100}
                         value={profile.budgetAlertThreshold}
-                        onChange={(e) => setProfile({ ...profile, budgetAlertThreshold: Number(e.target.value) })}
+                        onChange={(e) => handleBudgetThresholdChange(Number(e.target.value))}
                         className="mypage-range"
+                        disabled={savingNotifications}
                       />
-                      <span className="mypage-range-value">{profile.budgetAlertThreshold}%</span>
+                      {editingBudgetThreshold ? (
+                        <div className="mypage-threshold-value-input-wrap">
+                          <input
+                            ref={budgetThresholdInputRef}
+                            type="number"
+                            min={0}
+                            max={100}
+                            className="mypage-threshold-value-input"
+                            value={budgetThresholdDraft}
+                            onChange={(e) => setBudgetThresholdDraft(e.target.value)}
+                            onBlur={commitBudgetThresholdInput}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                commitBudgetThresholdInput();
+                              }
+                              if (e.key === 'Escape') {
+                                e.preventDefault();
+                                cancelBudgetThresholdInput();
+                              }
+                            }}
+                            disabled={savingNotifications}
+                          />
+                          <span className="mypage-threshold-value-suffix">%</span>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="mypage-range-value mypage-range-value-btn"
+                          onClick={startEditingBudgetThreshold}
+                          disabled={savingNotifications}
+                          title="클릭하여 직접 입력"
+                        >
+                          {profile.budgetAlertThreshold}%
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
 
                 <ToggleSwitch
                   checked={profile.isInterestCategoryEnabled}
-                  onChange={(v) => setProfile({ ...profile, isInterestCategoryEnabled: v })}
+                  onChange={(v) => void handleNotificationToggle('isInterestCategoryEnabled', v)}
                   label="관심 카테고리 알림"
                   description="내가 등록한 관심 카테고리에 새 글이 올라오면 알려드립니다"
+                  disabled={savingNotifications}
                 />
 
                 <ToggleSwitch
                   checked={profile.isGoalAlertEnabled}
-                  onChange={(v) => setProfile({ ...profile, isGoalAlertEnabled: v })}
+                  onChange={(v) => void handleNotificationToggle('isGoalAlertEnabled', v)}
                   label="계좌 목표 달성 알림"
                   description="계좌 목표 금액에 도달하면 알려드립니다"
+                  disabled={savingNotifications}
                 />
 
                 <ToggleSwitch
                   checked={profile.isSystemAlertEnabled}
-                  onChange={(v) => setProfile({ ...profile, isSystemAlertEnabled: v })}
-                  label="보안 알림"
-                  description="로그인, 비밀번호 변경 등 보안 관련 이벤트를 알려드립니다"
+                  onChange={(v) => void handleNotificationToggle('isSystemAlertEnabled', v)}
+                  label="시스템 알림"
+                  description="회원가입 환영, 서비스 공지 등 시스템 안내 알림을 받습니다"
+                  disabled={savingNotifications}
                 />
-              </div>
-
-              <div className="mypage-action-row" style={{ marginTop: '32px' }}>
-                <button className="mypage-btn-save" onClick={handleSaveNotifications} disabled={savingProfile}>
-                  {savingProfile ? <Loader2 size={15} className="spin-animation" /> : <Save size={15} />}
-                  설정 저장
-                </button>
+                </div>
               </div>
             </div>
           )}

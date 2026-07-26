@@ -26,6 +26,17 @@ export const notificationApi = {
       method: 'DELETE',
     }),
 
+  registerDeviceToken: (fcmToken: string) =>
+    authRequest<void>('/api/v1/notifications/device-token', {
+      method: 'POST',
+      body: JSON.stringify({ fcmToken }),
+    }),
+
+  unregisterDeviceToken: () =>
+    authRequest<void>('/api/v1/notifications/device-token', {
+      method: 'DELETE',
+    }),
+
   /** Fetch all pages (for client-side filtering) */
   fetchAll: async (): Promise<{ items: NotificationResponse[]; error: string | null }> => {
     const all: NotificationResponse[] = [];
