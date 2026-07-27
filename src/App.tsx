@@ -17,6 +17,7 @@ import { AssetView, type AssetActiveSection } from './components/AssetView';
 import { LoginView } from './components/LoginView';
 import { MyPageView } from './components/MyPageView';
 import { authApi, notificationApi, setAuthExpiredHandler, tokenStorage, userApi } from './api';
+import { useNotificationSync } from './hooks/useNotificationSync';
 import { clearMyUserIdCache } from './lib/boardApi';
 import { Construction } from 'lucide-react';
 
@@ -118,6 +119,8 @@ function App() {
       setUnreadNotificationCount(0);
     }
   }, [isLoggedIn, refreshUnreadCount]);
+
+  useNotificationSync(isLoggedIn, refreshUnreadCount);
 
   const handleLogout = async () => {
     if (tokenStorage.hasToken()) {
