@@ -11,13 +11,14 @@ import { KnowhowWriteView } from './components/KnowhowWriteView';
 import { QnaListView } from './components/QnaListView';
 import { QnaDetailView } from './components/QnaDetailView';
 import { QnaWriteView } from './components/QnaWriteView';
+import { GroupBuyAdminView } from './components/GroupBuyAdminView';
 import { NotificationView } from './components/NotificationView';
 import { BudgetView } from './components/BudgetView';
 import { AssetView, type AssetActiveSection } from './components/AssetView';
 import { LoginView } from './components/LoginView';
 import { MyPageView } from './components/MyPageView';
+import { AdminView } from './components/AdminView';
 import { authApi, notificationApi, setAuthExpiredHandler, tokenStorage, userApi } from './api';
-import { useNotificationSync } from './hooks/useNotificationSync';
 import { clearMyUserIdCache } from './lib/boardApi';
 import { Construction } from 'lucide-react';
 
@@ -33,6 +34,7 @@ const APP_TABS = new Set([
   'groupbuy',
   'knowhow',
   'qa',
+  'groupbuyAdmin',
   'notifications',
   'settings',
 ]);
@@ -51,7 +53,7 @@ function writeTabToUrl(tab: string) {
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => tokenStorage.hasToken());
   const [activeTab, setActiveTab] = useState<string>(readTabFromUrl);
-
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [knowhowMode, setKnowhowMode] = useState<BoardMode>('list');
   const [knowhowPostId, setKnowhowPostId] = useState<number | null>(null);
   const [qnaMode, setQnaMode] = useState<BoardMode>('list');
@@ -82,11 +84,11 @@ function App() {
 
   useEffect(() => {
     if (!isLoggedIn) return;
-    userApi.getMyProfile().then(() => {
-      // Intentionally empty or remove logic if not needed
-    }).catch(() => {
-      // Handle error if needed
-    });
+    userApi.getMyProfile().then((result) => {
+      if (result.ok && result.data?.role === 'ROLE_ADMIN') {
+        setIsAdmin(true);
+      }
+    }).catch(() => setIsAdmin(false));
   }, [isLoggedIn]);
 
   useEffect(() => {
@@ -120,8 +122,6 @@ function App() {
     }
   }, [isLoggedIn, refreshUnreadCount]);
 
-  useNotificationSync(isLoggedIn, refreshUnreadCount);
-
   const handleLogout = async () => {
     if (tokenStorage.hasToken()) {
       try {
@@ -132,6 +132,7 @@ function App() {
     }
     tokenStorage.clear();
     clearMyUserIdCache();
+    setIsAdmin(false);
     setIsLoggedIn(false);
     setActiveTab('dashboard');
     writeTabToUrl('dashboard');
@@ -269,6 +270,8 @@ function App() {
         return renderKnowhow();
       case 'qa':
         return renderQna();
+      case 'groupbuyAdmin':
+        return <GroupBuyAdminView />;
       case 'notifications':
         return (
           <NotificationView
@@ -278,6 +281,8 @@ function App() {
         );
       case 'settings':
         return <MyPageView />;
+      case 'admin':
+        return <AdminView />;
       default:
         return (
           <div
@@ -355,7 +360,7 @@ function App() {
   return (
     <div className="app-layout">
       {/* Sidebar Navigation */}
-      <Sidebar activeTab={activeTab} setActiveTab={handleTabChange} onLogout={handleLogout} />
+      <Sidebar activeTab={activeTab} setActiveTab={handleTabChange} onLogout={handleLogout} isAdmin={isAdmin} />
 
       {/* Main Container */}
       <div className="main-container">

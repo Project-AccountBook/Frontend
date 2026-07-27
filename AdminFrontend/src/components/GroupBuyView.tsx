@@ -201,6 +201,8 @@ export const GroupBuyView: React.FC<{
   const [sortBy, setSortBy] = useState('latest');
   const [distanceLimit, setDistanceLimit] = useState('1.5km');
   const [showBookmarksOnly, setShowBookmarksOnly] = useState(false);
+  const [showParticipatedOnly, setShowParticipatedOnly] = useState(false);
+  
   const [selectedItem, setSelectedItem] = useState<GroupBuyItem | null>(null);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -760,6 +762,7 @@ export const GroupBuyView: React.FC<{
     .filter(item => {
       if (activeCategoryName && item.category !== activeCategoryName) return false;
       if (showBookmarksOnly && !userBookmarks.includes(item.id)) return false;
+      if (showParticipatedOnly && !participatedItems.includes(item.id)) return false;
       return true;
     })
     .sort((a, b) => {
@@ -881,7 +884,25 @@ export const GroupBuyView: React.FC<{
             찜 목록
           </button>
 
+          {/* participating toggle */}
+          <button
+            onClick={() => setShowParticipatedOnly(!showParticipatedOnly)}
+            className={`groupbuy-toggle-btn ${showParticipatedOnly ? 'active' : ''}`}
+          >
+            신청 내역
+          </button>
 
+          {/* request modal btn */}
+          <button
+            onClick={() => {
+              setFormType('request');
+              setShowRequestModal(true);
+            }}
+            className="groupbuy-action-btn"
+          >
+            <Plus size={16} />
+            <span>신청 / 제보</span>
+          </button>
         </div>
       </div>
 

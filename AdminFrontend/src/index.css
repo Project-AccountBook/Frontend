@@ -693,15 +693,27 @@ a {
 .sidebar-logo {
   display: flex;
   align-items: center;
+  gap: 10px;
   padding: 0 8px;
   margin-bottom: 32px;
 }
 
-.sidebar-logo-img {
-  display: block;
-  height: 28px;
-  width: auto;
-  object-fit: contain;
+.sidebar-logo-text {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--navy);
+  letter-spacing: -0.5px;
+}
+
+.sidebar-logo-icon {
+  width: 32px;
+  height: 32px;
+  background: var(--blue);
+  color: white;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .sidebar-menu {
@@ -2554,11 +2566,16 @@ a {
 }
 
 .login-logo {
-  display: block;
-  height: 40px;
-  width: auto;
+  width: 48px;
+  height: 48px;
+  background: var(--blue);
+  color: white;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   margin: 0 auto 16px auto;
-  object-fit: contain;
+  box-shadow: 0 8px 16px rgba(59, 130, 246, 0.25);
 }
 
 .login-title {
@@ -3266,10 +3283,6 @@ a {
   margin-top: 4px;
 }
 
-.tx-period-summary + .calendar-wrapper {
-  margin-top: 4px;
-}
-
 /* 섹션별 공통 액션 바 */
 .section-action-bar {
   display: flex;
@@ -3620,10 +3633,6 @@ a {
   display: flex;
   flex-direction: column;
   gap: 20px;
-}
-
-.calendar-wrapper > .calendar-header:first-child {
-  margin-top: 16px;
 }
 
 .cal-toolbar {
@@ -4587,19 +4596,6 @@ a {
   transform: translateX(20px);
 }
 
-.mypage-notification-group + .mypage-notification-group {
-  margin-top: 28px;
-  padding-top: 24px;
-  border-top: 1px solid var(--border);
-}
-
-.mypage-notification-group-label {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-muted);
-  margin-bottom: 12px;
-}
-
 /* Budget threshold slider */
 .mypage-threshold-row {
   padding: 16px 20px;
@@ -4629,58 +4625,8 @@ a {
   font-size: 16px;
   font-weight: 800;
   color: var(--blue);
-  min-width: 52px;
+  min-width: 40px;
   text-align: right;
-}
-
-.mypage-range-value-btn {
-  border: none;
-  background: transparent;
-  padding: 4px 6px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background var(--transition-fast);
-}
-
-.mypage-range-value-btn:hover:not(:disabled) {
-  background: rgba(59, 130, 246, 0.12);
-}
-
-.mypage-range-value-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
-.mypage-threshold-value-input-wrap {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  min-width: 52px;
-  justify-content: flex-end;
-}
-
-.mypage-threshold-value-input {
-  width: 52px;
-  padding: 4px 6px;
-  border: 1px solid var(--blue-border);
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--blue);
-  text-align: right;
-  background: white;
-}
-
-.mypage-threshold-value-input:focus {
-  outline: none;
-  border-color: var(--blue);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
-}
-
-.mypage-threshold-value-suffix {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--blue);
 }
 
 /* Withdraw */
