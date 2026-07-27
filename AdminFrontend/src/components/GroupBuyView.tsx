@@ -884,7 +884,25 @@ export const GroupBuyView: React.FC<{
             찜 목록
           </button>
 
+          {/* participating toggle */}
+          <button
+            onClick={() => setShowParticipatedOnly(!showParticipatedOnly)}
+            className={`groupbuy-toggle-btn ${showParticipatedOnly ? 'active' : ''}`}
+          >
+            신청 내역
+          </button>
 
+          {/* request modal btn */}
+          <button
+            onClick={() => {
+              setFormType('request');
+              setShowRequestModal(true);
+            }}
+            className="groupbuy-action-btn"
+          >
+            <Plus size={16} />
+            <span>신청 / 제보</span>
+          </button>
         </div>
       </div>
 

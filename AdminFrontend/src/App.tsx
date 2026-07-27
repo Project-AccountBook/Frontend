@@ -11,11 +11,13 @@ import { KnowhowWriteView } from './components/KnowhowWriteView';
 import { QnaListView } from './components/QnaListView';
 import { QnaDetailView } from './components/QnaDetailView';
 import { QnaWriteView } from './components/QnaWriteView';
+import { GroupBuyAdminView } from './components/GroupBuyAdminView';
 import { NotificationView } from './components/NotificationView';
 import { BudgetView } from './components/BudgetView';
 import { AssetView, type AssetActiveSection } from './components/AssetView';
 import { LoginView } from './components/LoginView';
 import { MyPageView } from './components/MyPageView';
+import { AdminView } from './components/AdminView';
 import { authApi, notificationApi, setAuthExpiredHandler, tokenStorage, userApi } from './api';
 import { clearMyUserIdCache } from './lib/boardApi';
 import { Construction } from 'lucide-react';
@@ -32,6 +34,7 @@ const APP_TABS = new Set([
   'groupbuy',
   'knowhow',
   'qa',
+  'groupbuyAdmin',
   'notifications',
   'settings',
 ]);
@@ -267,6 +270,8 @@ function App() {
         return renderKnowhow();
       case 'qa':
         return renderQna();
+      case 'groupbuyAdmin':
+        return <GroupBuyAdminView />;
       case 'notifications':
         return (
           <NotificationView
@@ -276,6 +281,8 @@ function App() {
         );
       case 'settings':
         return <MyPageView />;
+      case 'admin':
+        return <AdminView />;
       default:
         return (
           <div

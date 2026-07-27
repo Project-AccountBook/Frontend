@@ -1,0 +1,50 @@
+name: '🚀 이슈 생성'
+description: '새로운 기능, 버그 수정, 리팩토링 등을 위한 이슈를 생성합니다.'
+title: '[Label] 이슈 제목을 입력해주세요'
+labels: []
+body:
+  - type: dropdown
+    id: label
+    attributes:
+      label: '🏷️ 이슈 종류 (Label)'
+      description: '이슈에 가장 적합한 라벨을 하나 선택해주세요.'
+      options:
+        - 'feat: 새로운 기능 추가'
+        - 'fix: 버그 수정'
+        - 'refactor: 코드 리팩토링'
+        - 'docs: 문서 작업'
+        - 'chore: 빌드, 설정 등 기타 작업'
+        - 'perf: 최적화'
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: '📝 상세 내용 (Description)'
+      description: '이슈에 대한 구체적인 설명을 작성해주세요. (배경, 목적 등)'
+      placeholder: '예: 현재 OO 기능은 사용자가 XX할 때 불편함이 있어, 이를 개선하고자 합니다.'
+    validations:
+      required: true
+
+  - type: textarea
+    id: tasks
+    attributes:
+      label: '✅ 체크리스트 (Tasks)'
+      description: '이 이슈를 완료하기 위해 필요한 작업 목록을 구체적으로 작성해주세요.'
+      value: |
+        - [ ] OO 기능 설계
+        - [ ] OO 기능 UI 개발
+        - [ ] OO 기능 API 개발
+        - [ ] 테스트 코드 작성
+    validations:
+      required: true
+
+  - type: textarea
+    id: etc
+    attributes:
+      label: '📎 참고 자료 (References)'
+      description: '관련된 다른 이슈, 외부 링크, 스크린샷 등을 첨부해주세요.'
+      placeholder: |
+        - 관련된 이슈: #123
+        - 참고 링크: https://...

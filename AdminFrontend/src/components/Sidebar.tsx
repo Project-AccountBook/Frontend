@@ -18,9 +18,10 @@ interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   onLogout: () => void;
+  isAdmin?: boolean;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, isAdmin }) => {
   const menuItems = [
     { id: 'dashboard', label: '대시보드', icon: LayoutDashboard },
     { id: 'history', label: '내역 및 자산 관리', icon: ReceiptText },
@@ -30,6 +31,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLog
     { id: 'qa', label: 'Q&A 게시판', icon: MessageSquare },
     { id: 'knowhow', label: '노하우 공유', icon: Lightbulb },
     { id: 'groupbuy', label: '동네 공동구매', icon: ShoppingBag, isHot: true },
+    { id: 'groupbuyAdmin', label: '공동구매 어드민', icon: Shield },
+    ...(isAdmin ? [{ id: 'admin', label: '게시판 어드민', icon: Shield }] : []),
   ];
 
   return (
