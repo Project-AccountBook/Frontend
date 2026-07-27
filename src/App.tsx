@@ -51,7 +51,7 @@ function writeTabToUrl(tab: string) {
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => tokenStorage.hasToken());
   const [activeTab, setActiveTab] = useState<string>(readTabFromUrl);
-  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+
   const [knowhowMode, setKnowhowMode] = useState<BoardMode>('list');
   const [knowhowPostId, setKnowhowPostId] = useState<number | null>(null);
   const [qnaMode, setQnaMode] = useState<BoardMode>('list');
@@ -82,11 +82,11 @@ function App() {
 
   useEffect(() => {
     if (!isLoggedIn) return;
-    userApi.getMyProfile().then((result) => {
-      if (result.ok && result.data?.role === 'ROLE_ADMIN') {
-        setIsAdmin(true);
-      }
-    }).catch(() => setIsAdmin(false));
+    userApi.getMyProfile().then(() => {
+      // Intentionally empty or remove logic if not needed
+    }).catch(() => {
+      // Handle error if needed
+    });
   }, [isLoggedIn]);
 
   useEffect(() => {
@@ -132,7 +132,6 @@ function App() {
     }
     tokenStorage.clear();
     clearMyUserIdCache();
-    setIsAdmin(false);
     setIsLoggedIn(false);
     setActiveTab('dashboard');
     writeTabToUrl('dashboard');
@@ -356,7 +355,7 @@ function App() {
   return (
     <div className="app-layout">
       {/* Sidebar Navigation */}
-      <Sidebar activeTab={activeTab} setActiveTab={handleTabChange} onLogout={handleLogout} isAdmin={isAdmin} />
+      <Sidebar activeTab={activeTab} setActiveTab={handleTabChange} onLogout={handleLogout} />
 
       {/* Main Container */}
       <div className="main-container">

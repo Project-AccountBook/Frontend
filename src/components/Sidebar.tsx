@@ -7,7 +7,6 @@ import {
   Lightbulb,
   ShoppingBag,
   Settings,
-  Shield,
   PiggyBank,
   LogOut,
   MapPin
