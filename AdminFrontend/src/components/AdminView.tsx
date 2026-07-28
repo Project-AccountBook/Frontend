@@ -236,10 +236,17 @@ const BoardsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
   const [total, setTotal] = useState(0);
   const [rows, setRows] = useState<AdminBoardResponse[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // New States for Sorting, Bulk, Modal
+  const [sortCol, setSortCol] = useState<'id'|'views'|'createdAt'>('id');
+  const [sortDesc, setSortDesc] = useState(true);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [detailModal, setDetailModal] = useState<AdminBoardResponse | null>(null);
 
   const load = async () => {
     setLoading(true);
     onError(null);
+    setSelectedIds(new Set());
     try {
       const data = await adminListBoards(type || null, includeDeleted, page, PAGE_SIZE);
       setRows(data.content);
@@ -267,6 +274,39 @@ const BoardsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
       onError((e as Error).message);
     }
   };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`선택한 ${selectedIds.size}개의 게시물을 일괄 삭제하시겠습니까?`)) return;
+    
+    let successCount = 0;
+    try {
+      for (const id of selectedIds) {
+        await adminDeleteBoard(id);
+        successCount++;
+      }
+      onFlash(`총 ${successCount}개의 게시물이 일괄 삭제되었습니다.`);
+    } catch (e) {
+      onError(`일괄 삭제 중 오류 발생: ${(e as Error).message}`);
+    } finally {
+      await load();
+    }
+  };
+
+  const toggleSort = (col: 'id'|'views'|'createdAt') => {
+    if (sortCol === col) setSortDesc(!sortDesc);
+    else { setSortCol(col); setSortDesc(true); }
+  };
+
+  const sortedRows = [...rows].sort((a, b) => {
+    let cmp = 0;
+    if (sortCol === 'id') cmp = a.id - b.id;
+    if (sortCol === 'views') cmp = a.views - b.views;
+    if (sortCol === 'createdAt') cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    return sortDesc ? -cmp : cmp;
+  });
+
+  const allSelected = sortedRows.length > 0 && selectedIds.size === sortedRows.filter(r => !r.adminDeleted).length;
 
   return (
     <div className="fade-in">
@@ -321,9 +361,25 @@ const BoardsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
         </div>
       </div>
 
+      <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'flex-end' }}>
+        <button 
+          onClick={handleBulkDelete}
+          disabled={selectedIds.size === 0}
+          style={{
+            ...opsBtnStyle(selectedIds.size > 0 ? '#ef4444' : '#f1f5f9'),
+            color: selectedIds.size > 0 ? 'white' : '#94a3b8',
+            padding: '10px 16px',
+            fontSize: '14px'
+          }}
+        >
+          <Trash2 size={16} style={{ marginRight: '6px' }} />
+          선택 일괄 삭제 ({selectedIds.size})
+        </button>
+      </div>
+
       {loading ? (
         <div style={loaderStyle}>데이터를 불러오는 중입니다...</div>
-      ) : rows.length === 0 ? (
+      ) : sortedRows.length === 0 ? (
         <div style={loaderStyle}>검색 결과가 없습니다.</div>
       ) : (
         <div style={{
@@ -336,19 +392,62 @@ const BoardsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
           <table style={tableStyle}>
             <thead>
               <tr style={{ background: '#f8fafc', borderBottom: '2px solid var(--border)' }}>
-                <th style={{...thStyle, width: '60px', textAlign: 'center'}}>ID</th>
+                <th style={{...thStyle, width: '40px', textAlign: 'center'}}>
+                  <input 
+                    type="checkbox" 
+                    checked={allSelected}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedIds(new Set(sortedRows.filter(r => !r.adminDeleted).map(r => r.id)));
+                      } else {
+                        setSelectedIds(new Set());
+                      }
+                    }}
+                    style={{ accentColor: 'var(--navy)' }}
+                  />
+                </th>
+                <th 
+                  style={{...thStyle, width: '60px', textAlign: 'center', cursor: 'pointer'}}
+                  onClick={() => toggleSort('id')}
+                >
+                  ID {sortCol === 'id' && (sortDesc ? '↓' : '↑')}
+                </th>
                 <th style={{...thStyle, width: '100px'}}>분류</th>
                 <th style={thStyle}>제목</th>
                 <th style={{...thStyle, width: '100px'}}>작성자</th>
-                <th style={{...thStyle, width: '80px', textAlign: 'center'}}>조회수</th>
+                <th 
+                  style={{...thStyle, width: '80px', textAlign: 'center', cursor: 'pointer'}}
+                  onClick={() => toggleSort('views')}
+                >
+                  조회수 {sortCol === 'views' && (sortDesc ? '↓' : '↑')}
+                </th>
                 <th style={{...thStyle, width: '100px', textAlign: 'center'}}>상태</th>
-                <th style={{...thStyle, width: '120px', textAlign: 'right'}}>작성일</th>
+                <th 
+                  style={{...thStyle, width: '120px', textAlign: 'right', cursor: 'pointer'}}
+                  onClick={() => toggleSort('createdAt')}
+                >
+                  작성일 {sortCol === 'createdAt' && (sortDesc ? '↓' : '↑')}
+                </th>
                 <th style={{ ...thStyle, width: '100px', textAlign: 'right', paddingRight: '24px' }}>관리</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((b) => (
-                <tr key={b.id} style={rowStyle(b.userDeleted)}>
+              {sortedRows.map((b) => (
+                <tr key={b.id} style={rowStyle(b.userDeleted)} onClick={() => setDetailModal(b)}>
+                  <td style={{...tdStyle, textAlign: 'center'}} onClick={(e) => e.stopPropagation()}>
+                    <input 
+                      type="checkbox" 
+                      checked={selectedIds.has(b.id)}
+                      disabled={b.adminDeleted}
+                      onChange={(e) => {
+                        const newSet = new Set(selectedIds);
+                        if (e.target.checked) newSet.add(b.id);
+                        else newSet.delete(b.id);
+                        setSelectedIds(newSet);
+                      }}
+                      style={{ accentColor: 'var(--navy)' }}
+                    />
+                  </td>
                   <td style={{...tdStyle, textAlign: 'center', fontWeight: 600, color: 'var(--text-secondary)'}}>
                     {b.id}
                   </td>
@@ -360,7 +459,7 @@ const BoardsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
                       {b.type}
                     </span>
                   </td>
-                  <td style={{ ...tdStyle, maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>
+                  <td style={{ ...tdStyle, maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600, cursor: 'pointer' }}>
                     {b.title}
                   </td>
                   <td style={tdStyle}>
@@ -378,7 +477,7 @@ const BoardsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
                   <td style={{ ...tdStyle, color: 'var(--text-muted)', textAlign: 'right', fontSize: '13px' }}>
                     {formatRelativeKo(b.createdAt)}
                   </td>
-                  <td style={{ ...tdStyle, textAlign: 'right', paddingRight: '24px' }}>
+                  <td style={{ ...tdStyle, textAlign: 'right', paddingRight: '24px' }} onClick={(e) => e.stopPropagation()}>
                     <button 
                       onClick={() => handleDelete(b.id)} 
                       disabled={b.adminDeleted} 
@@ -397,6 +496,57 @@ const BoardsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
       )}
 
       <Pager page={page} totalPages={totalPages} onChange={setPage} />
+
+      {/* Detail Modal */}
+      {detailModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(15, 23, 42, 0.6)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 999
+        }} onClick={() => setDetailModal(null)}>
+          <div style={{
+            background: 'white', borderRadius: '24px', padding: '32px',
+            width: '100%', maxWidth: '600px', maxHeight: '80vh', overflowY: 'auto',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+          }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+                게시물 상세 보기
+              </h2>
+              <button onClick={() => setDetailModal(null)} style={{ color: 'var(--text-secondary)', fontSize: '24px', fontWeight: 'bold' }}>×</button>
+            </div>
+            <div style={{ marginBottom: '16px' }}>
+              <span style={{...badgeStyle(detailModal.type === 'QNA' ? '#eff6ff' : '#fdf4ff', detailModal.type === 'QNA' ? '#2563eb' : '#c026d3', 'transparent'), marginRight: '8px'}}>
+                {detailModal.type}
+              </span>
+              <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>작성자 ID: #{detailModal.userId} | 조회수: {detailModal.views}</span>
+            </div>
+            <h3 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '20px', lineHeight: 1.4 }}>
+              {detailModal.title}
+            </h3>
+            <div style={{
+              background: '#f8fafc', padding: '24px', borderRadius: '16px',
+              fontSize: '15px', color: 'var(--text-primary)', lineHeight: 1.6, whiteSpace: 'pre-wrap'
+            }}>
+              {detailModal.content}
+            </div>
+            <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button 
+                onClick={() => {
+                  handleDelete(detailModal.id);
+                  setDetailModal(null);
+                }} 
+                disabled={detailModal.adminDeleted}
+                style={{ ...opsBtnStyle(detailModal.adminDeleted ? '#f1f5f9' : '#ef4444'), color: detailModal.adminDeleted ? '#94a3b8' : 'white' }}
+              >
+                {detailModal.adminDeleted ? '삭제됨' : '삭제하기'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -412,9 +562,16 @@ const CommentsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
   const [rows, setRows] = useState<AdminCommentResponse[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // New States for Sorting, Bulk, Modal
+  const [sortCol, setSortCol] = useState<'id'|'createdAt'>('id');
+  const [sortDesc, setSortDesc] = useState(true);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [detailModal, setDetailModal] = useState<AdminCommentResponse | null>(null);
+
   const load = async () => {
     setLoading(true);
     onError(null);
+    setSelectedIds(new Set());
     try {
       const data = await adminListComments(referenceType || null, referenceId, page, PAGE_SIZE);
       setRows(data.content);
@@ -442,6 +599,38 @@ const CommentsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
       onError((e as Error).message);
     }
   };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`선택한 ${selectedIds.size}개의 댓글을 일괄 삭제하시겠습니까?`)) return;
+    
+    let successCount = 0;
+    try {
+      for (const id of selectedIds) {
+        await adminDeleteComment(id);
+        successCount++;
+      }
+      onFlash(`총 ${successCount}개의 댓글이 일괄 삭제되었습니다.`);
+    } catch (e) {
+      onError(`일괄 삭제 중 오류 발생: ${(e as Error).message}`);
+    } finally {
+      await load();
+    }
+  };
+
+  const toggleSort = (col: 'id'|'createdAt') => {
+    if (sortCol === col) setSortDesc(!sortDesc);
+    else { setSortCol(col); setSortDesc(true); }
+  };
+
+  const sortedRows = [...rows].sort((a, b) => {
+    let cmp = 0;
+    if (sortCol === 'id') cmp = a.id - b.id;
+    if (sortCol === 'createdAt') cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    return sortDesc ? -cmp : cmp;
+  });
+
+  const allSelected = sortedRows.length > 0 && selectedIds.size === sortedRows.filter(r => !r.adminDeleted).length;
 
   return (
     <div className="fade-in">
@@ -512,9 +701,25 @@ const CommentsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
         </div>
       </div>
 
+      <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'flex-end' }}>
+        <button 
+          onClick={handleBulkDelete}
+          disabled={selectedIds.size === 0}
+          style={{
+            ...opsBtnStyle(selectedIds.size > 0 ? '#ef4444' : '#f1f5f9'),
+            color: selectedIds.size > 0 ? 'white' : '#94a3b8',
+            padding: '10px 16px',
+            fontSize: '14px'
+          }}
+        >
+          <Trash2 size={16} style={{ marginRight: '6px' }} />
+          선택 일괄 삭제 ({selectedIds.size})
+        </button>
+      </div>
+
       {loading ? (
         <div style={loaderStyle}>데이터를 불러오는 중입니다...</div>
-      ) : rows.length === 0 ? (
+      ) : sortedRows.length === 0 ? (
         <div style={loaderStyle}>검색 결과가 없습니다.</div>
       ) : (
         <div style={{
@@ -527,20 +732,58 @@ const CommentsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
           <table style={tableStyle}>
             <thead>
               <tr style={{ background: '#f8fafc', borderBottom: '2px solid var(--border)' }}>
-                <th style={{...thStyle, width: '60px', textAlign: 'center'}}>ID</th>
+                <th style={{...thStyle, width: '40px', textAlign: 'center'}}>
+                  <input 
+                    type="checkbox" 
+                    checked={allSelected}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedIds(new Set(sortedRows.filter(r => !r.adminDeleted).map(r => r.id)));
+                      } else {
+                        setSelectedIds(new Set());
+                      }
+                    }}
+                    style={{ accentColor: 'var(--navy)' }}
+                  />
+                </th>
+                <th 
+                  style={{...thStyle, width: '60px', textAlign: 'center', cursor: 'pointer'}}
+                  onClick={() => toggleSort('id')}
+                >
+                  ID {sortCol === 'id' && (sortDesc ? '↓' : '↑')}
+                </th>
                 <th style={{...thStyle, width: '120px'}}>도메인</th>
                 <th style={{...thStyle, width: '80px', textAlign: 'center'}}>Ref ID</th>
                 <th style={{...thStyle, width: '80px', textAlign: 'center'}}>Parent</th>
                 <th style={{...thStyle, width: '100px'}}>작성자</th>
                 <th style={thStyle}>댓글 내용</th>
                 <th style={{...thStyle, width: '100px', textAlign: 'center'}}>상태</th>
-                <th style={{...thStyle, width: '120px', textAlign: 'right'}}>작성일</th>
+                <th 
+                  style={{...thStyle, width: '120px', textAlign: 'right', cursor: 'pointer'}}
+                  onClick={() => toggleSort('createdAt')}
+                >
+                  작성일 {sortCol === 'createdAt' && (sortDesc ? '↓' : '↑')}
+                </th>
                 <th style={{ ...thStyle, width: '100px', textAlign: 'right', paddingRight: '24px' }}>관리</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((c) => (
-                <tr key={c.id} style={rowStyle(c.userDeleted)}>
+              {sortedRows.map((c) => (
+                <tr key={c.id} style={rowStyle(c.userDeleted)} onClick={() => setDetailModal(c)}>
+                  <td style={{...tdStyle, textAlign: 'center'}} onClick={(e) => e.stopPropagation()}>
+                    <input 
+                      type="checkbox" 
+                      checked={selectedIds.has(c.id)}
+                      disabled={c.adminDeleted}
+                      onChange={(e) => {
+                        const newSet = new Set(selectedIds);
+                        if (e.target.checked) newSet.add(c.id);
+                        else newSet.delete(c.id);
+                        setSelectedIds(newSet);
+                      }}
+                      style={{ accentColor: 'var(--navy)' }}
+                    />
+                  </td>
                   <td style={{...tdStyle, textAlign: 'center', fontWeight: 600, color: 'var(--text-secondary)'}}>
                     {c.id}
                   </td>
@@ -568,7 +811,7 @@ const CommentsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
                       <span style={{ color: 'var(--text-secondary)' }}>#{c.userId}</span>
                     </div>
                   </td>
-                  <td style={{ ...tdStyle, maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <td style={{ ...tdStyle, maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}>
                     {c.content}
                   </td>
                   <td style={{...tdStyle, textAlign: 'center'}}>
@@ -577,7 +820,7 @@ const CommentsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
                   <td style={{ ...tdStyle, color: 'var(--text-muted)', textAlign: 'right', fontSize: '13px' }}>
                     {formatRelativeKo(c.createdAt)}
                   </td>
-                  <td style={{ ...tdStyle, textAlign: 'right', paddingRight: '24px' }}>
+                  <td style={{ ...tdStyle, textAlign: 'right', paddingRight: '24px' }} onClick={(e) => e.stopPropagation()}>
                     <button 
                       onClick={() => handleDelete(c.id)} 
                       disabled={c.adminDeleted} 
@@ -596,6 +839,62 @@ const CommentsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
       )}
 
       <Pager page={page} totalPages={totalPages} onChange={setPage} />
+
+      {/* Detail Modal */}
+      {detailModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(15, 23, 42, 0.6)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 999
+        }} onClick={() => setDetailModal(null)}>
+          <div style={{
+            background: 'white', borderRadius: '24px', padding: '32px',
+            width: '100%', maxWidth: '600px', maxHeight: '80vh', overflowY: 'auto',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+          }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+                댓글 상세 보기
+              </h2>
+              <button onClick={() => setDetailModal(null)} style={{ color: 'var(--text-secondary)', fontSize: '24px', fontWeight: 'bold' }}>×</button>
+            </div>
+            <div style={{ marginBottom: '16px' }}>
+              <span style={{
+                ...badgeStyle(
+                  detailModal.referenceType === 'QNA' ? '#eff6ff' : detailModal.referenceType === 'KNOWHOW' ? '#fdf4ff' : '#ecfdf5',
+                  detailModal.referenceType === 'QNA' ? '#2563eb' : detailModal.referenceType === 'KNOWHOW' ? '#c026d3' : '#059669',
+                  'transparent'
+                ), marginRight: '8px'
+              }}>
+                {detailModal.referenceType}
+              </span>
+              <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
+                게시물 ID: #{detailModal.referenceId} | 작성자 ID: #{detailModal.userId} {detailModal.parentId && `| 부모 댓글: #${detailModal.parentId}`}
+              </span>
+            </div>
+            <div style={{
+              background: '#f8fafc', padding: '24px', borderRadius: '16px',
+              fontSize: '15px', color: 'var(--text-primary)', lineHeight: 1.6, whiteSpace: 'pre-wrap'
+            }}>
+              {detailModal.content}
+            </div>
+            <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button 
+                onClick={() => {
+                  handleDelete(detailModal.id);
+                  setDetailModal(null);
+                }} 
+                disabled={detailModal.adminDeleted}
+                style={{ ...opsBtnStyle(detailModal.adminDeleted ? '#f1f5f9' : '#ef4444'), color: detailModal.adminDeleted ? '#94a3b8' : 'white' }}
+              >
+                {detailModal.adminDeleted ? '삭제됨' : '삭제하기'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
