@@ -608,13 +608,13 @@ const OpsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
   const [lastReindexCount, setLastReindexCount] = useState<number | null>(null);
 
   const handleReindex = async () => {
-    if (!window.confirm('모든 게시물을 Elasticsearch 에 재색인합니다. 진행할까요?')) return;
+    if (!window.confirm('모든 게시물의 검색 데이터를 최신 상태로 동기화합니다. 진행할까요?')) return;
     setReindexing(true);
     onError(null);
     try {
       const count = await adminReindexBoards();
       setLastReindexCount(count);
-      onFlash(`재색인 완료: 성공적으로 ${count}개 문서를 동기화했습니다.`);
+      onFlash(`검색 동기화 완료: 성공적으로 ${count}개의 게시물을 업데이트했습니다.`);
     } catch (e) {
       onError((e as Error).message);
     } finally {
@@ -628,7 +628,7 @@ const OpsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
     try {
       const r = await adminReconcileLikes(500);
       setLastReport(r);
-      onFlash(`정합성 검증 완료: ${r.corrected}개의 불일치를 수정했습니다.`);
+      onFlash(`통계 수정 완료: ${r.corrected}건의 좋아요 수치 오류를 바로잡았습니다.`);
     } catch (e) {
       onError((e as Error).message);
     } finally {
@@ -660,10 +660,10 @@ const OpsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
           <Search size={32} color="#a855f7" />
         </div>
         <h3 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '12px' }}>
-          Elasticsearch 재색인
+          검색 최적화 (동기화)
         </h3>
         <p style={{ color: 'var(--text-secondary)', lineHeight: 1.6, fontSize: '14px', marginBottom: '32px', minHeight: '44px' }}>
-          모든 게시물을 태그와 함께 ES 에 다시 색인합니다. 검색 결과가 동기화되지 않거나 `BoardDocument` 스키마 변경 시 실행하세요.
+          게시판의 모든 글과 태그를 최신 상태로 검색 엔진에 업데이트합니다. 검색 결과가 실제 게시물과 다를 때 실행해 주세요.
         </p>
         <button 
           onClick={handleReindex} 
@@ -676,9 +676,9 @@ const OpsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
           }}
         >
           {reindexing ? (
-            <><RefreshCw size={18} className="spin" style={{ marginRight: '8px' }} /> 재색인 진행 중...</>
+            <><RefreshCw size={18} className="spin" style={{ marginRight: '8px' }} /> 동기화 진행 중...</>
           ) : (
-            <><ArrowUpRight size={18} style={{ marginRight: '8px' }} /> 전체 재색인 실행</>
+            <><ArrowUpRight size={18} style={{ marginRight: '8px' }} /> 검색 최적화 실행</>
           )}
         </button>
         {lastReindexCount !== null && (
@@ -710,10 +710,10 @@ const OpsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
           <CheckCircle2 size={32} color="#0ea5e9" />
         </div>
         <h3 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '12px' }}>
-          좋아요 정합성 검증
+          좋아요 통계 오류 수정
         </h3>
         <p style={{ color: 'var(--text-secondary)', lineHeight: 1.6, fontSize: '14px', marginBottom: '32px', minHeight: '44px' }}>
-          Redis의 캐시 데이터와 실제 DB 간의 좋아요 수 차이를 찾아 자동으로 수정합니다. (최대 500개 키)
+          서버 임시 저장소와 실제 데이터베이스 간의 좋아요 수치 차이를 찾아내고, 올바르게 맞춰줍니다. (최대 500건)
         </p>
         <button 
           onClick={handleReconcile} 
@@ -726,9 +726,9 @@ const OpsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
           }}
         >
           {reconciling ? (
-            <><RefreshCw size={18} className="spin" style={{ marginRight: '8px' }} /> 검증 진행 중...</>
+            <><RefreshCw size={18} className="spin" style={{ marginRight: '8px' }} /> 수정 진행 중...</>
           ) : (
-            <><ArrowUpRight size={18} style={{ marginRight: '8px' }} /> 정합성 검증 실행</>
+            <><ArrowUpRight size={18} style={{ marginRight: '8px' }} /> 통계 오류 수정 실행</>
           )}
         </button>
         {lastReport && (
