@@ -182,6 +182,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   // --- Login Submit ---
   const handleSocialLogin = (provider: 'kakao' | 'naver' | 'google') => {
     tokenStorage.setPendingRememberMe(rememberMe);
+    window.location.href = `${API_BASE_URL}/oauth2/authorization/${provider}?redirect_uri=${encodeURIComponent(window.location.origin + '/oauth2/redirect')}`;
     window.location.href = `${API_BASE_URL}/oauth2/authorization/${provider}`;
   };
 

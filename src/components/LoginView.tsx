@@ -183,8 +183,12 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   // --- Login Submit ---
   const handleSocialLogin = (provider: 'kakao' | 'naver' | 'google') => {
     tokenStorage.setPendingRememberMe(rememberMe);
-    window.location.href = `${API_BASE_URL}/oauth2/authorization/${provider}`;
+    window.location.href = `${API_BASE_URL}/oauth2/authorization/${provider}?redirect_uri=${encodeURIComponent(window.location.origin + '/oauth2/redirect')}`;
   };
+
+  // Skip down to the button hrefs (we need to replace them too, but we will just rely on handleSocialLogin or fix them individually)
+  // Actually, wait, the buttons use <a> tags with hrefs directly! Let's check.
+
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

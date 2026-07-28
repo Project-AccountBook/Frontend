@@ -41,6 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLog
         <div className="sidebar-logo-icon">
           <Wallet size={18} />
         </div>
+        <span className="sidebar-logo-text">MODI</span>
         <span className="sidebar-logo-text">Joint Living</span>
       </div>
 
