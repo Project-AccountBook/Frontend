@@ -113,13 +113,18 @@ export async function exportTransactions(startDate: string, endDate: string): Pr
   const search = new URLSearchParams({ startDate, endDate });
   const res = await authFetch(`/api/v1/transactions/export?${search}`);
   if (!res.ok) {
+    const contentType = res.headers.get('content-type') ?? '';
+    if (contentType.includes('application/json')) {
+      const data: ApiResponse<null> = await res.json();
+      throw new Error(data.error ?? '거래 내역 내보내기에 실패했습니다.');
+    }
     throw new Error('거래 내역 내보내기에 실패했습니다.');
   }
 
   const blob = await res.blob();
   const disposition = res.headers.get('Content-Disposition');
   const fileNameMatch = disposition?.match(/filename="?([^"]+)"?/);
-  const fileName = fileNameMatch?.[1] ?? `account_book_${startDate}_to_${endDate}.xlsx`;
+  const fileName = fileNameMatch?.[1] ?? `MODI_거래내역_${startDate}_${endDate}.xlsx`;
 
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
