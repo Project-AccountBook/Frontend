@@ -3,7 +3,6 @@ import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { DashboardView } from './components/DashboardView';
 import { ComparisonView } from './components/ComparisonView';
-import { LocationComparisonView } from './components/LocationComparisonView';
 import { GroupBuyView } from './components/GroupBuyView';
 import { KnowhowListView } from './components/KnowhowListView';
 import { KnowhowDetailView } from './components/KnowhowDetailView';
@@ -257,7 +256,7 @@ function App() {
       case 'comparison':
         return <ComparisonView />;
       case 'locationComparison':
-        return <LocationComparisonView />;
+        return <ComparisonView initialLocationMode />;
       case 'groupbuy':
         return (
           <GroupBuyView
@@ -277,7 +276,21 @@ function App() {
           />
         );
       case 'settings':
-        return <MyPageView />;
+        return (
+          <MyPageView
+            onOpenBoard={(type, id) => {
+              if (type === 'QNA') {
+                setQnaPostId(id);
+                setQnaMode('detail');
+                handleTabChange('qa');
+              } else {
+                setKnowhowPostId(id);
+                setKnowhowMode('detail');
+                handleTabChange('knowhow');
+              }
+            }}
+          />
+        );
       default:
         return (
           <div
