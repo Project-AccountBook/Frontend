@@ -22,6 +22,7 @@ import {
   listHotBoards,
   searchBoards,
 } from '../lib/boardApi';
+import { extractFirstImageUrl, stripMediaForPreview } from '../lib/renderPostContent';
 
 export interface KnowhowPost {
   id: number;
@@ -104,7 +105,9 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
               views: b.views,
               likeCount: b.likeCount,
               tags: b.tags ?? [],
-              thumbnail: b.imageUrls && b.imageUrls.length > 0 ? b.imageUrls[0] : undefined,
+              thumbnail:
+                extractFirstImageUrl(b.content) ??
+                (b.imageUrls && b.imageUrls.length > 0 ? b.imageUrls[0] : undefined),
             }))
           );
           setTotalPages(Math.max(1, data.totalPages));
@@ -448,7 +451,7 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
                     overflow: 'hidden'
                   }}
                 >
-                  {post.content}
+                  {stripMediaForPreview(post.content)}
                 </p>
 
                 {post.tags.length > 0 && (

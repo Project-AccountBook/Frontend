@@ -19,6 +19,11 @@ import {
   Shield,
   ChevronRight,
   Plus,
+  Users,
+  Bookmark,
+  MessageSquare,
+  HelpCircle,
+  Lightbulb,
 } from 'lucide-react';
 import {
   authApi,
@@ -30,6 +35,15 @@ import {
   type InterestCategoryResponse,
   type GroupPurchaseCategoryResponse,
 } from '../api';
+import type { BoardResponse, FollowUserResponse } from '../lib/boardApi';
+import {
+  formatRelativeKo,
+  getMyUserId,
+  listFollowers,
+  listFollowing,
+  listMyBookmarks,
+} from '../lib/boardApi';
+import { stripMediaForPreview } from '../lib/renderPostContent';
 import { openAddressSearch } from '../utils/daumPostcode';
 import { isFirebaseConfigured } from '../config/firebase';
 import {
@@ -45,9 +59,20 @@ import {
 
 type UserProfile = UserProfileResponse;
 
-type MyPageTab = 'profile' | 'password' | 'notifications' | 'interestCategories' | 'withdraw';
+type MyPageTab =
+  | 'profile'
+  | 'password'
+  | 'notifications'
+  | 'interestCategories'
+  | 'follow'
+  | 'bookmarks'
+  | 'withdraw';
 
-export const MyPageView: React.FC = () => {
+interface MyPageViewProps {
+  onOpenBoard?: (type: 'QNA' | 'KNOWHOW', id: number) => void;
+}
+
+export const MyPageView: React.FC<MyPageViewProps> = ({ onOpenBoard }) => {
   const [activeTab, setActiveTab] = useState<MyPageTab>('profile');
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -86,6 +111,18 @@ export const MyPageView: React.FC = () => {
   const [interestCategorySuccess, setInterestCategorySuccess] = useState<string | null>(null);
   const [interestActionId, setInterestActionId] = useState<number | null>(null);
   const [addingCategoryId, setAddingCategoryId] = useState<number | null>(null);
+
+  // Follow
+  const [followSubTab, setFollowSubTab] = useState<'following' | 'followers'>('following');
+  const [followingList, setFollowingList] = useState<FollowUserResponse[]>([]);
+  const [followersList, setFollowersList] = useState<FollowUserResponse[]>([]);
+  const [followLoading, setFollowLoading] = useState(false);
+  const [followError, setFollowError] = useState<string | null>(null);
+
+  // Bookmarks
+  const [bookmarks, setBookmarks] = useState<BoardResponse[]>([]);
+  const [bookmarksLoading, setBookmarksLoading] = useState(false);
+  const [bookmarksError, setBookmarksError] = useState<string | null>(null);
 
   const [pushPermission, setPushPermission] = useState<PushPermissionStatus>(() => getPushPermissionStatus());
   const [pushEnabledInApp, setPushEnabledInAppState] = useState<boolean>(() => isPushEnabledInApp());
@@ -147,6 +184,54 @@ export const MyPageView: React.FC = () => {
       setPwError(null);
       setPwSuccess(null);
     }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== 'follow') return;
+    let cancelled = false;
+    const load = async () => {
+      setFollowLoading(true);
+      setFollowError(null);
+      try {
+        const myId = await getMyUserId();
+        const [followingRes, followersRes] = await Promise.all([
+          listFollowing(myId),
+          listFollowers(myId),
+        ]);
+        if (cancelled) return;
+        setFollowingList(followingRes);
+        setFollowersList(followersRes);
+      } catch (e) {
+        if (!cancelled) setFollowError((e as Error).message);
+      } finally {
+        if (!cancelled) setFollowLoading(false);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== 'bookmarks') return;
+    let cancelled = false;
+    const load = async () => {
+      setBookmarksLoading(true);
+      setBookmarksError(null);
+      try {
+        const data = await listMyBookmarks();
+        if (!cancelled) setBookmarks(data);
+      } catch (e) {
+        if (!cancelled) setBookmarksError((e as Error).message);
+      } finally {
+        if (!cancelled) setBookmarksLoading(false);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
   }, [activeTab]);
 
   useEffect(() => {
@@ -578,6 +663,8 @@ export const MyPageView: React.FC = () => {
     { id: 'password', label: passwordTabLabel, icon: Lock },
     { id: 'notifications', label: '알림 설정', icon: Bell },
     { id: 'interestCategories', label: '관심 카테고리', icon: Tags },
+    { id: 'follow', label: '팔로우 목록', icon: Users },
+    { id: 'bookmarks', label: '저장한 글', icon: Bookmark },
     { id: 'withdraw', label: '회원 탈퇴', icon: Trash2 },
   ];
 
@@ -1146,6 +1233,230 @@ export const MyPageView: React.FC = () => {
                     </div>
                   )}
                 </>
+              )}
+            </div>
+          )}
+
+          {/* ── Follow Tab ───────────────────── */}
+          {activeTab === 'follow' && (
+            <div>
+              <div className="mypage-section-head">
+                <div>
+                  <h2 className="mypage-section-title">팔로우 목록</h2>
+                  <p className="mypage-section-desc">내가 팔로우 중인 사용자와 나를 팔로우한 사용자를 확인합니다</p>
+                </div>
+              </div>
+
+              <div className="sub-tabs-container" style={{ marginBottom: '20px' }}>
+                <button
+                  type="button"
+                  onClick={() => setFollowSubTab('following')}
+                  className={`sub-tab-btn ${followSubTab === 'following' ? 'active' : ''}`}
+                >
+                  팔로잉 ({followingList.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFollowSubTab('followers')}
+                  className={`sub-tab-btn ${followSubTab === 'followers' ? 'active' : ''}`}
+                >
+                  팔로워 ({followersList.length})
+                </button>
+              </div>
+
+              {followError && <Feedback msg={followError} type="error" />}
+
+              {followLoading ? (
+                <div className="mypage-loading">
+                  <Loader2 size={24} className="spin-animation" />
+                  <span>불러오는 중...</span>
+                </div>
+              ) : (
+                (() => {
+                  const list = followSubTab === 'following' ? followingList : followersList;
+                  if (list.length === 0) {
+                    return (
+                      <div
+                        style={{
+                          padding: '32px 20px',
+                          textAlign: 'center',
+                          color: 'var(--text-secondary)',
+                          fontSize: '14px',
+                          border: '1px dashed var(--border)',
+                          borderRadius: '12px',
+                        }}
+                      >
+                        {followSubTab === 'following'
+                          ? '아직 팔로우 중인 사용자가 없습니다.'
+                          : '아직 팔로워가 없습니다.'}
+                      </div>
+                    );
+                  }
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {list.map((u) => (
+                        <div
+                          key={u.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            padding: '14px 16px',
+                            border: '1px solid var(--border)',
+                            borderRadius: '10px',
+                            background: 'white',
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: '36px',
+                              height: '36px',
+                              borderRadius: '50%',
+                              background: 'var(--purple-bg)',
+                              color: 'var(--purple)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '14px',
+                              fontWeight: '700',
+                            }}
+                          >
+                            {u.nickname?.charAt(0) ?? '?'}
+                          </div>
+                          <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>
+                            {u.nickname ?? '탈퇴한 사용자'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()
+              )}
+            </div>
+          )}
+
+          {/* ── Bookmarks Tab ────────────────── */}
+          {activeTab === 'bookmarks' && (
+            <div>
+              <div className="mypage-section-head">
+                <div>
+                  <h2 className="mypage-section-title">저장한 글</h2>
+                  <p className="mypage-section-desc">북마크한 Q&A 및 노하우 게시물을 확인합니다</p>
+                </div>
+              </div>
+
+              {bookmarksError && <Feedback msg={bookmarksError} type="error" />}
+
+              {bookmarksLoading ? (
+                <div className="mypage-loading">
+                  <Loader2 size={24} className="spin-animation" />
+                  <span>불러오는 중...</span>
+                </div>
+              ) : bookmarks.length === 0 ? (
+                <div
+                  style={{
+                    padding: '32px 20px',
+                    textAlign: 'center',
+                    color: 'var(--text-secondary)',
+                    fontSize: '14px',
+                    border: '1px dashed var(--border)',
+                    borderRadius: '12px',
+                  }}
+                >
+                  아직 저장한 글이 없습니다.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {bookmarks.map((b) => {
+                    const isQna = b.type === 'QNA';
+                    const accent = isQna ? 'var(--purple)' : 'var(--blue)';
+                    const accentBg = isQna ? 'var(--purple-bg)' : 'var(--blue-bg)';
+                    const TypeIcon = isQna ? HelpCircle : Lightbulb;
+                    return (
+                      <button
+                        key={b.id}
+                        type="button"
+                        onClick={() => onOpenBoard?.(b.type, b.id)}
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px',
+                          padding: '16px 18px',
+                          border: '1px solid var(--border)',
+                          borderRadius: '10px',
+                          background: 'white',
+                          textAlign: 'left',
+                          cursor: onOpenBoard ? 'pointer' : 'default',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '11px',
+                              fontWeight: '700',
+                              color: accent,
+                              background: accentBg,
+                              padding: '2px 8px',
+                              borderRadius: '6px',
+                            }}
+                          >
+                            <TypeIcon size={11} />
+                            {isQna ? 'Q&A' : '노하우'}
+                          </span>
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: 'auto' }}>
+                            {formatRelativeKo(b.createdAt)}
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '15px',
+                            fontWeight: '700',
+                            color: 'var(--text-primary)',
+                            lineHeight: '1.4',
+                          }}
+                        >
+                          {isQna ? 'Q. ' : ''}
+                          {b.title}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '13px',
+                            color: 'var(--text-secondary)',
+                            lineHeight: '1.5',
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {stripMediaForPreview(b.content)}
+                        </div>
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            fontSize: '12px',
+                            color: 'var(--text-secondary)',
+                          }}
+                        >
+                          <span style={{ fontWeight: '600' }}>{b.authorNickname}</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                            <Eye size={12} />
+                            {b.views.toLocaleString()}
+                          </span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                            <MessageSquare size={12} />
+                            {b.likeCount}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               )}
             </div>
           )}

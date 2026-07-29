@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   Eye,
@@ -11,7 +11,8 @@ import {
   Heart,
   Bookmark,
   UserPlus,
-  UserCheck
+  UserCheck,
+  Image as ImageIcon
 } from 'lucide-react';
 import type { BoardResponse, CommentResponse, UserStatsResponse } from '../lib/boardApi';
 import {
@@ -32,7 +33,9 @@ import {
   toggleFollow,
   updateBoard,
   updateComment,
+  uploadFile,
 } from '../lib/boardApi';
+import { renderPostContent } from '../lib/renderPostContent';
 
 interface KnowhowDetailViewProps {
   postId: number;
@@ -51,6 +54,11 @@ export const KnowhowDetailView: React.FC<KnowhowDetailViewProps> = ({ postId, on
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editContent, setEditContent] = useState('');
+  const [editTags, setEditTags] = useState<string[]>([]);
+  const [editTagInput, setEditTagInput] = useState('');
+  const [editUploading, setEditUploading] = useState(false);
+  const editTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const editImageInputRef = useRef<HTMLInputElement>(null);
   const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
   const [editingCommentContent, setEditingCommentContent] = useState('');
   const [authorStats, setAuthorStats] = useState<UserStatsResponse | null>(null);
@@ -170,7 +178,51 @@ export const KnowhowDetailView: React.FC<KnowhowDetailViewProps> = ({ postId, on
     if (!post) return;
     setEditTitle(post.title);
     setEditContent(post.content);
+    setEditTags(post.tags ?? []);
+    setEditTagInput('');
     setEditing(true);
+  };
+
+  const insertAtEditCursor = (snippet: string) => {
+    const el = editTextareaRef.current;
+    if (!el) {
+      setEditContent((prev) => prev + snippet);
+      return;
+    }
+    const start = el.selectionStart ?? editContent.length;
+    const end = el.selectionEnd ?? editContent.length;
+    const next = editContent.slice(0, start) + snippet + editContent.slice(end);
+    setEditContent(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = start + snippet.length;
+      el.setSelectionRange(pos, pos);
+    });
+  };
+
+  const handleEditUpload = async (file: File) => {
+    setEditUploading(true);
+    setError(null);
+    try {
+      const url = await uploadFile(file);
+      insertAtEditCursor(`\n<img src="${url}" alt="" style="max-width:100%;" />\n`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setEditUploading(false);
+    }
+  };
+
+  const handleAddEditTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter' && e.key !== ',') return;
+    e.preventDefault();
+    const v = editTagInput.trim().replace(/^#/, '');
+    if (!v || editTags.includes(v) || editTags.length >= 5) {
+      setEditTagInput('');
+      return;
+    }
+    setEditTags([...editTags, v]);
+    setEditTagInput('');
   };
 
   const handleUpdatePost = async () => {
@@ -181,6 +233,7 @@ export const KnowhowDetailView: React.FC<KnowhowDetailViewProps> = ({ postId, on
         title: editTitle.trim(),
         content: editContent.trim(),
         type: 'KNOWHOW',
+        tags: editTags,
       });
       const refreshed = await getBoard(postId);
       setPost(refreshed);
@@ -409,7 +462,7 @@ export const KnowhowDetailView: React.FC<KnowhowDetailViewProps> = ({ postId, on
               <MessageSquare size={14} />
               {comments.length}
             </span>
-            {!editing && (
+            {myUserId === post.userId && !editing && (
               <button
                 onClick={startEditPost}
                 style={{
@@ -425,20 +478,22 @@ export const KnowhowDetailView: React.FC<KnowhowDetailViewProps> = ({ postId, on
                 수정
               </button>
             )}
-            <button
-              onClick={handleDeletePost}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                color: 'var(--red)',
-                fontWeight: '600'
-              }}
-              aria-label="삭제"
-            >
-              <Trash2 size={14} />
-              삭제
-            </button>
+            {myUserId === post.userId && (
+              <button
+                onClick={handleDeletePost}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  color: 'var(--red)',
+                  fontWeight: '600'
+                }}
+                aria-label="삭제"
+              >
+                <Trash2 size={14} />
+                삭제
+              </button>
+            )}
           </div>
         </div>
 
@@ -530,7 +585,51 @@ export const KnowhowDetailView: React.FC<KnowhowDetailViewProps> = ({ postId, on
 
         {editing ? (
           <>
+            <div style={{ display: 'flex', gap: '8px', margin: '24px 0 8px' }}>
+              <button
+                type="button"
+                onClick={() => editImageInputRef.current?.click()}
+                disabled={editUploading}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border)',
+                  background: 'white',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: 'var(--blue)',
+                  cursor: editUploading ? 'not-allowed' : 'pointer',
+                  opacity: editUploading ? 0.6 : 1
+                }}
+              >
+                <ImageIcon size={14} />
+                사진 삽입
+              </button>
+              {editUploading && (
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', alignSelf: 'center' }}>
+                  업로드 중...
+                </span>
+              )}
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', alignSelf: 'center', marginLeft: 'auto' }}>
+                사진 삭제는 본문에서 &lt;img&gt; 태그를 지우면 됩니다
+              </span>
+              <input
+                ref={editImageInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void handleEditUpload(f);
+                  e.target.value = '';
+                }}
+              />
+            </div>
             <textarea
+              ref={editTextareaRef}
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
               rows={14}
@@ -546,9 +645,81 @@ export const KnowhowDetailView: React.FC<KnowhowDetailViewProps> = ({ postId, on
                 outline: 'none',
                 resize: 'vertical',
                 lineHeight: '1.7',
-                margin: '24px 0'
+                marginBottom: '24px'
               }}
             />
+            <div style={{ marginBottom: '16px' }}>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  color: 'var(--text-primary)',
+                  marginBottom: '8px'
+                }}
+              >
+                태그{' '}
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 500 }}>
+                  (최대 5개)
+                </span>
+              </label>
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '8px',
+                  padding: '10px 12px',
+                  background: '#f8fafc',
+                  border: '1px solid var(--border)',
+                  borderRadius: '10px',
+                  minHeight: '44px',
+                  alignItems: 'center'
+                }}
+              >
+                {editTags.map((t) => (
+                  <span
+                    key={t}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      color: 'var(--blue)',
+                      background: 'var(--blue-bg)',
+                      padding: '3px 10px',
+                      borderRadius: '14px'
+                    }}
+                  >
+                    #{t}
+                    <button
+                      type="button"
+                      onClick={() => setEditTags(editTags.filter((x) => x !== t))}
+                      style={{ marginLeft: '4px', color: 'var(--blue)' }}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+                <input
+                  type="text"
+                  value={editTagInput}
+                  onChange={(e) => setEditTagInput(e.target.value)}
+                  onKeyDown={handleAddEditTag}
+                  placeholder={editTags.length === 0 ? '태그 입력 후 Enter' : ''}
+                  disabled={editTags.length >= 5}
+                  style={{
+                    flex: 1,
+                    minWidth: '120px',
+                    border: 'none',
+                    background: 'transparent',
+                    outline: 'none',
+                    fontSize: '13px',
+                    fontFamily: 'inherit'
+                  }}
+                />
+              </div>
+            </div>
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
               <button
                 onClick={() => setEditing(false)}
@@ -590,7 +761,7 @@ export const KnowhowDetailView: React.FC<KnowhowDetailViewProps> = ({ postId, on
               whiteSpace: 'pre-wrap'
             }}
           >
-            {post.content}
+            {renderPostContent(post.content)}
           </div>
         )}
 
@@ -738,6 +909,7 @@ export const KnowhowDetailView: React.FC<KnowhowDetailViewProps> = ({ postId, on
                 setEditingCommentContent('');
               }}
               onToggleLike={() => handleToggleCommentLike(c.id)}
+              myUserId={myUserId}
             />
           ))}
         </div>
@@ -764,6 +936,7 @@ interface CommentItemProps {
   onSubmitEdit: (id: number) => void;
   onCancelEdit: () => void;
   onToggleLike: () => void;
+  myUserId: number | null;
 }
 
 const CommentItem: React.FC<CommentItemProps> = ({
@@ -784,6 +957,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
   onSubmitEdit,
   onCancelEdit,
   onToggleLike,
+  myUserId,
 }) => {
   const isEditing = editingCommentId === comment.id;
   return (
@@ -919,7 +1093,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
             >
               {replyOpen ? '취소' : '답글'}
             </button>
-            {!comment.deleted && !isEditing && (
+            {!comment.deleted && !isEditing && myUserId === comment.userId && (
               <>
                 <button
                   onClick={() => onStartEdit(comment)}
@@ -1044,7 +1218,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
                     <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                       {formatRelativeKo(r.createdAt)}
                     </span>
-                    {!r.deleted && (
+                    {!r.deleted && myUserId === r.userId && (
                       <button
                         onClick={() => onDeleteReply(r.id)}
                         style={{
