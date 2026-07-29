@@ -43,6 +43,7 @@ import type {
   PublicMonthlyIncomeResponse,
   PublicMonthlyPortfolioResponse,
 } from '../api/types';
+import type { CompareType as ApiCompareType } from '../api/types';
 
 type MetricKey = 'budget' | 'expense' | 'income';
 type MainTab = MetricKey | 'overall';
@@ -386,7 +387,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
       compareType === 'CATEGORY' && selectedCategoryId != null
         ? selectedCategoryId
         : undefined;
-    const effectiveType =
+    const effectiveType: ApiCompareType =
       locationMode && compareType === 'AMOUNT' ? 'LOCATION' : compareType;
     const compareFilter = locationMode
       ? {
