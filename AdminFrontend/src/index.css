@@ -703,7 +703,7 @@ a {
   font-family: 'Fredoka', sans-serif;
   font-weight: 700;
   color: var(--text-primary);
-  letter-spacing: -1px;
+  letter-spacing: 1px;
 }
 
 .sidebar-logo-icon {

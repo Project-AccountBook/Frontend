@@ -35,8 +35,8 @@ interface Category {
   id: number;
   name: string;
   description: string;
+  sortOrder: number;
   createdAt: string;
-
 }
 
 interface Report {
@@ -94,6 +94,7 @@ export const GroupBuyAdminView: React.FC = () => {
   const [selectedPostIds, setSelectedPostIds] = useState<Set<number>>(new Set());
   const [detailModalPost, setDetailModalPost] = useState<GroupBuyPost | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [draggedCategoryId, setDraggedCategoryId] = useState<number | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
 
@@ -200,9 +201,11 @@ export const GroupBuyAdminView: React.FC = () => {
         const mapped = res.data.map((cat: any) => ({
           id: cat.id,
           name: cat.name,
-          description: `정렬 순서: ${cat.sortOrder}`,
+          description: cat.description || '',
+          sortOrder: cat.sortOrder,
           createdAt: cat.createdAt ? cat.createdAt.split('T')[0] : ''
         }));
+        mapped.sort((a: any, b: any) => a.sortOrder - b.sortOrder);
         setCategories(mapped);
       }
     } catch (err) {
@@ -350,7 +353,8 @@ export const GroupBuyAdminView: React.FC = () => {
           method: 'POST',
           body: JSON.stringify({
             name: categoryForm.name,
-            sortOrder: categories.length + 1
+            sortOrder: categories.length + 1,
+            description: categoryForm.description
           })
         });
         if (res.success) {
@@ -361,7 +365,8 @@ export const GroupBuyAdminView: React.FC = () => {
           method: 'PUT',
           body: JSON.stringify({
             name: categoryForm.name,
-            sortOrder: 1
+            sortOrder: categories.find(c => c.id === selectedCategoryId)?.sortOrder || 1,
+            description: categoryForm.description
           })
         });
         if (res.success) {
@@ -516,11 +521,13 @@ export const GroupBuyAdminView: React.FC = () => {
   
   const handleBulkDeletePosts = async () => {
     if (selectedPostIds.size === 0) return;
-    if (!window.confirm(`선택한 ${selectedPostIds.size}개의 공동구매를 삭제하시겠습니까?`)) return;
+    if (!window.confirm(`선택한 ${selectedPostIds.size}개의 공동구매를 일괄 삭제하시겠습니까?`)) return;
     try {
-      for (const id of selectedPostIds) {
-        await fetchWithAuth(`/api/v1/admin/group-purchases/${id}`, { method: 'DELETE' });
-      }
+      const idsArray = Array.from(selectedPostIds);
+      await fetchWithAuth(`/api/v1/admin/group-purchases/bulk`, { 
+        method: 'DELETE',
+        body: JSON.stringify(idsArray)
+      });
       setSelectedPostIds(new Set());
       loadPosts();
     } catch (e) {
@@ -667,7 +674,7 @@ export const GroupBuyAdminView: React.FC = () => {
           { id: 'posts', label: '📝 공구 글 관리' },
           { id: 'categories', label: '📁 카테고리 관리' },
           { id: 'reports', label: `🚨 신고 접수 (${reports.filter(r=>r.status==='대기중').length})` },
-          { id: 'products', label: '📦 등록 상품 CRUD' }
+          { id: 'products', label: '📦 등록 상품 관리' }
         ].map(tab => {
           const isActive = activeAdminSubTab === tab.id;
           return (
@@ -1302,7 +1309,7 @@ export const GroupBuyAdminView: React.FC = () => {
             <table className="custom-table">
               <thead>
                 <tr>
-                  <th style={{ width: '80px' }}>ID</th>
+                  <th style={{ width: '80px' }}>No.</th>
                   <th style={{ width: '150px' }}>카테고리명</th>
                   <th>설명</th>
                   <th style={{ width: '120px' }}>등록일</th>
@@ -1311,13 +1318,69 @@ export const GroupBuyAdminView: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {categories.map(cat => {
+                {categories.map((cat, index) => {
                   // Count how many posts belong to this category
                   const postCount = posts.filter(p => p.category === cat.name).length;
                   
                   return (
-                    <tr key={cat.id}>
-                      <td style={{ color: 'var(--text-muted)', fontSize: '13px' }}>#{cat.id.toString().slice(-4)}</td>
+                    <tr key={cat.id}
+                        draggable
+                        onDragStart={(e) => {
+                          setDraggedCategoryId(cat.id);
+                          e.dataTransfer.effectAllowed = 'move';
+                          // For visual feedback
+                          const crt = e.currentTarget.cloneNode(true) as HTMLElement;
+                          crt.style.backgroundColor = 'white';
+                          crt.style.position = 'absolute';
+                          crt.style.top = '-1000px';
+                          document.body.appendChild(crt);
+                          e.dataTransfer.setDragImage(crt, 0, 0);
+                          setTimeout(() => document.body.removeChild(crt), 0);
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                        }}
+                        onDrop={async (e) => {
+                          e.preventDefault();
+                          if (draggedCategoryId === null || draggedCategoryId === cat.id) return;
+                          
+                          const draggedIndex = categories.findIndex(c => c.id === draggedCategoryId);
+                          const dropIndex = categories.findIndex(c => c.id === cat.id);
+                          
+                          if (draggedIndex < 0 || dropIndex < 0) return;
+                          
+                          const newCategories = [...categories];
+                          const [draggedItem] = newCategories.splice(draggedIndex, 1);
+                          newCategories.splice(dropIndex, 0, draggedItem);
+                          
+                          setCategories(newCategories);
+                          
+                          try {
+                            for (let i = 0; i < newCategories.length; i++) {
+                              if (newCategories[i].sortOrder !== i + 1) {
+                                await fetchWithAuth(`/api/v1/group-purchase-categories/${newCategories[i].id}`, {
+                                  method: 'PUT',
+                                  body: JSON.stringify({ name: newCategories[i].name, sortOrder: i + 1, description: newCategories[i].description })
+                                });
+                                newCategories[i].sortOrder = i + 1;
+                              }
+                            }
+                            setCategories([...newCategories]);
+                          } catch (error) {
+                            console.error("Failed to reorder categories", error);
+                          }
+                          setDraggedCategoryId(null);
+                        }}
+                        onDragEnd={() => setDraggedCategoryId(null)}
+                        style={{
+                          cursor: 'grab',
+                          opacity: draggedCategoryId === cat.id ? 0.4 : 1,
+                          background: draggedCategoryId === cat.id ? '#f8fafc' : 'white',
+                          transition: 'all 0.2s ease'
+                        }}
+                    >
+                      <td style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 'bold' }}>{index + 1}</td>
                       <td>
                         <span style={{
                           fontWeight: '700',
@@ -1647,7 +1710,7 @@ export const GroupBuyAdminView: React.FC = () => {
           
           <div className="card-header-row" style={{ marginBottom: '0' }}>
             <div>
-              <h3 className="card-title">공동구매 상품 카탈로그 (CRUD)</h3>
+              <h3 className="card-title">공동구매 상품 관리</h3>
               <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
                 사용자들이 공구 요청이나 제보한 물품을 기반으로 등록한 정식 공동구매 상품 풀을 관리합니다.
               </p>

@@ -24,7 +24,9 @@ import type {
 } from '../lib/boardApi';
 import {
   adminDeleteBoard,
+  adminDeleteBoardsBulk,
   adminDeleteComment,
+  adminDeleteCommentsBulk,
   adminListBoards,
   adminListComments,
   adminReconcileLikes,
@@ -279,13 +281,10 @@ const BoardsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
     if (selectedIds.size === 0) return;
     if (!window.confirm(`선택한 ${selectedIds.size}개의 게시물을 일괄 삭제하시겠습니까?`)) return;
     
-    let successCount = 0;
     try {
-      for (const id of selectedIds) {
-        await adminDeleteBoard(id);
-        successCount++;
-      }
-      onFlash(`총 ${successCount}개의 게시물이 일괄 삭제되었습니다.`);
+      const idsArray = Array.from(selectedIds);
+      await adminDeleteBoardsBulk(idsArray);
+      onFlash(`총 ${idsArray.length}개의 게시물이 일괄 삭제되었습니다.`);
     } catch (e) {
       onError(`일괄 삭제 중 오류 발생: ${(e as Error).message}`);
     } finally {
@@ -332,8 +331,8 @@ const BoardsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
             style={selectStyle}
           >
             <option value="">전체 타입</option>
-            <option value="QNA">질문게시판 (QNA)</option>
-            <option value="KNOWHOW">노하우 (KNOWHOW)</option>
+            <option value="QNA">QnA</option>
+            <option value="KNOWHOW">노하우</option>
           </select>
           
           <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: 'var(--text-primary)', cursor: 'pointer' }}>
@@ -456,7 +455,7 @@ const BoardsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
                       ...badgeStyle(b.type === 'QNA' ? '#eff6ff' : '#fdf4ff', b.type === 'QNA' ? '#2563eb' : '#c026d3', 'transparent'),
                       padding: '4px 10px',
                     }}>
-                      {b.type}
+                      {b.type === 'QNA' ? 'QnA' : b.type === 'KNOWHOW' ? '노하우' : b.type}
                     </span>
                   </td>
                   <td style={{ ...tdStyle, maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600, cursor: 'pointer' }}>
@@ -519,7 +518,7 @@ const BoardsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
             </div>
             <div style={{ marginBottom: '16px' }}>
               <span style={{...badgeStyle(detailModal.type === 'QNA' ? '#eff6ff' : '#fdf4ff', detailModal.type === 'QNA' ? '#2563eb' : '#c026d3', 'transparent'), marginRight: '8px'}}>
-                {detailModal.type}
+                {detailModal.type === 'QNA' ? 'QnA' : detailModal.type === 'KNOWHOW' ? '노하우' : detailModal.type}
               </span>
               <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>작성자 ID: #{detailModal.userId} | 조회수: {detailModal.views}</span>
             </div>
@@ -604,13 +603,10 @@ const CommentsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
     if (selectedIds.size === 0) return;
     if (!window.confirm(`선택한 ${selectedIds.size}개의 댓글을 일괄 삭제하시겠습니까?`)) return;
     
-    let successCount = 0;
     try {
-      for (const id of selectedIds) {
-        await adminDeleteComment(id);
-        successCount++;
-      }
-      onFlash(`총 ${successCount}개의 댓글이 일괄 삭제되었습니다.`);
+      const idsArray = Array.from(selectedIds);
+      await adminDeleteCommentsBulk(idsArray);
+      onFlash(`총 ${idsArray.length}개의 댓글이 일괄 삭제되었습니다.`);
     } catch (e) {
       onError(`일괄 삭제 중 오류 발생: ${(e as Error).message}`);
     } finally {
@@ -656,9 +652,9 @@ const CommentsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
             style={selectStyle}
           >
             <option value="">모든 도메인</option>
-            <option value="QNA">QNA</option>
-            <option value="KNOWHOW">KNOWHOW</option>
-            <option value="GROUPPURCHASE">GROUPPURCHASE</option>
+            <option value="QNA">QnA</option>
+            <option value="KNOWHOW">노하우</option>
+            <option value="GROUPPURCHASE">공동구매</option>
           </select>
           <input
             type="number"
@@ -796,7 +792,7 @@ const CommentsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
                       ),
                       padding: '4px 10px',
                     }}>
-                      {c.referenceType}
+                      {c.referenceType === 'QNA' ? 'QnA' : c.referenceType === 'KNOWHOW' ? '노하우' : c.referenceType === 'GROUPPURCHASE' ? '공동구매' : c.referenceType}
                     </span>
                   </td>
                   <td style={{...tdStyle, textAlign: 'center', fontWeight: 600}}>#{c.referenceId}</td>
@@ -868,7 +864,7 @@ const CommentsPanel: React.FC<PanelProps> = ({ onError, onFlash }) => {
                   'transparent'
                 ), marginRight: '8px'
               }}>
-                {detailModal.referenceType}
+                {detailModal.referenceType === 'QNA' ? 'QnA' : detailModal.referenceType === 'KNOWHOW' ? '노하우' : detailModal.referenceType === 'GROUPPURCHASE' ? '공동구매' : detailModal.referenceType}
               </span>
               <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
                 게시물 ID: #{detailModal.referenceId} | 작성자 ID: #{detailModal.userId} {detailModal.parentId && `| 부모 댓글: #${detailModal.parentId}`}
