@@ -393,8 +393,22 @@ export async function adminDeleteBoard(boardId: number): Promise<number> {
   return request(`/api/v1/admin/boards/${boardId}`, { method: 'DELETE' });
 }
 
+export async function adminDeleteBoardsBulk(boardIds: number[]): Promise<number[]> {
+  return request(`/api/v1/admin/boards/bulk`, { 
+    method: 'DELETE',
+    body: JSON.stringify(boardIds)
+  });
+}
+
 export async function adminDeleteComment(commentId: number): Promise<number> {
   return request(`/api/v1/admin/comments/${commentId}`, { method: 'DELETE' });
+}
+
+export async function adminDeleteCommentsBulk(commentIds: number[]): Promise<number[]> {
+  return request(`/api/v1/admin/comments/bulk`, { 
+    method: 'DELETE',
+    body: JSON.stringify(commentIds)
+  });
 }
 
 export async function adminReconcileLikes(limit = 500): Promise<LikeReconcileReport> {

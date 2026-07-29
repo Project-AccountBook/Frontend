@@ -35,8 +35,8 @@ interface Category {
   id: number;
   name: string;
   description: string;
+  sortOrder: number;
   createdAt: string;
-
 }
 
 interface Report {
@@ -89,7 +89,12 @@ export const GroupBuyAdminView: React.FC = () => {
   const [, setError] = useState<string | null>(null);
 
   const [posts, setPosts] = useState<GroupBuyPost[]>([]);
+  const [postSortCol, setPostSortCol] = useState<'createdAt'|'price'>('createdAt');
+  const [postSortDesc, setPostSortDesc] = useState(true);
+  const [selectedPostIds, setSelectedPostIds] = useState<Set<number>>(new Set());
+  const [detailModalPost, setDetailModalPost] = useState<GroupBuyPost | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [draggedCategoryId, setDraggedCategoryId] = useState<number | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
 
@@ -196,9 +201,11 @@ export const GroupBuyAdminView: React.FC = () => {
         const mapped = res.data.map((cat: any) => ({
           id: cat.id,
           name: cat.name,
-          description: `정렬 순서: ${cat.sortOrder}`,
+          description: cat.description || '',
+          sortOrder: cat.sortOrder,
           createdAt: cat.createdAt ? cat.createdAt.split('T')[0] : ''
         }));
+        mapped.sort((a: any, b: any) => a.sortOrder - b.sortOrder);
         setCategories(mapped);
       }
     } catch (err) {
@@ -346,7 +353,8 @@ export const GroupBuyAdminView: React.FC = () => {
           method: 'POST',
           body: JSON.stringify({
             name: categoryForm.name,
-            sortOrder: categories.length + 1
+            sortOrder: categories.length + 1,
+            description: categoryForm.description
           })
         });
         if (res.success) {
@@ -357,7 +365,8 @@ export const GroupBuyAdminView: React.FC = () => {
           method: 'PUT',
           body: JSON.stringify({
             name: categoryForm.name,
-            sortOrder: 1
+            sortOrder: categories.find(c => c.id === selectedCategoryId)?.sortOrder || 1,
+            description: categoryForm.description
           })
         });
         if (res.success) {
@@ -492,14 +501,45 @@ export const GroupBuyAdminView: React.FC = () => {
 
   // --- Filtered lists for rendering ---
   const filteredPosts = useMemo(() => {
-    return posts.filter(p => {
+    const filtered = posts.filter(p => {
       const matchesStatus = postFilterStatus === '전체' || p.status === postFilterStatus;
       const matchesSearch = p.title.toLowerCase().includes(postSearchQuery.toLowerCase()) ||
                             p.owner.toLowerCase().includes(postSearchQuery.toLowerCase()) ||
                             p.category.toLowerCase().includes(postSearchQuery.toLowerCase());
       return matchesStatus && matchesSearch;
     });
-  }, [posts, postFilterStatus, postSearchQuery]);
+    
+    return filtered.sort((a, b) => {
+      let cmp = 0;
+      if (postSortCol === 'price') cmp = a.price - b.price;
+      if (postSortCol === 'createdAt') cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      return postSortDesc ? -cmp : cmp;
+    });
+  }, [posts, postFilterStatus, postSearchQuery, postSortCol, postSortDesc]);
+
+  const allPostsSelected = filteredPosts.length > 0 && selectedPostIds.size === filteredPosts.length;
+  
+  const handleBulkDeletePosts = async () => {
+    if (selectedPostIds.size === 0) return;
+    if (!window.confirm(`선택한 ${selectedPostIds.size}개의 공동구매를 일괄 삭제하시겠습니까?`)) return;
+    try {
+      const idsArray = Array.from(selectedPostIds);
+      await fetchWithAuth(`/api/v1/admin/group-purchases/bulk`, { 
+        method: 'DELETE',
+        body: JSON.stringify(idsArray)
+      });
+      setSelectedPostIds(new Set());
+      loadPosts();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+  
+  const togglePostSort = (col: 'price'|'createdAt') => {
+    if (postSortCol === col) setPostSortDesc(!postSortDesc);
+    else { setPostSortCol(col); setPostSortDesc(true); }
+  };
+
 
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
@@ -634,7 +674,7 @@ export const GroupBuyAdminView: React.FC = () => {
           { id: 'posts', label: '📝 공구 글 관리' },
           { id: 'categories', label: '📁 카테고리 관리' },
           { id: 'reports', label: `🚨 신고 접수 (${reports.filter(r=>r.status==='대기중').length})` },
-          { id: 'products', label: '📦 등록 상품 CRUD' }
+          { id: 'products', label: '📦 등록 상품 관리' }
         ].map(tab => {
           const isActive = activeAdminSubTab === tab.id;
           return (
@@ -974,17 +1014,48 @@ export const GroupBuyAdminView: React.FC = () => {
             </div>
           </div>
 
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button 
+              onClick={handleBulkDeletePosts}
+              disabled={selectedPostIds.size === 0}
+              style={{
+                padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
+                background: selectedPostIds.size > 0 ? 'var(--red)' : '#f1f5f9',
+                color: selectedPostIds.size > 0 ? 'white' : '#94a3b8',
+                border: 'none', cursor: selectedPostIds.size > 0 ? 'pointer' : 'default',
+                display: 'flex', alignItems: 'center', gap: '6px'
+              }}
+            >
+              <Trash2 size={14} /> 선택 일괄 삭제 ({selectedPostIds.size})
+            </button>
+          </div>
+
           {/* Table */}
           <div className="custom-table-container">
             <table className="custom-table">
               <thead>
                 <tr>
+                  <th style={{ width: '40px', textAlign: 'center' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={allPostsSelected}
+                      onChange={(e) => {
+                        if (e.target.checked) setSelectedPostIds(new Set(filteredPosts.map(p => p.id)));
+                        else setSelectedPostIds(new Set());
+                      }}
+                      style={{ accentColor: 'var(--navy)' }}
+                    />
+                  </th>
                   <th>카테고리</th>
                   <th>공동구매 제목</th>
                   <th>작성자</th>
-                  <th>가격</th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => togglePostSort('price')}>
+                    가격 {postSortCol === 'price' && (postSortDesc ? '↓' : '↑')}
+                  </th>
                   <th>참여 현황</th>
-                  <th>개설일시</th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => togglePostSort('createdAt')}>
+                    개설일시 {postSortCol === 'createdAt' && (postSortDesc ? '↓' : '↑')}
+                  </th>
                   <th>상태</th>
                   <th style={{ textAlign: 'center' }}>조치</th>
                 </tr>
@@ -1016,7 +1087,20 @@ export const GroupBuyAdminView: React.FC = () => {
                     const progressPercent = Math.min(100, Math.round((post.currentCount / post.targetCount) * 100));
 
                     return (
-                      <tr key={post.id}>
+                      <tr key={post.id} onClick={() => setDetailModalPost(post)} style={{ cursor: 'pointer' }}>
+                        <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                          <input 
+                            type="checkbox"
+                            checked={selectedPostIds.has(post.id)}
+                            onChange={(e) => {
+                              const newSet = new Set(selectedPostIds);
+                              if (e.target.checked) newSet.add(post.id);
+                              else newSet.delete(post.id);
+                              setSelectedPostIds(newSet);
+                            }}
+                            style={{ accentColor: 'var(--navy)' }}
+                          />
+                        </td>
                         <td>
                           <span style={{
                             fontSize: '11px',
@@ -1064,7 +1148,7 @@ export const GroupBuyAdminView: React.FC = () => {
                             {post.status}
                           </span>
                         </td>
-                        <td>
+                        <td onClick={(e) => e.stopPropagation()}>
                           <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
                             {post.status === '모집중' && (
                               <>
@@ -1136,6 +1220,56 @@ export const GroupBuyAdminView: React.FC = () => {
         </div>
       )}
 
+      {/* Group Buy Post Detail Modal */}
+      {detailModalPost && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999
+        }} onClick={() => setDetailModalPost(null)}>
+          <div style={{
+            background: 'white', borderRadius: '24px', padding: '32px',
+            width: '100%', maxWidth: '500px', maxHeight: '80vh', overflowY: 'auto',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+                공동구매 상세 보기
+              </h2>
+              <button onClick={() => setDetailModalPost(null)} style={{ color: 'var(--text-secondary)', fontSize: '24px', fontWeight: 'bold' }}>×</button>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div><strong style={{ display: 'inline-block', width: '80px' }}>카테고리:</strong> {detailModalPost.category}</div>
+              <div><strong style={{ display: 'inline-block', width: '80px' }}>제목:</strong> {detailModalPost.title}</div>
+              <div><strong style={{ display: 'inline-block', width: '80px' }}>작성자:</strong> {detailModalPost.owner}</div>
+              <div><strong style={{ display: 'inline-block', width: '80px' }}>가격:</strong> {detailModalPost.price.toLocaleString()}원</div>
+              <div><strong style={{ display: 'inline-block', width: '80px' }}>모집 현황:</strong> {detailModalPost.currentCount} / {detailModalPost.targetCount} 명</div>
+              <div><strong style={{ display: 'inline-block', width: '80px' }}>상태:</strong> {detailModalPost.status}</div>
+              <div><strong style={{ display: 'inline-block', width: '80px' }}>개설일:</strong> {detailModalPost.createdAt}</div>
+            </div>
+
+            <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button 
+                onClick={async () => {
+                  if (window.confirm('정말 삭제하시겠습니까?')) {
+                    await fetchWithAuth(`/api/v1/admin/group-purchases/${detailModalPost.id}`, { method: 'DELETE' });
+                    setDetailModalPost(null);
+                    loadPosts();
+                  }
+                }}
+                style={{
+                  padding: '8px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: '600',
+                  background: 'var(--red)', color: 'white', border: 'none'
+                }}
+              >
+                삭제하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* =========================================================================
           VIEW 3: CATEGORY MANAGEMENT
           ========================================================================= */}
@@ -1175,7 +1309,7 @@ export const GroupBuyAdminView: React.FC = () => {
             <table className="custom-table">
               <thead>
                 <tr>
-                  <th style={{ width: '80px' }}>ID</th>
+                  <th style={{ width: '80px' }}>No.</th>
                   <th style={{ width: '150px' }}>카테고리명</th>
                   <th>설명</th>
                   <th style={{ width: '120px' }}>등록일</th>
@@ -1184,13 +1318,69 @@ export const GroupBuyAdminView: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {categories.map(cat => {
+                {categories.map((cat, index) => {
                   // Count how many posts belong to this category
                   const postCount = posts.filter(p => p.category === cat.name).length;
                   
                   return (
-                    <tr key={cat.id}>
-                      <td style={{ color: 'var(--text-muted)', fontSize: '13px' }}>#{cat.id.toString().slice(-4)}</td>
+                    <tr key={cat.id}
+                        draggable
+                        onDragStart={(e) => {
+                          setDraggedCategoryId(cat.id);
+                          e.dataTransfer.effectAllowed = 'move';
+                          // For visual feedback
+                          const crt = e.currentTarget.cloneNode(true) as HTMLElement;
+                          crt.style.backgroundColor = 'white';
+                          crt.style.position = 'absolute';
+                          crt.style.top = '-1000px';
+                          document.body.appendChild(crt);
+                          e.dataTransfer.setDragImage(crt, 0, 0);
+                          setTimeout(() => document.body.removeChild(crt), 0);
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                        }}
+                        onDrop={async (e) => {
+                          e.preventDefault();
+                          if (draggedCategoryId === null || draggedCategoryId === cat.id) return;
+                          
+                          const draggedIndex = categories.findIndex(c => c.id === draggedCategoryId);
+                          const dropIndex = categories.findIndex(c => c.id === cat.id);
+                          
+                          if (draggedIndex < 0 || dropIndex < 0) return;
+                          
+                          const newCategories = [...categories];
+                          const [draggedItem] = newCategories.splice(draggedIndex, 1);
+                          newCategories.splice(dropIndex, 0, draggedItem);
+                          
+                          setCategories(newCategories);
+                          
+                          try {
+                            for (let i = 0; i < newCategories.length; i++) {
+                              if (newCategories[i].sortOrder !== i + 1) {
+                                await fetchWithAuth(`/api/v1/group-purchase-categories/${newCategories[i].id}`, {
+                                  method: 'PUT',
+                                  body: JSON.stringify({ name: newCategories[i].name, sortOrder: i + 1, description: newCategories[i].description })
+                                });
+                                newCategories[i].sortOrder = i + 1;
+                              }
+                            }
+                            setCategories([...newCategories]);
+                          } catch (error) {
+                            console.error("Failed to reorder categories", error);
+                          }
+                          setDraggedCategoryId(null);
+                        }}
+                        onDragEnd={() => setDraggedCategoryId(null)}
+                        style={{
+                          cursor: 'grab',
+                          opacity: draggedCategoryId === cat.id ? 0.4 : 1,
+                          background: draggedCategoryId === cat.id ? '#f8fafc' : 'white',
+                          transition: 'all 0.2s ease'
+                        }}
+                    >
+                      <td style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 'bold' }}>{index + 1}</td>
                       <td>
                         <span style={{
                           fontWeight: '700',
@@ -1356,6 +1546,22 @@ export const GroupBuyAdminView: React.FC = () => {
             </div>
           </div>
 
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button 
+              onClick={handleBulkDeletePosts}
+              disabled={selectedPostIds.size === 0}
+              style={{
+                padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
+                background: selectedPostIds.size > 0 ? 'var(--red)' : '#f1f5f9',
+                color: selectedPostIds.size > 0 ? 'white' : '#94a3b8',
+                border: 'none', cursor: selectedPostIds.size > 0 ? 'pointer' : 'default',
+                display: 'flex', alignItems: 'center', gap: '6px'
+              }}
+            >
+              <Trash2 size={14} /> 선택 일괄 삭제 ({selectedPostIds.size})
+            </button>
+          </div>
+
           {/* Table */}
           <div className="custom-table-container">
             <table className="custom-table">
@@ -1504,7 +1710,7 @@ export const GroupBuyAdminView: React.FC = () => {
           
           <div className="card-header-row" style={{ marginBottom: '0' }}>
             <div>
-              <h3 className="card-title">공동구매 상품 카탈로그 (CRUD)</h3>
+              <h3 className="card-title">공동구매 상품 관리</h3>
               <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
                 사용자들이 공구 요청이나 제보한 물품을 기반으로 등록한 정식 공동구매 상품 풀을 관리합니다.
               </p>

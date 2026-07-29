@@ -7,7 +7,6 @@ import {
   Lightbulb,
   ShoppingBag,
   Settings,
-  Wallet,
   Shield,
   PiggyBank,
   LogOut,
@@ -38,11 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLog
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <div className="sidebar-logo-icon">
-          <Wallet size={18} />
-        </div>
         <span className="sidebar-logo-text">MODI</span>
-        <span className="sidebar-logo-text">Joint Living</span>
       </div>
 
       <nav className="sidebar-menu">
