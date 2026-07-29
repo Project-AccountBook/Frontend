@@ -1296,7 +1296,7 @@ export const MyPageView: React.FC<MyPageViewProps> = ({ onOpenBoard }) => {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       {list.map((u) => (
                         <div
-                          key={u.id}
+                          key={u.userId}
                           style={{
                             display: 'flex',
                             alignItems: 'center',
