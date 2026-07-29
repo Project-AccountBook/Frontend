@@ -141,7 +141,8 @@ export async function listBoards(
   type: BoardType | null = null,
   page = 0,
   size = 10,
-  tag: string | null = null
+  tag: string | null = null,
+  options?: { mine?: boolean }
 ): Promise<PageResponse<BoardResponse>> {
   const params = new URLSearchParams();
   params.set('page', String(page));
@@ -149,7 +150,16 @@ export async function listBoards(
   params.set('sort', 'createdAt,desc');
   if (type) params.set('type', type);
   if (tag) params.set('tag', tag);
+  if (options?.mine) params.set('mine', 'true');
   return request(`/api/v1/boards?${params.toString()}`);
+}
+
+export async function listMyBoards(
+  type: BoardType,
+  page = 0,
+  size = 10
+): Promise<PageResponse<BoardResponse>> {
+  return listBoards(type, page, size, null, { mine: true });
 }
 
 export async function searchBoards(

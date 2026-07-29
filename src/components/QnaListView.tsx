@@ -12,7 +12,8 @@ import {
   ThumbsUp,
   CheckCircle2,
   Hash,
-  TrendingUp
+  TrendingUp,
+  User,
 } from 'lucide-react';
 import type { BoardHotResponse, BoardResponse } from '../lib/boardApi';
 import {
@@ -50,9 +51,10 @@ const SORT_TABS = [
 interface QnaListViewProps {
   onSelectPost: (id: number) => void;
   onWrite: () => void;
+  onViewMyPosts: () => void;
 }
 
-export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite }) => {
+export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite, onViewMyPosts }) => {
   const [activeSort, setActiveSort] = useState('latest');
   const [search, setSearch] = useState('');
   const [submittedSearch, setSubmittedSearch] = useState('');
@@ -177,14 +179,20 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
           </div>
         </div>
 
-        <button
-          onClick={onWrite}
-          className="header-btn-primary"
-          style={{ background: 'var(--purple)' }}
-        >
-          <PenSquare size={16} />
-          <span>질문하기</span>
-        </button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button onClick={onViewMyPosts} className="header-btn-secondary">
+            <User size={16} />
+            <span>내 글</span>
+          </button>
+          <button
+            onClick={onWrite}
+            className="header-btn-primary"
+            style={{ background: 'var(--purple)' }}
+          >
+            <PenSquare size={16} />
+            <span>질문하기</span>
+          </button>
+        </div>
       </div>
 
       {hotPosts.length > 0 && (

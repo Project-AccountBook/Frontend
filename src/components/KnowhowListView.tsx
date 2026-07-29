@@ -11,7 +11,8 @@ import {
   AlertCircle,
   Heart,
   Flame,
-  Hash
+  Hash,
+  User,
 } from 'lucide-react';
 import type { BoardHotResponse, BoardResponse } from '../lib/boardApi';
 import {
@@ -47,9 +48,10 @@ const SORT_TABS = [
 interface KnowhowListViewProps {
   onSelectPost: (id: number) => void;
   onWrite: () => void;
+  onViewMyPosts: () => void;
 }
 
-export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, onWrite }) => {
+export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, onWrite, onViewMyPosts }) => {
   const [activeSort, setActiveSort] = useState('latest');
   const [search, setSearch] = useState('');
   const [submittedSearch, setSubmittedSearch] = useState('');
@@ -169,14 +171,20 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
           </div>
         </div>
 
-        <button
-          onClick={onWrite}
-          className="header-btn-primary"
-          style={{ background: 'var(--blue)' }}
-        >
-          <PenSquare size={16} />
-          <span>글쓰기</span>
-        </button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button onClick={onViewMyPosts} className="header-btn-secondary">
+            <User size={16} />
+            <span>내 글</span>
+          </button>
+          <button
+            onClick={onWrite}
+            className="header-btn-primary"
+            style={{ background: 'var(--blue)' }}
+          >
+            <PenSquare size={16} />
+            <span>글쓰기</span>
+          </button>
+        </div>
       </div>
 
       {hotPosts.length > 0 && (
