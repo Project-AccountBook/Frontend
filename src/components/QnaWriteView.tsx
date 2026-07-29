@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   PenSquare,
@@ -6,10 +6,11 @@ import {
   AlignLeft,
   HelpCircle,
   AlertCircle,
-  Lightbulb
+  Lightbulb,
+  Image as ImageIcon
 } from 'lucide-react';
 import type { BoardCategory } from '../lib/boardApi';
-import { attachBoardImage, createBoard, listBoardCategories } from '../lib/boardApi';
+import { createBoard, listBoardCategories, uploadFile } from '../lib/boardApi';
 
 const TITLE_MAX = 80;
 const CONTENT_MAX = 2000;
@@ -26,9 +27,41 @@ export const QnaWriteView: React.FC<QnaWriteViewProps> = ({ onCancel, onSubmit }
   const [categories, setCategories] = useState<BoardCategory[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const insertAtCursor = (snippet: string) => {
+    const el = textareaRef.current;
+    if (!el) {
+      setContent((prev) => (prev + snippet).slice(0, CONTENT_MAX));
+      return;
+    }
+    const start = el.selectionStart ?? content.length;
+    const end = el.selectionEnd ?? content.length;
+    const next = (content.slice(0, start) + snippet + content.slice(end)).slice(0, CONTENT_MAX);
+    setContent(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = Math.min(start + snippet.length, CONTENT_MAX);
+      el.setSelectionRange(pos, pos);
+    });
+  };
+
+  const handleUpload = async (file: File) => {
+    setUploading(true);
+    setError(null);
+    try {
+      const url = await uploadFile(file);
+      insertAtCursor(`\n<img src="${url}" alt="" style="max-width:100%;" />\n`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleAddTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Enter' && e.key !== ',') return;
@@ -66,20 +99,13 @@ export const QnaWriteView: React.FC<QnaWriteViewProps> = ({ onCancel, onSubmit }
     setSubmitting(true);
     setError(null);
     try {
-      const created = await createBoard({
+      await createBoard({
         categoryId,
         title: title.trim(),
         content: content.trim(),
         type: 'QNA',
         tags,
       });
-      if (imageUrl.trim()) {
-        try {
-          await attachBoardImage(created.id, imageUrl.trim());
-        } catch (e) {
-          console.warn('image attach failed', e);
-        }
-      }
       onSubmit();
     } catch (e) {
       setError((e as Error).message);
@@ -340,37 +366,6 @@ export const QnaWriteView: React.FC<QnaWriteViewProps> = ({ onCancel, onSubmit }
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
-                fontSize: '13px',
-                fontWeight: '700',
-                color: 'var(--text-primary)',
-                marginBottom: '10px'
-              }}
-            >
-              대표 이미지 URL <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 500 }}>(선택)</span>
-            </label>
-            <input
-              type="url"
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
-              placeholder="https://..."
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                background: '#f8fafc',
-                border: '1px solid var(--border)',
-                borderRadius: '10px',
-                fontSize: '13px',
-                fontFamily: 'inherit',
-                outline: 'none',
-                marginBottom: '16px'
-              }}
-            />
-
-            <label
-              style={{
-                display: 'flex',
-                alignItems: 'center',
                 justifyContent: 'space-between',
                 fontSize: '13px',
                 fontWeight: '700',
@@ -392,7 +387,48 @@ export const QnaWriteView: React.FC<QnaWriteViewProps> = ({ onCancel, onSubmit }
                 {content.length.toLocaleString()} / {CONTENT_MAX.toLocaleString()}
               </span>
             </label>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+              <button
+                type="button"
+                onClick={() => imageInputRef.current?.click()}
+                disabled={uploading}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border)',
+                  background: 'white',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: 'var(--purple)',
+                  cursor: uploading ? 'not-allowed' : 'pointer',
+                  opacity: uploading ? 0.6 : 1
+                }}
+              >
+                <ImageIcon size={14} />
+                사진
+              </button>
+              {uploading && (
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', alignSelf: 'center' }}>
+                  업로드 중...
+                </span>
+              )}
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void handleUpload(f);
+                  e.target.value = '';
+                }}
+              />
+            </div>
             <textarea
+              ref={textareaRef}
               value={content}
               onChange={(e) => setContent(e.target.value.slice(0, CONTENT_MAX))}
               placeholder={`상황을 자세히 적을수록 더 정확한 답변을 받을 수 있어요.\n\n예시)\n· 현재 어떤 상황인가요?\n· 무엇이 고민되시나요?\n· 어떤 답변을 기대하시나요?`}

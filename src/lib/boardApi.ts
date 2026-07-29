@@ -227,6 +227,10 @@ export async function toggleBoardBookmark(id: number): Promise<BookmarkToggleRes
   return request(`/api/v1/boards/${id}/bookmark`, { method: 'POST' });
 }
 
+export async function listMyBookmarks(): Promise<BoardResponse[]> {
+  return request(`/api/v1/users/me/bookmarks`);
+}
+
 export async function attachBoardImage(
   boardId: number,
   imageUrl: string,
@@ -244,6 +248,20 @@ export async function listBoardImages(boardId: number): Promise<ImageResponse[]>
 
 export async function deleteImage(imageId: number): Promise<number> {
   return request(`/api/v1/images/${imageId}`, { method: 'DELETE' });
+}
+
+export async function uploadFile(file: File): Promise<string> {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await authFetch(`/api/files/upload`, {
+    method: 'POST',
+    body: form,
+  });
+  if (!res.ok) {
+    throw new Error(`업로드 실패 (${res.status})`);
+  }
+  const json = (await res.json()) as { url: string };
+  return json.url;
 }
 
 export async function listComments(

@@ -11,16 +11,19 @@ import {
   ChevronRight,
   ThumbsUp,
   CheckCircle2,
-  Hash
+  Hash,
+  TrendingUp
 } from 'lucide-react';
-import type { BoardResponse } from '../lib/boardApi';
+import type { BoardHotResponse, BoardResponse } from '../lib/boardApi';
 import {
   authorColorForUser,
   authorInitialForUser,
   formatRelativeKo,
   listBoards,
+  listHotBoards,
   searchBoards,
 } from '../lib/boardApi';
+import { extractFirstImageUrl, stripMediaForPreview } from '../lib/renderPostContent';
 
 export interface QnaPost {
   id: number;
@@ -34,13 +37,14 @@ export interface QnaPost {
   resolved: boolean;
   urgent: boolean;
   tags: string[];
+  thumbnail?: string;
 }
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 8;
 
 const SORT_TABS = [
   { id: 'latest', label: '최신순', icon: Clock },
-  { id: 'views', label: '조회순', icon: Flame }
+  { id: 'views', label: '조회순', icon: TrendingUp }
 ];
 
 interface QnaListViewProps {
@@ -57,8 +61,13 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
   const [totalPages, setTotalPages] = useState(1);
   const [totalElements, setTotalElements] = useState(0);
   const [posts, setPosts] = useState<QnaPost[]>([]);
+  const [hotPosts, setHotPosts] = useState<BoardHotResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    listHotBoards('QNA', 7, 3).then(setHotPosts).catch(() => setHotPosts([]));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,6 +92,7 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
               resolved: false,
               urgent: false,
               tags: b.tags ?? [],
+              thumbnail: extractFirstImageUrl(b.content),
             }))
           );
           setTotalPages(data.totalPages);
@@ -103,6 +113,9 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
               resolved: b.resolved,
               urgent: b.urgent,
               tags: b.tags ?? [],
+              thumbnail:
+                extractFirstImageUrl(b.content) ??
+                (b.imageUrls && b.imageUrls.length > 0 ? b.imageUrls[0] : undefined),
             }))
           );
           setTotalPages(Math.max(1, data.totalPages));
@@ -173,6 +186,84 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
           <span>질문하기</span>
         </button>
       </div>
+
+      {hotPosts.length > 0 && (
+        <div className="card" style={{ marginBottom: '20px', padding: '20px 24px' }}>
+          <div className="card-header-row" style={{ marginBottom: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Flame size={18} color="#f43f5e" />
+              <span className="card-title">HOT 질문</span>
+            </div>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>최근 7일</span>
+          </div>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+              gap: '12px'
+            }}
+          >
+            {hotPosts.map((post, idx) => (
+              <button
+                key={post.id}
+                onClick={() => onSelectPost(post.id)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '10px',
+                  padding: '10px',
+                  borderRadius: '10px',
+                  border: '1px solid var(--border)',
+                  background: '#fafbfc',
+                  textAlign: 'left'
+                }}
+              >
+                <div
+                  style={{
+                    width: '26px',
+                    height: '26px',
+                    borderRadius: '8px',
+                    background: idx === 0 ? '#f43f5e' : idx === 1 ? '#fb923c' : '#fbbf24',
+                    color: 'white',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '12px',
+                    fontWeight: '800'
+                  }}
+                >
+                  {idx + 1}
+                </div>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div
+                    style={{
+                      fontSize: '13px',
+                      fontWeight: '700',
+                      color: 'var(--text-primary)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      marginBottom: '4px'
+                    }}
+                  >
+                    {post.title}
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                      <ThumbsUp size={11} />
+                      {post.likeCount}
+                    </span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                      <Eye size={11} />
+                      {post.views}
+                    </span>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="card" style={{ marginBottom: '24px', padding: '20px 24px' }}>
         <form
@@ -303,7 +394,13 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
           등록된 질문이 없습니다.
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+            gap: '20px'
+          }}
+        >
           {sorted.map((post) => (
             <button
               key={post.id}
@@ -311,15 +408,26 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
               className="card"
               style={{
                 display: 'flex',
-                padding: '20px 24px',
-                gap: '20px',
-                alignItems: 'flex-start',
+                flexDirection: 'column',
+                padding: 0,
+                overflow: 'hidden',
                 textAlign: 'left',
                 cursor: 'pointer'
               }}
             >
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+              {post.thumbnail && (
+                <div
+                  style={{
+                    width: '100%',
+                    height: '180px',
+                    backgroundImage: `url(${post.thumbnail})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center'
+                  }}
+                />
+              )}
+              <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                   {post.resolved && (
                     <span
                       style={{
@@ -360,13 +468,12 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
 
                 <h3
                   style={{
-                    fontSize: '15px',
+                    fontSize: '16px',
                     fontWeight: '700',
                     color: 'var(--text-primary)',
                     lineHeight: '1.4',
-                    marginBottom: '8px',
                     display: '-webkit-box',
-                    WebkitLineClamp: 1,
+                    WebkitLineClamp: 2,
                     WebkitBoxOrient: 'vertical',
                     overflow: 'hidden'
                   }}
@@ -382,15 +489,14 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
                     display: '-webkit-box',
                     WebkitLineClamp: 2,
                     WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden',
-                    marginBottom: '12px'
+                    overflow: 'hidden'
                   }}
                 >
-                  {post.content}
+                  {stripMediaForPreview(post.content)}
                 </p>
 
                 {post.tags.length > 0 && (
-                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                     {post.tags.map((t) => (
                       <span
                         key={t}
@@ -413,21 +519,23 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite 
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between'
+                    justifyContent: 'space-between',
+                    paddingTop: '12px',
+                    borderTop: '1px solid var(--border)'
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div
                       style={{
-                        width: '24px',
-                        height: '24px',
+                        width: '28px',
+                        height: '28px',
                         borderRadius: '50%',
                         background: authorColorForUser(post.authorId),
                         color: 'white',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: '11px',
+                        fontSize: '12px',
                         fontWeight: '700'
                       }}
                     >
