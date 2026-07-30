@@ -13,7 +13,7 @@
 - ⏳ 5-2. FCM 푸시 알림 — 미착수 (Firebase Console 설정 필요)
 - ⏳ 5-3. 이미지 업로드 (Camera 플러그인 연동) — 미착수
 - ⏳ 6. OAuth2 딥링크 — 미착수
-- ⏳ 7. CORS (백엔드) — 미착수
+- ✅ 7. CORS (백엔드) — `capacitor://localhost`, `http://localhost` 허용 추가
 - ⏳ 8. 스플래시 & 아이콘 — 미착수 (소스 이미지 필요)
 - ⏳ 9. 반응형·안전영역 — 미착수
 - ⏳ 10. 배포 (TestFlight / Play Console) — 미착수
