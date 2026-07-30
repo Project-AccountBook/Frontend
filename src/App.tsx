@@ -3,7 +3,6 @@ import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { DashboardView } from './components/DashboardView';
 import { ComparisonView } from './components/ComparisonView';
-import { LocationComparisonView } from './components/LocationComparisonView';
 import { GroupBuyView } from './components/GroupBuyView';
 import { KnowhowListView } from './components/KnowhowListView';
 import { KnowhowDetailView } from './components/KnowhowDetailView';
@@ -11,6 +10,7 @@ import { KnowhowWriteView } from './components/KnowhowWriteView';
 import { QnaListView } from './components/QnaListView';
 import { QnaDetailView } from './components/QnaDetailView';
 import { QnaWriteView } from './components/QnaWriteView';
+import { MyBoardsListView } from './components/MyBoardsListView';
 import { NotificationView } from './components/NotificationView';
 import { BudgetView } from './components/BudgetView';
 import { AssetView, type AssetActiveSection } from './components/AssetView';
@@ -21,7 +21,7 @@ import { useNotificationSync } from './hooks/useNotificationSync';
 import { clearMyUserIdCache } from './lib/boardApi';
 import { Construction } from 'lucide-react';
 
-type BoardMode = 'list' | 'detail' | 'write';
+type BoardMode = 'list' | 'detail' | 'write' | 'my';
 
 const APP_TABS = new Set([
   'dashboard',
@@ -198,6 +198,18 @@ function App() {
         />
       );
     }
+    if (knowhowMode === 'my') {
+      return (
+        <MyBoardsListView
+          type="KNOWHOW"
+          onSelectPost={(id) => {
+            setKnowhowPostId(id);
+            setKnowhowMode('detail');
+          }}
+          onBack={() => setKnowhowMode('list')}
+        />
+      );
+    }
     return (
       <KnowhowListView
         onSelectPost={(id) => {
@@ -205,6 +217,7 @@ function App() {
           setKnowhowMode('detail');
         }}
         onWrite={() => setKnowhowMode('write')}
+        onViewMyPosts={() => setKnowhowMode('my')}
       />
     );
   };
@@ -229,6 +242,18 @@ function App() {
         />
       );
     }
+    if (qnaMode === 'my') {
+      return (
+        <MyBoardsListView
+          type="QNA"
+          onSelectPost={(id) => {
+            setQnaPostId(id);
+            setQnaMode('detail');
+          }}
+          onBack={() => setQnaMode('list')}
+        />
+      );
+    }
     return (
       <QnaListView
         onSelectPost={(id) => {
@@ -236,6 +261,7 @@ function App() {
           setQnaMode('detail');
         }}
         onWrite={() => setQnaMode('write')}
+        onViewMyPosts={() => setQnaMode('my')}
       />
     );
   };
@@ -257,7 +283,7 @@ function App() {
       case 'comparison':
         return <ComparisonView />;
       case 'locationComparison':
-        return <LocationComparisonView />;
+        return <ComparisonView initialLocationMode />;
       case 'groupbuy':
         return (
           <GroupBuyView
@@ -277,7 +303,21 @@ function App() {
           />
         );
       case 'settings':
-        return <MyPageView />;
+        return (
+          <MyPageView
+            onOpenBoard={(type, id) => {
+              if (type === 'QNA') {
+                setQnaPostId(id);
+                setQnaMode('detail');
+                handleTabChange('qa');
+              } else {
+                setKnowhowPostId(id);
+                setKnowhowMode('detail');
+                handleTabChange('knowhow');
+              }
+            }}
+          />
+        );
       default:
         return (
           <div

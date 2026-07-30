@@ -12,11 +12,13 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   PieChart,
+  MapPin,
 } from 'lucide-react';
 import {
   budgetCompareApi,
   expenseCompareApi,
   incomeCompareApi,
+  locationApi,
   portfolioApi,
   portfolioCompareApi,
   userApi,
@@ -31,6 +33,7 @@ import type {
   MyExpenseResponse,
   MyIncomeResponse,
   MyPortfolioResponse,
+  NearbyUserResponse,
   PairBudgetDetailResponse,
   PairExpenseDetailResponse,
   PairIncomeDetailResponse,
@@ -40,6 +43,7 @@ import type {
   PublicMonthlyIncomeResponse,
   PublicMonthlyPortfolioResponse,
 } from '../api/types';
+import type { CompareType as ApiCompareType } from '../api/types';
 
 type MetricKey = 'budget' | 'expense' | 'income';
 type MainTab = MetricKey | 'overall';
@@ -63,6 +67,7 @@ interface PublicUserMetric {
   username: string;
   yearMonth: string;
   total: number;
+  distanceKm?: number;
 }
 
 interface MetricConfig {
@@ -166,26 +171,24 @@ const incomeToMy = (r: MyIncomeResponse): MyMetric => {
   };
 };
 
-const publicBudgetToUser = (r: PublicMonthlyBudgetResponse): PublicUserMetric => ({
-  userId: r.userId,
-  username: r.username,
-  yearMonth: r.yearMonth,
-  total: r.totalBudget,
-});
-
-const publicExpenseToUser = (r: PublicMonthlyExpenseResponse): PublicUserMetric => ({
-  userId: r.userId,
-  username: r.username,
-  yearMonth: r.yearMonth,
-  total: r.totalExpense,
-});
-
-const publicIncomeToUser = (r: PublicMonthlyIncomeResponse): PublicUserMetric => ({
-  userId: r.userId,
-  username: r.username,
-  yearMonth: r.yearMonth,
-  total: r.totalIncome,
-});
+const toPublicUserMetric = <
+  T extends { userId: number; username: string; yearMonth: string }
+>(
+  list: T[],
+  totalOf: (r: T) => number,
+  distanceMap: Map<number, number> | null
+): PublicUserMetric[] => {
+  const base = list.map((u) => ({
+    userId: u.userId,
+    username: u.username,
+    yearMonth: u.yearMonth,
+    total: totalOf(u),
+    distanceKm: distanceMap?.get(u.userId),
+  }));
+  return distanceMap
+    ? base.filter((u) => u.distanceKm !== undefined)
+    : base;
+};
 
 const budgetDetailToCategories = (
   categoryBudgets: CategoryBudgetResponse[]
@@ -208,12 +211,20 @@ const flatDetailToCategories = (
     color: colorFor(i),
   }));
 
-export const ComparisonView: React.FC = () => {
+interface ComparisonViewProps {
+  initialLocationMode?: boolean;
+}
+
+export const ComparisonView: React.FC<ComparisonViewProps> = ({
+  initialLocationMode = false,
+}) => {
+  const [locationMode, setLocationMode] = useState<boolean>(initialLocationMode);
   const [mainTab, setMainTab] = useState<MainTab>('budget');
   const [year, setYear] = useState<number>(new Date().getFullYear());
   const [month, setMonth] = useState<number>(new Date().getMonth() + 1);
   const [minAmount, setMinAmount] = useState<number>(0);
   const [maxAmount, setMaxAmount] = useState<number>(20000000);
+  const [radiusKm, setRadiusKm] = useState<number>(3);
   const [compareType, setCompareType] = useState<CompareType>('AGE');
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
@@ -222,10 +233,14 @@ export const ComparisonView: React.FC = () => {
   const [overallFilterMetric, setOverallFilterMetric] = useState<MetricKey>('budget');
 
   const [myPortfolio, setMyPortfolio] = useState<MyPortfolioResponse | null>(null);
-  const [budgetUsers, setBudgetUsers] = useState<PublicUserMetric[]>([]);
-  const [expenseUsers, setExpenseUsers] = useState<PublicUserMetric[]>([]);
-  const [incomeUsers, setIncomeUsers] = useState<PublicUserMetric[]>([]);
-  const [overallUsers, setOverallUsers] = useState<PublicMonthlyPortfolioResponse[]>([]);
+  const [publicBudget, setPublicBudget] = useState<PublicMonthlyBudgetResponse[]>([]);
+  const [publicExpense, setPublicExpense] = useState<PublicMonthlyExpenseResponse[]>([]);
+  const [publicIncome, setPublicIncome] = useState<PublicMonthlyIncomeResponse[]>([]);
+  const [publicPortfolio, setPublicPortfolio] = useState<PublicMonthlyPortfolioResponse[]>(
+    []
+  );
+  const [nearby, setNearby] = useState<NearbyUserResponse[]>([]);
+  const [locationMissing, setLocationMissing] = useState<boolean>(false);
   const [compareBudget, setCompareBudget] = useState<BudgetCompareResponse | null>(null);
   const [compareExpense, setCompareExpense] = useState<ExpenseCompareResponse | null>(null);
   const [compareIncome, setCompareIncome] = useState<IncomeCompareResponse | null>(null);
@@ -291,29 +306,79 @@ export const ComparisonView: React.FC = () => {
   }, [yearMonth]);
 
   useEffect(() => {
+    if (!locationMode) {
+      setNearby([]);
+      setLocationMissing(false);
+      return;
+    }
     let cancelled = false;
-    const filter = { year, month, minAmount, maxAmount };
-    Promise.all([
-      budgetCompareApi.users(filter),
-      expenseCompareApi.users(filter),
-      incomeCompareApi.users(filter),
-      portfolioCompareApi.users({
-        year,
-        month,
-        minBudget: minAmount,
-        maxBudget: maxAmount,
-      }),
-    ]).then(([b, e, i, p]) => {
+    locationApi.nearby(radiusKm).then((res) => {
       if (cancelled) return;
-      setBudgetUsers((b.data ?? []).map(publicBudgetToUser));
-      setExpenseUsers((e.data ?? []).map(publicExpenseToUser));
-      setIncomeUsers((i.data ?? []).map(publicIncomeToUser));
-      setOverallUsers(p.data ?? []);
+      if (res.ok && res.data) {
+        setNearby(res.data);
+        setLocationMissing(false);
+      } else {
+        setNearby([]);
+        setLocationMissing(true);
+      }
     });
     return () => {
       cancelled = true;
     };
-  }, [year, month, minAmount, maxAmount]);
+  }, [locationMode, radiusKm]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const amountFilter = locationMode
+      ? { year, month }
+      : { year, month, minAmount, maxAmount };
+    const portfolioFilter = locationMode
+      ? { year, month }
+      : { year, month, minBudget: minAmount, maxBudget: maxAmount };
+    Promise.all([
+      budgetCompareApi.users(amountFilter),
+      expenseCompareApi.users(amountFilter),
+      incomeCompareApi.users(amountFilter),
+      portfolioCompareApi.users(portfolioFilter),
+    ]).then(([b, e, i, p]) => {
+      if (cancelled) return;
+      setPublicBudget(b.data ?? []);
+      setPublicExpense(e.data ?? []);
+      setPublicIncome(i.data ?? []);
+      setPublicPortfolio(p.data ?? []);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [year, month, minAmount, maxAmount, locationMode]);
+
+  const distanceMap = useMemo(() => {
+    if (!locationMode) return null;
+    const map = new Map<number, number>();
+    nearby.forEach((n) => map.set(n.userId, n.distanceKm));
+    return map;
+  }, [locationMode, nearby]);
+
+  const budgetUsers = useMemo(
+    () => toPublicUserMetric(publicBudget, (r) => r.totalBudget, distanceMap),
+    [publicBudget, distanceMap]
+  );
+  const expenseUsers = useMemo(
+    () => toPublicUserMetric(publicExpense, (r) => r.totalExpense, distanceMap),
+    [publicExpense, distanceMap]
+  );
+  const incomeUsers = useMemo(
+    () => toPublicUserMetric(publicIncome, (r) => r.totalIncome, distanceMap),
+    [publicIncome, distanceMap]
+  );
+  const overallUsers = useMemo(() => {
+    if (!distanceMap) {
+      return publicPortfolio.map((u) => ({ ...u, distanceKm: undefined as number | undefined }));
+    }
+    return publicPortfolio
+      .filter((u) => distanceMap.has(u.userId))
+      .map((u) => ({ ...u, distanceKm: distanceMap.get(u.userId) }));
+  }, [publicPortfolio, distanceMap]);
 
   useEffect(() => {
     if (!activeMetric) return;
@@ -322,13 +387,22 @@ export const ComparisonView: React.FC = () => {
       compareType === 'CATEGORY' && selectedCategoryId != null
         ? selectedCategoryId
         : undefined;
-    const compareFilter = {
-      type: compareType,
-      yearMonth,
-      categoryId,
-      minAmount,
-      maxAmount,
-    };
+    const effectiveType: ApiCompareType =
+      locationMode && compareType === 'AMOUNT' ? 'LOCATION' : compareType;
+    const compareFilter = locationMode
+      ? {
+          type: effectiveType,
+          yearMonth,
+          categoryId,
+          radiusKm,
+        }
+      : {
+          type: compareType,
+          yearMonth,
+          categoryId,
+          minAmount,
+          maxAmount,
+        };
     const run = async () => {
       if (activeMetric === 'budget') {
         const res = await budgetCompareApi.compare(compareFilter);
@@ -345,7 +419,16 @@ export const ComparisonView: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [activeMetric, compareType, selectedCategoryId, yearMonth, minAmount, maxAmount]);
+  }, [
+    activeMetric,
+    compareType,
+    selectedCategoryId,
+    yearMonth,
+    minAmount,
+    maxAmount,
+    locationMode,
+    radiusKm,
+  ]);
 
   useEffect(() => {
     if (selectedUserId == null) {
@@ -437,7 +520,10 @@ export const ComparisonView: React.FC = () => {
     const compare = compareFor(config.key);
 
     const filteredPublicUsers = publicUsers.filter(
-      (b) => b.yearMonth === yearMonth && b.userId !== myUserId
+      (b) =>
+        b.yearMonth === yearMonth &&
+        b.userId !== myUserId &&
+        (!locationMode || (b.distanceKm !== undefined && b.distanceKm <= radiusKm))
     );
     const sumPublic = filteredPublicUsers.reduce((s, b) => s + b.total, 0);
     const avgPublic = filteredPublicUsers.length
@@ -445,11 +531,16 @@ export const ComparisonView: React.FC = () => {
       : 0;
 
     const compareLabel = (() => {
-      if (compareType === 'AGE') return '동일 나이대 평균';
+      if (compareType === 'AGE')
+        return locationMode ? '동일 나이대 이웃 평균' : '동일 나이대 평균';
       if (compareType === 'AMOUNT')
-        return `${formatMan(minAmount)}~${formatMan(maxAmount)}원 구간 평균`;
+        return locationMode
+          ? `반경 ${radiusKm}km 이웃 평균`
+          : `${formatMan(minAmount)}~${formatMan(maxAmount)}원 구간 평균`;
       const cat = my.categories.find((c) => c.categoryId === selectedCategoryId);
-      return `${cat?.categoryName ?? ''} 카테고리 평균`;
+      return locationMode
+        ? `${cat?.categoryName ?? ''} 이웃 평균`
+        : `${cat?.categoryName ?? ''} 카테고리 평균`;
     })();
 
     const myAmount = compare?.myAmount ?? my.total;
@@ -473,13 +564,21 @@ export const ComparisonView: React.FC = () => {
 
           <div className="card stat-card purple-theme">
             <div className="card-header-row">
-              <span className="card-title">카테고리 수</span>
+              <span className="card-title">
+                {locationMode ? '반경 이웃 수' : '카테고리 수'}
+              </span>
               <div className="icon-wrapper">
-                <Filter size={20} />
+                {locationMode ? <MapPin size={20} /> : <Filter size={20} />}
               </div>
             </div>
-            <div className="stat-value">{my.categories.length}개</div>
-            <div className="stat-label">{config.label} 카테고리</div>
+            <div className="stat-value">
+              {locationMode
+                ? `${filteredPublicUsers.length}명`
+                : `${my.categories.length}개`}
+            </div>
+            <div className="stat-label">
+              {locationMode ? `${radiusKm}km 반경` : `${config.label} 카테고리`}
+            </div>
           </div>
 
           <div className="card stat-card navy-theme">
@@ -547,7 +646,7 @@ export const ComparisonView: React.FC = () => {
               {(
                 [
                   { id: 'AGE', label: '나이대' },
-                  { id: 'AMOUNT', label: '금액' },
+                  { id: 'AMOUNT', label: locationMode ? '이웃' : '금액' },
                   { id: 'CATEGORY', label: '카테고리' },
                 ] as { id: CompareType; label: string }[]
               ).map((tab) => (
@@ -674,7 +773,9 @@ export const ComparisonView: React.FC = () => {
 
               <div className="asset-progress-item">
                 <div className="asset-progress-header">
-                  <span className="asset-progress-name">평균</span>
+                  <span className="asset-progress-name">
+                    {locationMode ? '이웃 평균' : '평균'}
+                  </span>
                   <span className="asset-progress-val">{formatKRW(averageAmount)}원</span>
                 </div>
                 <div className="progress-bar-container">
@@ -704,9 +805,11 @@ export const ComparisonView: React.FC = () => {
                 color: isMyLess ? 'var(--green)' : 'var(--red)',
               }}
             >
-              {isMyLess
-                ? `평균보다 ${formatKRW(Math.abs(difference))}원 ${config.verbNegative}`
-                : `평균보다 ${formatKRW(Math.abs(difference))}원 ${config.verbPositive}`}
+              {(() => {
+                const prefix = locationMode ? '이웃보다' : '평균보다';
+                const verb = isMyLess ? config.verbNegative : config.verbPositive;
+                return `${prefix} ${formatKRW(Math.abs(difference))}원 ${verb}`;
+              })()}
             </div>
           </div>
         </div>
@@ -728,8 +831,15 @@ export const ComparisonView: React.FC = () => {
               >
                 <Filter size={18} />
               </div>
-              <span className="card-title">공개 {config.label} 필터</span>
+              <span className="card-title">
+                {locationMode ? '위치 기반' : '공개'} {config.label} 필터
+              </span>
             </div>
+            {locationMode && (
+              <span className="stat-label" style={{ marginTop: 0 }}>
+                내 위치로부터 반경 내 공개 사용자만 조회
+              </span>
+            )}
           </div>
 
           <div
@@ -770,38 +880,58 @@ export const ComparisonView: React.FC = () => {
               </select>
             </div>
 
-            <div>
-              <label className="filter-label">
-                월 총 {config.label} 금액 구간:{' '}
-                <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
-                  {formatKRW(minAmount)}원 ~ {formatKRW(maxAmount)}원
-                </span>
-              </label>
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            {locationMode ? (
+              <div>
+                <label className="filter-label">
+                  반경:{' '}
+                  <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
+                    {radiusKm}km
+                  </span>
+                </label>
                 <input
                   type="range"
-                  min={0}
-                  max={20000000}
-                  step={500000}
-                  value={minAmount}
-                  onChange={(e) =>
-                    setMinAmount(Math.min(Number(e.target.value), maxAmount))
-                  }
-                  style={{ flex: 1, accentColor: config.accentColor }}
-                />
-                <input
-                  type="range"
-                  min={0}
-                  max={20000000}
-                  step={500000}
-                  value={maxAmount}
-                  onChange={(e) =>
-                    setMaxAmount(Math.max(Number(e.target.value), minAmount))
-                  }
-                  style={{ flex: 1, accentColor: config.accentColor }}
+                  min={0.5}
+                  max={50}
+                  step={0.5}
+                  value={radiusKm}
+                  onChange={(e) => setRadiusKm(Number(e.target.value))}
+                  style={{ width: '100%', accentColor: config.accentColor }}
                 />
               </div>
-            </div>
+            ) : (
+              <div>
+                <label className="filter-label">
+                  월 총 {config.label} 금액 구간:{' '}
+                  <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
+                    {formatKRW(minAmount)}원 ~ {formatKRW(maxAmount)}원
+                  </span>
+                </label>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                  <input
+                    type="range"
+                    min={0}
+                    max={20000000}
+                    step={500000}
+                    value={minAmount}
+                    onChange={(e) =>
+                      setMinAmount(Math.min(Number(e.target.value), maxAmount))
+                    }
+                    style={{ flex: 1, accentColor: config.accentColor }}
+                  />
+                  <input
+                    type="range"
+                    min={0}
+                    max={20000000}
+                    step={500000}
+                    value={maxAmount}
+                    onChange={(e) =>
+                      setMaxAmount(Math.max(Number(e.target.value), minAmount))
+                    }
+                    style={{ flex: 1, accentColor: config.accentColor }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -822,16 +952,26 @@ export const ComparisonView: React.FC = () => {
               >
                 <Users size={18} />
               </div>
-              <span className="card-title">공개 사용자 월 총 {config.label}</span>
+              <span className="card-title">
+                {locationMode ? '반경 내 이웃' : '공개 사용자'} 월 총 {config.label}
+              </span>
             </div>
             <span className="stat-label" style={{ marginTop: 0 }}>
-              필터링 결과 {filteredPublicUsers.length}건 · 평균 {formatKRW(avgPublic)}원
+              {locationMode
+                ? `${filteredPublicUsers.length}명 · 평균 ${formatKRW(avgPublic)}원`
+                : `필터링 결과 ${filteredPublicUsers.length}건 · 평균 ${formatKRW(avgPublic)}원`}
             </span>
           </div>
 
-          {filteredPublicUsers.length === 0 ? (
+          {locationMode && locationMissing ? (
             <div className="empty-state">
-              필터 조건에 맞는 공개 사용자가 없습니다. 금액 구간을 조정해 보세요.
+              내 위치 정보가 등록되지 않았습니다. 위치를 먼저 등록해 주세요.
+            </div>
+          ) : filteredPublicUsers.length === 0 ? (
+            <div className="empty-state">
+              {locationMode
+                ? '반경 내에 공개 사용자가 없습니다. 반경을 넓혀 보세요.'
+                : '필터 조건에 맞는 공개 사용자가 없습니다. 금액 구간을 조정해 보세요.'}
             </div>
           ) : (
             <div className="public-user-grid">
@@ -849,7 +989,15 @@ export const ComparisonView: React.FC = () => {
                       <div className="public-user-avatar">{initial}</div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div className="public-user-name">{u.username}</div>
-                        <div className="public-user-meta">{u.yearMonth}</div>
+                        <div className="public-user-meta">
+                          {locationMode && u.distanceKm !== undefined && (
+                            <>
+                              <MapPin size={11} style={{ marginRight: '4px' }} />
+                              {u.distanceKm.toFixed(1)}km ·{' '}
+                            </>
+                          )}
+                          {u.yearMonth}
+                        </div>
                       </div>
                       <span
                         className={`public-user-diff-badge ${isLess ? 'less' : 'more'}`}
@@ -947,6 +1095,9 @@ export const ComparisonView: React.FC = () => {
     const my = myByKey(config.key);
     if (!my) return null;
 
+    const targetDistance =
+      locationMode && selectedUserId != null ? distanceMap?.get(selectedUserId) : undefined;
+
     let targetUsername = '';
     let targetYearMonth = yearMonth;
     let targetTotal = 0;
@@ -1037,6 +1188,12 @@ export const ComparisonView: React.FC = () => {
                     marginTop: '2px',
                   }}
                 >
+                  {targetDistance != null && (
+                    <>
+                      <MapPin size={11} style={{ marginRight: '4px' }} />
+                      {targetDistance.toFixed(1)}km ·{' '}
+                    </>
+                  )}
                   {targetYearMonth}
                 </div>
               </div>
@@ -1107,7 +1264,7 @@ export const ComparisonView: React.FC = () => {
               {(
                 [
                   { id: 'AGE', label: '나이대' },
-                  { id: 'AMOUNT', label: '금액' },
+                  { id: 'AMOUNT', label: locationMode ? '이웃' : '금액' },
                   { id: 'CATEGORY', label: '카테고리' },
                 ] as { id: CompareType; label: string }[]
               ).map((tab) => (
@@ -1164,7 +1321,9 @@ export const ComparisonView: React.FC = () => {
 
             {pairCompareType === 'AMOUNT' && (
               <div className="hint-box">
-                {formatMan(minAmount)}~{formatMan(maxAmount)}원 구간 기준 비교
+                {locationMode
+                  ? `반경 ${radiusKm}km 이웃 기준 비교`
+                  : `${formatMan(minAmount)}~${formatMan(maxAmount)}원 구간 기준 비교`}
               </div>
             )}
 
@@ -1229,7 +1388,10 @@ export const ComparisonView: React.FC = () => {
   const renderOverallTab = () => {
     if (!myBudget || !myExpense || !myIncome) return null;
     const filteredOverall = overallUsers.filter(
-      (u) => u.yearMonth === yearMonth && u.userId !== myUserId
+      (u) =>
+        u.yearMonth === yearMonth &&
+        u.userId !== myUserId &&
+        (!locationMode || (u.distanceKm !== undefined && u.distanceKm <= radiusKm))
     );
     const avgOf = (arr: number[]) =>
       arr.length === 0 ? 0 : Math.round(arr.reduce((s, v) => s + v, 0) / arr.length);
@@ -1289,7 +1451,8 @@ export const ComparisonView: React.FC = () => {
                 </div>
                 <div className="stat-value">{formatKRW(row.my)}</div>
                 <div className="stat-label">
-                  평균 대비 {isLess ? '-' : '+'}
+                  {locationMode ? '이웃 평균 대비 ' : '평균 대비 '}
+                  {isLess ? '-' : '+'}
                   {formatKRW(Math.abs(diff))}
                 </div>
               </div>
@@ -1317,7 +1480,10 @@ export const ComparisonView: React.FC = () => {
               <span className="card-title">예산 · 지출 · 수입 종합</span>
             </div>
             <span className="stat-label" style={{ marginTop: 0 }}>
-              {yearMonth} · 공개 사용자 평균과 비교
+              {yearMonth} ·{' '}
+              {locationMode
+                ? `반경 ${radiusKm}km 이웃 평균과 비교`
+                : '공개 사용자 평균과 비교'}
             </span>
           </div>
 
@@ -1398,14 +1564,21 @@ export const ComparisonView: React.FC = () => {
               >
                 <Filter size={18} />
               </div>
-              <span className="card-title">공개 사용자 필터</span>
+              <span className="card-title">
+                {locationMode ? '위치 기반 이웃 필터' : '공개 사용자 필터'}
+              </span>
             </div>
+            {locationMode && (
+              <span className="stat-label" style={{ marginTop: 0 }}>
+                내 위치로부터 반경 내 공개 사용자만 조회
+              </span>
+            )}
           </div>
 
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: '1fr 1fr 1fr 2fr',
+              gridTemplateColumns: locationMode ? '1fr 1fr 2fr' : '1fr 1fr 1fr 2fr',
               gap: '16px',
               alignItems: 'end',
             }}
@@ -1440,57 +1613,82 @@ export const ComparisonView: React.FC = () => {
               </select>
             </div>
 
-            <div>
-              <label className="filter-label">금액 기준</label>
-              <select
-                value={overallFilterMetric}
-                onChange={(ev) => setOverallFilterMetric(ev.target.value as MetricKey)}
-                className="filter-select"
-              >
-                <option value="budget">예산</option>
-                <option value="expense">지출</option>
-                <option value="income">수입</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="filter-label">
-                월 총 {METRIC_CONFIGS[overallFilterMetric].label} 금액 구간:{' '}
-                <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
-                  {formatKRW(minAmount)}원 ~ {formatKRW(maxAmount)}원
-                </span>
-              </label>
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            {locationMode ? (
+              <div>
+                <label className="filter-label">
+                  반경:{' '}
+                  <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
+                    {radiusKm}km
+                  </span>
+                </label>
                 <input
                   type="range"
-                  min={0}
-                  max={20000000}
-                  step={500000}
-                  value={minAmount}
-                  onChange={(ev) =>
-                    setMinAmount(Math.min(Number(ev.target.value), maxAmount))
-                  }
+                  min={0.5}
+                  max={50}
+                  step={0.5}
+                  value={radiusKm}
+                  onChange={(ev) => setRadiusKm(Number(ev.target.value))}
                   style={{
-                    flex: 1,
-                    accentColor: METRIC_CONFIGS[overallFilterMetric].accentColor,
-                  }}
-                />
-                <input
-                  type="range"
-                  min={0}
-                  max={20000000}
-                  step={500000}
-                  value={maxAmount}
-                  onChange={(ev) =>
-                    setMaxAmount(Math.max(Number(ev.target.value), minAmount))
-                  }
-                  style={{
-                    flex: 1,
+                    width: '100%',
                     accentColor: METRIC_CONFIGS[overallFilterMetric].accentColor,
                   }}
                 />
               </div>
-            </div>
+            ) : (
+              <>
+                <div>
+                  <label className="filter-label">금액 기준</label>
+                  <select
+                    value={overallFilterMetric}
+                    onChange={(ev) => setOverallFilterMetric(ev.target.value as MetricKey)}
+                    className="filter-select"
+                  >
+                    <option value="budget">예산</option>
+                    <option value="expense">지출</option>
+                    <option value="income">수입</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="filter-label">
+                    월 총 {METRIC_CONFIGS[overallFilterMetric].label} 금액 구간:{' '}
+                    <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
+                      {formatKRW(minAmount)}원 ~ {formatKRW(maxAmount)}원
+                    </span>
+                  </label>
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    <input
+                      type="range"
+                      min={0}
+                      max={20000000}
+                      step={500000}
+                      value={minAmount}
+                      onChange={(ev) =>
+                        setMinAmount(Math.min(Number(ev.target.value), maxAmount))
+                      }
+                      style={{
+                        flex: 1,
+                        accentColor: METRIC_CONFIGS[overallFilterMetric].accentColor,
+                      }}
+                    />
+                    <input
+                      type="range"
+                      min={0}
+                      max={20000000}
+                      step={500000}
+                      value={maxAmount}
+                      onChange={(ev) =>
+                        setMaxAmount(Math.max(Number(ev.target.value), minAmount))
+                      }
+                      style={{
+                        flex: 1,
+                        accentColor: METRIC_CONFIGS[overallFilterMetric].accentColor,
+                      }}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -1511,15 +1709,25 @@ export const ComparisonView: React.FC = () => {
               >
                 <Users size={18} />
               </div>
-              <span className="card-title">공개 사용자 종합 현황</span>
+              <span className="card-title">
+                {locationMode ? '반경 내 이웃 종합 현황' : '공개 사용자 종합 현황'}
+              </span>
             </div>
             <span className="stat-label" style={{ marginTop: 0 }}>
               {filteredOverall.length}명 · 사용자를 선택하면 상세 비교가 열려요
             </span>
           </div>
 
-          {filteredOverall.length === 0 ? (
-            <div className="empty-state">해당 기간에 공개된 사용자가 없습니다.</div>
+          {locationMode && locationMissing ? (
+            <div className="empty-state">
+              내 위치 정보가 등록되지 않았습니다. 위치를 먼저 등록해 주세요.
+            </div>
+          ) : filteredOverall.length === 0 ? (
+            <div className="empty-state">
+              {locationMode
+                ? '반경 내에 공개된 이웃이 없습니다.'
+                : '해당 기간에 공개된 사용자가 없습니다.'}
+            </div>
           ) : (
             <div className="public-user-grid">
               {filteredOverall.map((u) => {
@@ -1534,7 +1742,15 @@ export const ComparisonView: React.FC = () => {
                       <div className="public-user-avatar">{initial}</div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div className="public-user-name">{u.username}</div>
-                        <div className="public-user-meta">{u.yearMonth}</div>
+                        <div className="public-user-meta">
+                          {locationMode && u.distanceKm !== undefined && (
+                            <>
+                              <MapPin size={11} style={{ marginRight: '4px' }} />
+                              {u.distanceKm.toFixed(1)}km ·{' '}
+                            </>
+                          )}
+                          {u.yearMonth}
+                        </div>
                       </div>
                     </div>
 
@@ -1594,6 +1810,9 @@ export const ComparisonView: React.FC = () => {
       t.income.fixedCategoryIncomes,
       t.income.variableCategoryIncomes
     );
+
+    const targetDistance =
+      locationMode && selectedUserId != null ? distanceMap?.get(selectedUserId) : undefined;
 
     const sections: {
       key: MetricKey;
@@ -1682,6 +1901,12 @@ export const ComparisonView: React.FC = () => {
                     marginTop: '2px',
                   }}
                 >
+                  {targetDistance != null && (
+                    <>
+                      <MapPin size={11} style={{ marginRight: '4px' }} />
+                      {targetDistance.toFixed(1)}km ·{' '}
+                    </>
+                  )}
                   {t.yearMonth}
                 </div>
               </div>
@@ -1891,24 +2116,52 @@ export const ComparisonView: React.FC = () => {
             </button>
           ))}
         </div>
-        <div className="dashboard-date-selector">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button
-            className="dashboard-date-arrow"
-            onClick={handlePrevMonth}
-            aria-label="Previous month"
+            type="button"
+            onClick={() => {
+              setLocationMode((prev) => !prev);
+              setSelectedUserId(null);
+            }}
+            aria-pressed={locationMode}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 14px',
+              borderRadius: '999px',
+              border: `1px solid ${locationMode ? 'var(--blue)' : 'var(--border)'}`,
+              background: locationMode ? 'var(--blue)' : '#fff',
+              color: locationMode ? '#fff' : 'var(--text-secondary)',
+              fontSize: '13px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all var(--transition-fast)',
+            }}
+            title={locationMode ? '위치 기반 비교 켜짐 · 클릭하여 끄기' : '위치 기반 비교 꺼짐 · 클릭하여 켜기'}
           >
-            <ChevronLeft size={16} />
+            <MapPin size={14} />
+            <span>위치 기반</span>
           </button>
-          <span>
-            {year}년 {month}월
-          </span>
-          <button
-            className="dashboard-date-arrow"
-            onClick={handleNextMonth}
-            aria-label="Next month"
-          >
-            <ChevronRight size={16} />
-          </button>
+          <div className="dashboard-date-selector">
+            <button
+              className="dashboard-date-arrow"
+              onClick={handlePrevMonth}
+              aria-label="Previous month"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span>
+              {year}년 {month}월
+            </span>
+            <button
+              className="dashboard-date-arrow"
+              onClick={handleNextMonth}
+              aria-label="Next month"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
         </div>
       </div>
 

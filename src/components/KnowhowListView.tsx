@@ -11,7 +11,8 @@ import {
   AlertCircle,
   Heart,
   Flame,
-  Hash
+  Hash,
+  User,
 } from 'lucide-react';
 import type { BoardHotResponse, BoardResponse } from '../lib/boardApi';
 import {
@@ -22,6 +23,7 @@ import {
   listHotBoards,
   searchBoards,
 } from '../lib/boardApi';
+import { extractFirstImageUrl, stripMediaForPreview } from '../lib/renderPostContent';
 
 export interface KnowhowPost {
   id: number;
@@ -46,9 +48,10 @@ const SORT_TABS = [
 interface KnowhowListViewProps {
   onSelectPost: (id: number) => void;
   onWrite: () => void;
+  onViewMyPosts: () => void;
 }
 
-export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, onWrite }) => {
+export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, onWrite, onViewMyPosts }) => {
   const [activeSort, setActiveSort] = useState('latest');
   const [search, setSearch] = useState('');
   const [submittedSearch, setSubmittedSearch] = useState('');
@@ -104,7 +107,9 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
               views: b.views,
               likeCount: b.likeCount,
               tags: b.tags ?? [],
-              thumbnail: b.imageUrls && b.imageUrls.length > 0 ? b.imageUrls[0] : undefined,
+              thumbnail:
+                extractFirstImageUrl(b.content) ??
+                (b.imageUrls && b.imageUrls.length > 0 ? b.imageUrls[0] : undefined),
             }))
           );
           setTotalPages(Math.max(1, data.totalPages));
@@ -166,14 +171,20 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
           </div>
         </div>
 
-        <button
-          onClick={onWrite}
-          className="header-btn-primary"
-          style={{ background: 'var(--blue)' }}
-        >
-          <PenSquare size={16} />
-          <span>글쓰기</span>
-        </button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button onClick={onViewMyPosts} className="header-btn-secondary">
+            <User size={16} />
+            <span>내 글</span>
+          </button>
+          <button
+            onClick={onWrite}
+            className="header-btn-primary"
+            style={{ background: 'var(--blue)' }}
+          >
+            <PenSquare size={16} />
+            <span>글쓰기</span>
+          </button>
+        </div>
       </div>
 
       {hotPosts.length > 0 && (
@@ -448,7 +459,7 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
                     overflow: 'hidden'
                   }}
                 >
-                  {post.content}
+                  {stripMediaForPreview(post.content)}
                 </p>
 
                 {post.tags.length > 0 && (
