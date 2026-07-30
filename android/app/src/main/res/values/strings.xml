@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">JointLiving</string>
+    <string name="title_activity_main">JointLiving</string>
+    <string name="package_name">com.jointliving.app</string>
+    <string name="custom_url_scheme">com.jointliving.app</string>
+</resources>
