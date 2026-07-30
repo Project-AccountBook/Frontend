@@ -11,6 +11,7 @@ export interface TransactionResponse {
   targetAccountArchived?: boolean;
   categoryId: number;
   categoryName: string;
+  categoryArchived?: boolean;
   type: TransactionType;
   amount: number;
   transactionDate: string;

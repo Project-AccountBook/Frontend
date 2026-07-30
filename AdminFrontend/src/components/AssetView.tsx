@@ -428,8 +428,10 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
 
   const handleDeleteItem = async (id: number): Promise<boolean> => {
     const confirmMessage = activeSection === 'accounts'
-      ? '이 계좌를 삭제하시겠습니까?\n\n· 연결된 고정 수입/지출은 함께 삭제됩니다.\n· 기존 거래 내역은 계좌명과 함께 보존됩니다.'
-      : '정말 삭제하시겠습니까?';
+      ? '이 계좌를 삭제하시겠습니까?\n\n· 연결된 고정 수입/지출은 함께 삭제됩니다.\n· 기존 거래 내역 및 예산 설정 내역은 계좌명과 함께 보존됩니다.'
+      : activeSection === 'categories'
+        ? '이 카테고리를 삭제하시겠습니까?\n\n· 연결된 고정 수입/지출은 함께 삭제됩니다.\n· 기존 거래 내역 및 예산 설정 내역은 카테고리명과 함께 보존됩니다.'
+        : '정말 삭제하시겠습니까?';
 
     if (!window.confirm(confirmMessage)) return false;
 
@@ -449,6 +451,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
       } else if (activeSection === 'categories') {
         await deleteCategory(id);
         await fetchCategories();
+        await fetchFixedTransactions();
       }
       return true;
     } catch (err) {
@@ -718,6 +721,9 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
       : undefined);
 
   const formatAccountDisplayName = (name: string, archived?: boolean) =>
+    archived ? `${name} (삭제됨)` : name;
+
+  const formatCategoryDisplayName = (name: string, archived?: boolean) =>
     archived ? `${name} (삭제됨)` : name;
 
   const formatTransferRoute = (tx: Transaction) => {
@@ -1340,7 +1346,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                                       {formatAccountDisplayName(tx.accountName, tx.accountArchived)}
                                     </span>
                                   )}
-                                  · <span className="category-tag">{tx.categoryName}</span>
+                                  · <span className="category-tag">{formatCategoryDisplayName(tx.categoryName, tx.categoryArchived)}</span>
                                 </span>
                               </div>
                             </div>
@@ -1411,7 +1417,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                               : formatAccountDisplayName(tx.accountName, tx.accountArchived)}
                           </td>
                           <td>
-                            <span className="category-tag">{tx.categoryName}</span>
+                            <span className="category-tag">{formatCategoryDisplayName(tx.categoryName, tx.categoryArchived)}</span>
                           </td>
                           <td>
                             <span className={`type-badge ${getTxTypeBadgeClass(tx.type)}`}>

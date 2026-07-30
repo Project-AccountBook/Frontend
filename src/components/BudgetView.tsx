@@ -13,10 +13,16 @@ import {
   X,
   Calendar,
   ArrowRight,
-  Activity
+  Activity,
+  Copy
 } from 'lucide-react';
 import { budgetApi, categoryApi } from '../api';
-import type { BudgetResponse, BudgetSummaryResponse, CategoryResponse } from '../api';
+import type {
+  BudgetCopyResponse,
+  BudgetResponse,
+  BudgetSummaryResponse,
+  CategoryResponse
+} from '../api';
 import { fetchAllUserTransactionsInRange, type TransactionResponse } from '../api/transactionApi';
 import { MonthYearNavigator } from './MonthYearNavigator';
 
@@ -24,6 +30,7 @@ interface BudgetItem {
   id: number;
   categoryId: number;
   categoryName: string;
+  categoryArchived: boolean;
   totalBudget: number;
   expectedExpense: number;
   totalPlannedBudget: number;
@@ -77,10 +84,17 @@ const parseYearMonthToDate = (yearMonth: string) => {
   return new Date(y, m - 1, 1);
 };
 
+const getSkipReasonLabel = (reason: string | null) => {
+  if (reason === 'DELETED_CATEGORY') return '삭제된 카테고리';
+  if (reason === 'ALREADY_EXISTS') return '이미 등록된 카테고리';
+  return '';
+};
+
 const mapBudgetResponse = (item: BudgetResponse): BudgetItem => ({
   id: item.id,
   categoryId: item.categoryId,
   categoryName: item.categoryName,
+  categoryArchived: item.categoryArchived ?? false,
   totalBudget: Number(item.totalBudget),
   expectedExpense: Number(item.expectedExpense),
   totalPlannedBudget: Number(item.totalPlannedBudget),
@@ -93,6 +107,9 @@ const getCategoryColor = (categoryId: number, categories: ExpenseCategory[]) => 
   const idx = categories.findIndex((c) => c.id === categoryId);
   return CATEGORY_COLORS[idx >= 0 ? idx % CATEGORY_COLORS.length : 0];
 };
+
+const formatCategoryDisplayName = (name: string, archived?: boolean) =>
+  archived ? `${name} (삭제됨)` : name;
 
 const buildFilterTabs = (categoryNames: string[]) => ['전체', ...categoryNames];
 
@@ -651,7 +668,7 @@ const CategoryProgressCard: React.FC<{
             }}
           >
             <span style={{ fontSize: '14px', fontWeight: '800', color: 'var(--text-primary)' }}>
-              {item.categoryName}
+              {formatCategoryDisplayName(item.categoryName, item.categoryArchived)}
             </span>
             <span
               style={{
@@ -722,6 +739,7 @@ interface BudgetModalProps {
   onSubmit: (yearMonth: string, payload: BudgetFormPayload, editId?: number) => void;
   onDelete?: () => void;
   onGoToCategorySettings?: () => void;
+  onLoadPreviousMonth?: (targetYearMonth: string) => void;
   submitting?: boolean;
 }
 
@@ -737,6 +755,7 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
   onSubmit,
   onDelete,
   onGoToCategorySettings,
+  onLoadPreviousMonth,
   submitting = false
 }) => {
   const isEdit = mode === 'edit';
@@ -904,6 +923,29 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
             <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px' }}>
               선택한 월에 예산이 등록됩니다
             </p>
+          )}
+          {!isEdit && budgets.length === 0 && onLoadPreviousMonth && (
+            <button
+              type="button"
+              onClick={() => onLoadPreviousMonth(yearMonth)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                marginTop: '10px',
+                padding: '8px 12px',
+                borderRadius: '8px',
+                border: '1px solid var(--blue-border)',
+                background: 'var(--blue-bg)',
+                fontSize: '12px',
+                fontWeight: '700',
+                color: 'var(--blue)',
+                cursor: 'pointer'
+              }}
+            >
+              <Copy size={13} />
+              최근 예산 불러오기
+            </button>
           )}
         </div>
 
@@ -1196,6 +1238,261 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
   );
 };
 
+interface CopyPreviousBudgetModalProps {
+  open: boolean;
+  preview: BudgetCopyResponse | null;
+  loading: boolean;
+  submitting: boolean;
+  error: string | null;
+  onClose: () => void;
+  onConfirm: () => void;
+}
+
+const CopyPreviousBudgetModal: React.FC<CopyPreviousBudgetModalProps> = ({
+  open,
+  preview,
+  loading,
+  submitting,
+  error,
+  onClose,
+  onConfirm
+}) => {
+  if (!open) return null;
+
+  const copyItems = preview?.items.filter((item) => item.selected) ?? [];
+  const skipItems = preview?.items.filter((item) => !item.selected) ?? [];
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(15, 23, 42, 0.45)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1001,
+        padding: '24px'
+      }}
+      onClick={onClose}
+    >
+      <div
+        className="card fade-in"
+        style={{
+          width: '100%',
+          maxWidth: '520px',
+          padding: '24px',
+          boxShadow: 'var(--shadow-lg)',
+          maxHeight: '90vh',
+          overflowY: 'auto'
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '16px'
+          }}
+        >
+          <h2
+            style={{
+              fontSize: '17px',
+              fontWeight: '800',
+              color: 'var(--text-primary)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            <Copy size={18} color="var(--blue)" />
+            최근 예산 불러오기
+          </h2>
+          <button
+            onClick={onClose}
+            aria-label="닫기"
+            style={{
+              width: '34px',
+              height: '34px',
+              borderRadius: '8px',
+              border: '1px solid var(--border)',
+              background: 'white',
+              color: 'var(--text-secondary)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {loading ? (
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', textAlign: 'center', padding: '24px 0' }}>
+            지난 예산을 확인하는 중...
+          </p>
+        ) : preview ? (
+          <>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px', lineHeight: 1.6 }}>
+              가장 최근 예산이 등록된 <strong>{formatYearMonthLabel(preview.sourceYearMonth)}</strong> 설정을{' '}
+              <strong>{formatYearMonthLabel(preview.targetYearMonth)}</strong>로 불러옵니다.
+              {preview.copyCount > 0
+                ? ` ${preview.copyCount}개 카테고리가 복사됩니다.`
+                : ' 복사할 수 있는 카테고리가 없습니다.'}
+              {skipItems.length > 0 && ` (${skipItems.length}개 제외)`}
+            </p>
+
+            {copyItems.length > 0 && (
+              <div style={{ marginBottom: '16px' }}>
+                <div
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: '700',
+                    color: 'var(--text-primary)',
+                    marginBottom: '8px'
+                  }}
+                >
+                  불러올 예산 ({copyItems.length})
+                </div>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px',
+                    maxHeight: '180px',
+                    overflowY: 'auto'
+                  }}
+                >
+                  {copyItems.map((item) => (
+                    <div
+                      key={item.categoryId}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '8px 12px',
+                        borderRadius: '8px',
+                        background: '#f8fafc',
+                        border: '1px solid var(--border)',
+                        fontSize: '12px'
+                      }}
+                    >
+                      <span style={{ fontWeight: '700', color: 'var(--text-primary)' }}>
+                        {item.categoryName}
+                      </span>
+                      <span style={{ fontWeight: '600', color: 'var(--text-secondary)', flexShrink: 0 }}>
+                        {formatKRW(Number(item.totalBudget) + Number(item.expectedExpense))}원
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {skipItems.length > 0 && (
+              <div
+                style={{
+                  marginBottom: '16px',
+                  padding: '12px 14px',
+                  borderRadius: '10px',
+                  background: '#fff7ed',
+                  border: '1px solid #fed7aa'
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: '700',
+                    color: '#ea580c',
+                    marginBottom: '8px'
+                  }}
+                >
+                  제외되는 카테고리 ({skipItems.length})
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {skipItems.map((item) => (
+                    <div
+                      key={item.categoryId}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        gap: '8px',
+                        fontSize: '11px',
+                        color: 'var(--text-secondary)'
+                      }}
+                    >
+                      <span style={{ fontWeight: '600' }}>{item.categoryName}</span>
+                      <span style={{ flexShrink: 0 }}>{getSkipReasonLabel(item.skipReason)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        ) : null}
+
+        {error && (
+          <div
+            style={{
+              marginBottom: '16px',
+              padding: '10px 12px',
+              borderRadius: '8px',
+              background: 'var(--red-bg)',
+              border: '1px solid var(--red-border)',
+              color: 'var(--red)',
+              fontSize: '12px',
+              fontWeight: '600'
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              flex: 1,
+              padding: '12px',
+              borderRadius: '10px',
+              border: '1px solid var(--border)',
+              background: 'white',
+              fontSize: '13px',
+              fontWeight: '700',
+              color: 'var(--text-secondary)'
+            }}
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={loading || submitting || !preview || preview.copyCount === 0}
+            className="header-btn-primary"
+            style={{
+              flex: 1,
+              justifyContent: 'center',
+              background:
+                loading || submitting || !preview || preview.copyCount === 0
+                  ? '#cbd5e1'
+                  : 'var(--blue)',
+              cursor:
+                loading || submitting || !preview || preview.copyCount === 0
+                  ? 'not-allowed'
+                  : 'pointer'
+            }}
+          >
+            {submitting ? '불러오는 중...' : '불러오기'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
   onGoToCategorySettings
 }) => {
@@ -1221,6 +1518,11 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [editItem, setEditItem] = useState<BudgetItem | null>(null);
   const [modalDate, setModalDate] = useState(currentDate);
+  const [copyModalOpen, setCopyModalOpen] = useState(false);
+  const [copyTargetYearMonth, setCopyTargetYearMonth] = useState<string | null>(null);
+  const [copyPreview, setCopyPreview] = useState<BudgetCopyResponse | null>(null);
+  const [copyPreviewLoading, setCopyPreviewLoading] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
 
   const yearMonth = formatYearMonth(currentDate);
 
@@ -1455,6 +1757,61 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
     onGoToCategorySettings?.();
   };
 
+  const openCopyPreviousModal = async (targetYearMonth: string) => {
+    setCopyTargetYearMonth(targetYearMonth);
+    setCopyModalOpen(true);
+    setCopyPreview(null);
+    setCopyError(null);
+    setCopyPreviewLoading(true);
+
+    try {
+      const result = await budgetApi.previewCopyFromLatest(targetYearMonth);
+      if (!result.ok || !result.data) {
+        throw new Error(result.error ?? '최근 예산을 확인하지 못했습니다.');
+      }
+      setCopyPreview(result.data);
+    } catch (err) {
+      setCopyError(err instanceof Error ? err.message : '최근 예산을 확인하지 못했습니다.');
+    } finally {
+      setCopyPreviewLoading(false);
+    }
+  };
+
+  const handleCopyPreviousBudget = async () => {
+    if (!copyTargetYearMonth) return;
+
+    setSubmitting(true);
+    setCopyError(null);
+    setActionError(null);
+
+    try {
+      const result = await budgetApi.copyFromLatest(copyTargetYearMonth);
+      if (!result.ok || !result.data) {
+        throw new Error(result.error ?? '최근 예산 불러오기에 실패했습니다.');
+      }
+
+      setCopyModalOpen(false);
+      setCopyPreview(null);
+      setCopyTargetYearMonth(null);
+      setModalOpen(false);
+      setEditItem(null);
+      setModalMode('create');
+      setCurrentDate(parseYearMonthToDate(copyTargetYearMonth));
+      await loadCurrentMonth();
+    } catch (err) {
+      setCopyError(err instanceof Error ? err.message : '최근 예산 불러오기에 실패했습니다.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const closeCopyModal = () => {
+    setCopyModalOpen(false);
+    setCopyPreview(null);
+    setCopyTargetYearMonth(null);
+    setCopyError(null);
+  };
+
   return (
     <div className="fade-in">
       {(error || actionError) && (
@@ -1615,7 +1972,7 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
                   color: 'var(--red)'
                 }}
               >
-                {item.categoryName} · {formatKRW(Math.abs(item.remainingBudget))}원 초과
+                {formatCategoryDisplayName(item.categoryName, item.categoryArchived)} · {formatKRW(Math.abs(item.remainingBudget))}원 초과
               </div>
             ))}
           </div>
@@ -1741,14 +2098,23 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
             <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
               {yearMonthLabel}에 등록된 예산이 없습니다.
             </p>
-            <button
-              onClick={openCreateModal}
-              className="header-btn-primary"
-              style={{ background: 'var(--blue)', margin: '0 auto' }}
-            >
-              <Plus size={14} />
-              <span>예산 등록하기</span>
-            </button>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button
+                onClick={openCreateModal}
+                className="header-btn-primary"
+                style={{ background: 'var(--blue)' }}
+              >
+                <Plus size={14} />
+                <span>예산 등록하기</span>
+              </button>
+              <button
+                onClick={() => void openCopyPreviousModal(yearMonth)}
+                className="header-btn-secondary"
+              >
+                <Copy size={14} />
+                <span>최근 예산 불러오기</span>
+              </button>
+            </div>
           </div>
         ) : filtered.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 16px', color: 'var(--text-secondary)', fontSize: '14px' }}>
@@ -1818,7 +2184,7 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
                               className="group-buy-category"
                               style={{ borderColor: `${color}33`, color }}
                             >
-                              {item.categoryName}
+                              {formatCategoryDisplayName(item.categoryName, item.categoryArchived)}
                             </span>
                           </td>
                           <td>{formatKRW(item.totalBudget)}원</td>
@@ -1922,7 +2288,20 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
             : undefined
         }
         onGoToCategorySettings={handleGoToCategorySettings}
+        onLoadPreviousMonth={(targetYearMonth) => {
+          void openCopyPreviousModal(targetYearMonth);
+        }}
         submitting={submitting}
+      />
+
+      <CopyPreviousBudgetModal
+        open={copyModalOpen}
+        preview={copyPreview}
+        loading={copyPreviewLoading}
+        submitting={submitting}
+        error={copyError}
+        onClose={closeCopyModal}
+        onConfirm={() => void handleCopyPreviousBudget()}
       />
 
       {deleteTarget && (

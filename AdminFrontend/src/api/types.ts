@@ -195,6 +195,7 @@ export interface BudgetResponse {
   id: number;
   categoryId: number;
   categoryName: string;
+  categoryArchived?: boolean;
   totalBudget: number;
   expectedExpense: number;
   totalPlannedBudget: number;
@@ -208,6 +209,22 @@ export interface BudgetSummaryResponse {
   totalPlannedBudgetSum: number;
   totalActualExpenseSum: number;
   totalRemainingBudget: number;
+}
+
+export interface BudgetCopyItem {
+  categoryId: number;
+  categoryName: string;
+  totalBudget: number;
+  expectedExpense: number;
+  selected: boolean;
+  skipReason: 'DELETED_CATEGORY' | 'ALREADY_EXISTS' | null;
+}
+
+export interface BudgetCopyResponse {
+  sourceYearMonth: string;
+  targetYearMonth: string;
+  items: BudgetCopyItem[];
+  copyCount: number;
 }
 
 /** DashboardController */
