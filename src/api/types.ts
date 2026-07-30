@@ -192,11 +192,12 @@ export interface BudgetRequest {
 }
 
 export interface BudgetResponse {
-  id: number;
+  id: number | null;
   categoryId: number;
   categoryName: string;
   categoryArchived?: boolean;
   totalBudget: number;
+  fixedExpenseAmount: number;
   expectedExpense: number;
   totalPlannedBudget: number;
   actualExpense: number;

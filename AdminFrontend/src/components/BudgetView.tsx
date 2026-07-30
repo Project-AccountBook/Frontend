@@ -27,11 +27,12 @@ import { fetchAllUserTransactionsInRange, type TransactionResponse } from '../ap
 import { MonthYearNavigator } from './MonthYearNavigator';
 
 interface BudgetItem {
-  id: number;
+  id: number | null;
   categoryId: number;
   categoryName: string;
   categoryArchived: boolean;
   totalBudget: number;
+  fixedExpenseAmount: number;
   expectedExpense: number;
   totalPlannedBudget: number;
   actualExpense: number;
@@ -96,12 +97,16 @@ const mapBudgetResponse = (item: BudgetResponse): BudgetItem => ({
   categoryName: item.categoryName,
   categoryArchived: item.categoryArchived ?? false,
   totalBudget: Number(item.totalBudget),
+  fixedExpenseAmount: Number(item.fixedExpenseAmount ?? 0),
   expectedExpense: Number(item.expectedExpense),
   totalPlannedBudget: Number(item.totalPlannedBudget),
   actualExpense: Number(item.actualExpense),
   remainingBudget: Number(item.remainingBudget),
   progress: Math.round(Number(item.progress)),
 });
+
+const isUserConfiguredBudget = (item: BudgetItem) =>
+  item.id != null && (item.totalBudget > 0 || item.expectedExpense > 0);
 
 const getCategoryColor = (categoryId: number, categories: ExpenseCategory[]) => {
   const idx = categories.findIndex((c) => c.id === categoryId);
@@ -735,6 +740,7 @@ interface BudgetModalProps {
   budgets: BudgetItem[];
   expenseCategories: ExpenseCategory[];
   editItem?: BudgetItem | null;
+  initialCategoryId?: number;
   onClose: () => void;
   onSubmit: (yearMonth: string, payload: BudgetFormPayload, editId?: number) => void;
   onDelete?: () => void;
@@ -751,6 +757,7 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
   budgets,
   expenseCategories,
   editItem,
+  initialCategoryId,
   onClose,
   onSubmit,
   onDelete,
@@ -763,7 +770,7 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
   const yearMonthLabel = formatYearMonthLabel(yearMonth);
 
   const usedCategoryIds = new Set(
-    budgets.filter((b) => b.id !== editItem?.id).map((b) => b.categoryId)
+    budgets.filter((b) => b.id != null && b.id !== editItem?.id).map((b) => b.categoryId)
   );
 
   const availableCategories =
@@ -772,7 +779,7 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
       : expenseCategories.filter((c) => !usedCategoryIds.has(c.id));
 
   const [categoryId, setCategoryId] = useState(
-    editItem?.categoryId ?? availableCategories[0]?.id ?? 1
+    editItem?.categoryId ?? initialCategoryId ?? availableCategories[0]?.id ?? 1
   );
   const [totalBudget, setTotalBudget] = useState(
     editItem ? formatKRW(editItem.totalBudget) : ''
@@ -784,24 +791,26 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
   useEffect(() => {
     if (!open) return;
     const used = new Set(
-      budgets.filter((b) => b.id !== editItem?.id).map((b) => b.categoryId)
+      budgets.filter((b) => b.id != null && b.id !== editItem?.id).map((b) => b.categoryId)
     );
     const available =
       isEdit && editItem
         ? expenseCategories.filter((c) => c.id === editItem.categoryId)
         : expenseCategories.filter((c) => !used.has(c.id));
-    setCategoryId(editItem?.categoryId ?? available[0]?.id ?? 1);
+    setCategoryId(editItem?.categoryId ?? initialCategoryId ?? available[0]?.id ?? 1);
     setTotalBudget(editItem ? formatKRW(editItem.totalBudget) : '');
     setExpectedExpense(editItem ? formatKRW(editItem.expectedExpense) : '');
-  }, [open, editItem, budgets, isEdit, yearMonth, expenseCategories]);
+  }, [open, editItem, initialCategoryId, budgets, isEdit, yearMonth, expenseCategories]);
 
   if (!open) return null;
 
+  const fixedExpenseNum =
+    budgets.find((b) => b.categoryId === categoryId)?.fixedExpenseAmount ?? 0;
   const totalBudgetNum = parseAmount(totalBudget);
   const expectedExpenseNum = parseAmount(expectedExpense);
   const canSubmit =
     !submitting &&
-    totalBudgetNum > 0 &&
+    (totalBudgetNum > 0 || fixedExpenseNum > 0) &&
     ((isEdit && editItem) || (!isEdit && availableCategories.length > 0));
 
   const inputStyle: React.CSSProperties = {
@@ -924,7 +933,7 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
               선택한 월에 예산이 등록됩니다
             </p>
           )}
-          {!isEdit && budgets.length === 0 && onLoadPreviousMonth && (
+          {!isEdit && !budgets.some(isUserConfiguredBudget) && onLoadPreviousMonth && (
             <button
               type="button"
               onClick={() => onLoadPreviousMonth(yearMonth)}
@@ -1095,7 +1104,7 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
             추가 예상 지출
           </label>
           <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '8px', lineHeight: 1.5 }}>
-            기본 예산 외에, 이번 달 추가로 지출할 것으로 예상되는 금액입니다. 없으면 비워두세요.
+            변동 지출 등 기본 한도 외에 추가로 책정하는 금액입니다. 고정 지출은 자동 반영됩니다.
           </p>
           <input
             type="text"
@@ -1109,7 +1118,29 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
           />
         </div>
 
-        {(totalBudgetNum > 0 || expectedExpenseNum > 0) && (
+        {fixedExpenseNum > 0 && (
+          <div
+            style={{
+              marginBottom: '16px',
+              padding: '12px 14px',
+              borderRadius: '10px',
+              background: '#f0fdf4',
+              border: '1px solid #bbf7d0'
+            }}
+          >
+            <div style={{ fontSize: '11px', fontWeight: '600', color: '#15803d', marginBottom: '4px' }}>
+              고정 지출 (자동 반영)
+            </div>
+            <div style={{ fontSize: '14px', fontWeight: '800', color: '#166534' }}>
+              {formatKRW(fixedExpenseNum)}원
+            </div>
+            <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px', lineHeight: 1.5 }}>
+              고정 수입/지출에서 등록한 금액이 예산에 자동으로 포함됩니다.
+            </p>
+          </div>
+        )}
+
+        {(totalBudgetNum > 0 || fixedExpenseNum > 0 || expectedExpenseNum > 0) && (
           <div
             style={{
               marginBottom: '24px',
@@ -1123,13 +1154,17 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
               이번 달 계획 합계
             </div>
             <div style={{ fontSize: '14px', fontWeight: '800', color: 'var(--blue)' }}>
-              {formatKRW(totalBudgetNum)}원 + {formatKRW(expectedExpenseNum)}원 ={' '}
-              {formatKRW(totalBudgetNum + expectedExpenseNum)}원
+              {formatKRW(totalBudgetNum)}원
+              {fixedExpenseNum > 0 && ` + ${formatKRW(fixedExpenseNum)}원(고정)`}
+              {expectedExpenseNum > 0 && ` + ${formatKRW(expectedExpenseNum)}원(추가)`}
+              {' '}= {formatKRW(totalBudgetNum + fixedExpenseNum + expectedExpenseNum)}원
             </div>
           </div>
         )}
 
-        {totalBudgetNum <= 0 && expectedExpenseNum <= 0 && <div style={{ marginBottom: '24px' }} />}
+        {totalBudgetNum <= 0 && fixedExpenseNum <= 0 && expectedExpenseNum <= 0 && (
+          <div style={{ marginBottom: '24px' }} />
+        )}
 
         {isEdit && onDelete ? (
           <div
@@ -1523,6 +1558,7 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
   const [copyPreview, setCopyPreview] = useState<BudgetCopyResponse | null>(null);
   const [copyPreviewLoading, setCopyPreviewLoading] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
+  const [initialCategoryId, setInitialCategoryId] = useState<number | undefined>();
 
   const yearMonth = formatYearMonth(currentDate);
 
@@ -1655,6 +1691,8 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
 
   const yearMonthLabel = formatYearMonthLabel(yearMonth);
   const filterTabs = buildFilterTabs(expenseCategories.map((c) => c.name));
+  const hasUserConfiguredBudget = budgets.some(isUserConfiguredBudget);
+  const hasFixedExpenseOnly = !hasUserConfiguredBudget && budgets.some((b) => b.fixedExpenseAmount > 0);
 
   useEffect(() => {
     setActiveCategory('전체');
@@ -1713,13 +1751,23 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
     setEditItem(null);
     setModalMode('create');
     setModalDate(currentDate);
+    setInitialCategoryId(undefined);
     setModalOpen(true);
   };
 
   const openEditModal = (item: BudgetItem) => {
+    if (item.id == null) {
+      setEditItem(null);
+      setModalMode('create');
+      setModalDate(currentDate);
+      setInitialCategoryId(item.categoryId);
+      setModalOpen(true);
+      return;
+    }
     setEditItem(item);
     setModalMode('edit');
     setModalDate(currentDate);
+    setInitialCategoryId(undefined);
     setModalOpen(true);
   };
 
@@ -1732,7 +1780,7 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
   };
 
   const handleDelete = async () => {
-    if (!deleteTarget) return;
+    if (!deleteTarget || deleteTarget.id == null) return;
     setSubmitting(true);
     setActionError(null);
     try {
@@ -1906,9 +1954,9 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
           <span className="card-title" style={{ fontSize: '15px' }}>
             {yearMonthLabel} 예산 요약
           </span>
-          {budgets.length === 0 && (
+          {!hasUserConfiguredBudget && (
             <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: 'auto' }}>
-              등록된 예산이 없습니다
+              {hasFixedExpenseOnly ? '고정 지출만 반영됨 · 기본 예산 미설정' : '등록된 예산이 없습니다'}
             </span>
           )}
         </div>
@@ -1922,7 +1970,7 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
           <CompactStat
             label="계획 합계"
             value={`${formatKRW(summaryValues.totalPlannedBudgetSum)}원`}
-            sub={`기본 예산 + 추가 예상 · ${budgets.length}개 카테고리`}
+            sub={`기본 + 고정 + 추가 예상 · ${budgets.filter(isUserConfiguredBudget).length}개 카테고리 설정`}
             icon={<PiggyBank size={18} />}
           />
           <CompactStat
@@ -2122,6 +2170,36 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
           </div>
         ) : (
           <>
+            {!hasUserConfiguredBudget && (
+              <div
+                style={{
+                  marginBottom: '16px',
+                  padding: '12px 16px',
+                  borderRadius: '10px',
+                  background: 'var(--blue-bg)',
+                  border: '1px solid var(--blue-border)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  flexWrap: 'wrap'
+                }}
+              >
+                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
+                  {hasFixedExpenseOnly
+                    ? '고정 지출이 자동 반영되었습니다. 변동 지출용 기본 예산은 최근 설정을 불러오거나 직접 등록하세요.'
+                    : '이번 달 기본 예산이 아직 없습니다. 지난 달 설정을 불러오거나 새로 등록하세요.'}
+                </p>
+                <button
+                  onClick={() => void openCopyPreviousModal(yearMonth)}
+                  className="header-btn-secondary"
+                  style={{ flexShrink: 0 }}
+                >
+                  <Copy size={14} />
+                  <span>최근 예산 불러오기</span>
+                </button>
+              </div>
+            )}
             <div
               style={{
                 display: 'grid',
@@ -2158,6 +2236,7 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
                     <tr>
                       <th>카테고리</th>
                       <th>기본 예산</th>
+                      <th>고정 지출</th>
                       <th>추가 예상</th>
                       <th>계획 합계</th>
                       <th>실제 지출</th>
@@ -2188,6 +2267,9 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
                             </span>
                           </td>
                           <td>{formatKRW(item.totalBudget)}원</td>
+                          <td style={{ color: item.fixedExpenseAmount > 0 ? '#15803d' : undefined }}>
+                            {formatKRW(item.fixedExpenseAmount)}원
+                          </td>
                           <td>{formatKRW(item.expectedExpense)}원</td>
                           <td style={{ fontWeight: '700' }}>{formatKRW(item.totalPlannedBudget)}원</td>
                           <td>{formatKRW(item.actualExpense)}원</td>
@@ -2212,43 +2294,52 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
                           </td>
                           <td onClick={(e) => e.stopPropagation()}>
                             <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
-                              <button
-                                onClick={() => openEditModal(item)}
-                                aria-label="예산 수정"
-                                style={{
-                                  width: '30px',
-                                  height: '30px',
-                                  borderRadius: '7px',
-                                  border: '1px solid var(--border)',
-                                  background: 'white',
-                                  color: 'var(--text-secondary)',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center'
-                                }}
-                              >
-                                <Pencil size={13} />
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDeleteTarget(item);
-                                }}
-                                aria-label="예산 삭제"
-                                style={{
-                                  width: '30px',
-                                  height: '30px',
-                                  borderRadius: '7px',
-                                  border: '1px solid var(--red-border)',
-                                  background: 'var(--red-bg)',
-                                  color: 'var(--red)',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center'
-                                }}
-                              >
-                                <Trash2 size={13} />
-                              </button>
+                              {item.id != null && (
+                                <>
+                                  <button
+                                    onClick={() => openEditModal(item)}
+                                    aria-label="예산 수정"
+                                    style={{
+                                      width: '30px',
+                                      height: '30px',
+                                      borderRadius: '7px',
+                                      border: '1px solid var(--border)',
+                                      background: 'white',
+                                      color: 'var(--text-secondary)',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center'
+                                    }}
+                                  >
+                                    <Pencil size={13} />
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setDeleteTarget(item);
+                                    }}
+                                    aria-label="예산 삭제"
+                                    style={{
+                                      width: '30px',
+                                      height: '30px',
+                                      borderRadius: '7px',
+                                      border: '1px solid var(--red-border)',
+                                      background: 'var(--red-bg)',
+                                      color: 'var(--red)',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center'
+                                    }}
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </>
+                              )}
+                              {item.id == null && (
+                                <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '600' }}>
+                                  고정 지출만
+                                </span>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -2271,10 +2362,12 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
         budgets={modalBudgets}
         expenseCategories={expenseCategories}
         editItem={editItem}
+        initialCategoryId={initialCategoryId}
         onClose={() => {
           setModalOpen(false);
           setEditItem(null);
           setModalMode('create');
+          setInitialCategoryId(undefined);
         }}
         onSubmit={handleModalSubmit}
         onDelete={
