@@ -831,7 +831,7 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
     onSubmit(
       yearMonth,
       { categoryId, totalBudget: totalBudgetNum, expectedExpense: expectedExpenseNum },
-      editItem?.id
+      editItem?.id ?? undefined
     );
   };
 
@@ -1746,6 +1746,31 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
     return matchCategory && matchSearch && matchStatus;
   });
 
+  const filteredTotals = useMemo(() => {
+    const totals = filtered.reduce(
+      (acc, item) => ({
+        totalBudget: acc.totalBudget + item.totalBudget,
+        fixedExpenseAmount: acc.fixedExpenseAmount + item.fixedExpenseAmount,
+        expectedExpense: acc.expectedExpense + item.expectedExpense,
+        totalPlannedBudget: acc.totalPlannedBudget + item.totalPlannedBudget,
+        actualExpense: acc.actualExpense + item.actualExpense,
+        remainingBudget: acc.remainingBudget + item.remainingBudget,
+      }),
+      {
+        totalBudget: 0,
+        fixedExpenseAmount: 0,
+        expectedExpense: 0,
+        totalPlannedBudget: 0,
+        actualExpense: 0,
+        remainingBudget: 0,
+      }
+    );
+    const progress =
+      totals.totalPlannedBudget > 0
+        ? Math.round((totals.actualExpense / totals.totalPlannedBudget) * 100)
+        : 0;
+    return { ...totals, progress };
+  }, [filtered]);
 
   const openCreateModal = () => {
     setEditItem(null);
@@ -2346,6 +2371,45 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
                       );
                     })}
                   </tbody>
+                  {filtered.length > 0 && (
+                    <tfoot>
+                      <tr className="budget-detail-total-row">
+                        <td>합계</td>
+                        <td>{formatKRW(filteredTotals.totalBudget)}원</td>
+                        <td style={{ color: filteredTotals.fixedExpenseAmount > 0 ? '#15803d' : undefined }}>
+                          {formatKRW(filteredTotals.fixedExpenseAmount)}원
+                        </td>
+                        <td>{formatKRW(filteredTotals.expectedExpense)}원</td>
+                        <td>{formatKRW(filteredTotals.totalPlannedBudget)}원</td>
+                        <td>{formatKRW(filteredTotals.actualExpense)}원</td>
+                        <td
+                          style={{
+                            color: filteredTotals.remainingBudget < 0 ? 'var(--red)' : '#10b981',
+                          }}
+                        >
+                          {filteredTotals.remainingBudget < 0 ? '-' : ''}
+                          {formatKRW(Math.abs(filteredTotals.remainingBudget))}원
+                        </td>
+                        <td>{filteredTotals.progress}%</td>
+                        <td>
+                          <span
+                            style={{
+                              fontSize: '11px',
+                              fontWeight: '700',
+                              padding: '3px 8px',
+                              borderRadius: '6px',
+                              background:
+                                filteredTotals.remainingBudget < 0 ? 'var(--red-bg)' : '#ecfdf5',
+                              color: filteredTotals.remainingBudget < 0 ? 'var(--red)' : '#10b981',
+                            }}
+                          >
+                            {filteredTotals.remainingBudget < 0 ? '초과' : '정상'}
+                          </span>
+                        </td>
+                        <td />
+                      </tr>
+                    </tfoot>
+                  )}
                 </table>
                 </div>
               </div>
