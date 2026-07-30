@@ -14,7 +14,9 @@ import {
   Calendar,
   ArrowRight,
   Activity,
-  Copy
+  Copy,
+  LayoutGrid,
+  Table2
 } from 'lucide-react';
 import { budgetApi, categoryApi } from '../api';
 import type {
@@ -64,6 +66,18 @@ const STATUS_TABS = [
   { id: 'normal', label: '정상' },
   { id: 'over', label: '초과' }
 ] as const;
+
+type CategoryViewMode = 'graph' | 'table';
+
+const CATEGORY_VIEW_TABS: {
+  id: CategoryViewMode;
+  label: string;
+  icon: React.ComponentType<{ size?: number }>;
+  title: string;
+}[] = [
+  { id: 'graph', label: '그래프', icon: LayoutGrid, title: '그래프 뷰' },
+  { id: 'table', label: '표', icon: Table2, title: '표 뷰' }
+];
 
 const formatKRW = (value: number) => new Intl.NumberFormat('ko-KR').format(value);
 
@@ -136,8 +150,6 @@ interface WeeklyPaceData {
   currentWeekExpense: number;
   proratedRecommended: number;
   paceStatus: PaceStatus;
-  projectedMonthEnd: number;
-  projectedOverrun: number;
   remainingWeeks: number;
   isCurrentMonth: boolean;
   isPastMonth: boolean;
@@ -196,8 +208,6 @@ const buildWeekBuckets = (
 const computeWeeklyPace = (
   yearMonth: string,
   weeks: WeekBucket[],
-  totalPlanned: number,
-  totalActual: number,
   remainingBudget: number,
   referenceDate: Date
 ): WeeklyPaceData => {
@@ -232,19 +242,12 @@ const computeWeeklyPace = (
     else if (ratio < 0.75) paceStatus = 'slow';
   }
 
-  const daysElapsed = isCurrentMonth ? today : isPastMonth ? lastDay : 0;
-  const projectedMonthEnd =
-    daysElapsed > 0 && totalPlanned > 0 ? (totalActual / daysElapsed) * lastDay : totalActual;
-  const projectedOverrun = projectedMonthEnd - totalPlanned;
-
   return {
     weeks,
     recommendedWeekly,
     currentWeekExpense,
     proratedRecommended,
     paceStatus,
-    projectedMonthEnd,
-    projectedOverrun,
     remainingWeeks,
     isCurrentMonth,
     isPastMonth
@@ -377,17 +380,6 @@ const WeeklyPacePanel: React.FC<{
                       ? 'var(--blue)'
                       : undefined
                 }
-              />
-              <div style={{ width: '1px', background: 'var(--border)', flexShrink: 0 }} />
-              <PaceInlineStat
-                label="월말 예상 지출"
-                value={`${formatKRW(Math.round(pace.projectedMonthEnd))}원`}
-                sub={
-                  pace.projectedOverrun > 0
-                    ? `예산 대비 +${formatKRW(Math.round(pace.projectedOverrun))}원 예상`
-                    : '현재 페이스 유지 시'
-                }
-                valueColor={pace.projectedOverrun > 0 ? 'var(--red)' : undefined}
               />
             </div>
           )}
@@ -1547,6 +1539,7 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
   });
   const [activeCategory, setActiveCategory] = useState('전체');
   const [activeStatus, setActiveStatus] = useState('all');
+  const [categoryViewMode, setCategoryViewMode] = useState<CategoryViewMode>('graph');
   const [search, setSearch] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<BudgetItem | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -1726,8 +1719,6 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
     return computeWeeklyPace(
       yearMonth,
       weeks,
-      summaryValues.totalPlannedBudgetSum,
-      summaryValues.totalActualExpenseSum,
       summaryValues.totalRemainingBudget,
       new Date()
     );
@@ -2065,19 +2056,38 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
         >
           <span className="card-title">카테고리별 예산</span>
           {budgets.length > 0 && (
-            <span
-              style={{
-                fontSize: '12px',
-                fontWeight: '700',
-                padding: '4px 10px',
-                borderRadius: '6px',
-                background: '#fff',
-                color: usagePercent > 90 ? 'var(--red)' : 'var(--blue)',
-                border: `1px solid ${usagePercent > 90 ? 'var(--red-border)' : 'var(--blue-border)'}`
-              }}
-            >
-              전체 {usagePercent}%
-            </span>
+            <>
+              <span
+                style={{
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  background: '#fff',
+                  color: usagePercent > 90 ? 'var(--red)' : 'var(--blue)',
+                  border: `1px solid ${usagePercent > 90 ? 'var(--red-border)' : 'var(--blue-border)'}`
+                }}
+              >
+                전체 {usagePercent}%
+              </span>
+              <div className="view-mode-toggle" style={{ marginLeft: 'auto' }}>
+                {CATEGORY_VIEW_TABS.map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      className={`view-toggle-btn ${categoryViewMode === tab.id ? 'active' : ''}`}
+                      onClick={() => setCategoryViewMode(tab.id)}
+                      title={tab.title}
+                    >
+                      <Icon size={15} />
+                      <span>{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
 
@@ -2114,7 +2124,8 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
                   border: '1px solid var(--border)',
                   padding: '6px 12px',
                   borderRadius: '8px',
-                  minWidth: '200px'
+                  minWidth: '200px',
+                  flexShrink: 0
                 }}
               >
                 <Search size={14} color="var(--text-secondary)" />
@@ -2225,36 +2236,31 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
                 </button>
               </div>
             )}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
-                gap: '12px'
-              }}
-            >
-              {filtered.map((item) => (
-                <CategoryProgressCard
-                  key={item.id}
-                  item={item}
-                  categories={expenseCategories}
-                  onClick={() => openEditModal(item)}
-                />
-              ))}
-            </div>
-
-            <div
-              style={{
-                marginTop: '28px',
-                paddingTop: '22px',
-                borderTop: '1px solid var(--border)'
-              }}
-            >
-              <div className="card-header-row" style={{ marginBottom: '14px' }}>
-                <span className="card-title" style={{ fontSize: '14px' }}>
-                  예산 설정 상세
-                </span>
+            {categoryViewMode === 'graph' ? (
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+                  gap: '12px'
+                }}
+              >
+                {filtered.map((item) => (
+                  <CategoryProgressCard
+                    key={item.id}
+                    item={item}
+                    categories={expenseCategories}
+                    onClick={() => openEditModal(item)}
+                  />
+                ))}
               </div>
-              <div className="budget-detail-table-wrap">
+            ) : (
+              <div>
+                <div className="card-header-row" style={{ marginBottom: '14px' }}>
+                  <span className="card-title" style={{ fontSize: '14px' }}>
+                    예산 설정 상세
+                  </span>
+                </div>
+                <div className="budget-detail-table-wrap">
                 <div className="custom-table-container">
                   <table className="custom-table">
                   <thead>
@@ -2266,7 +2272,7 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
                       <th>계획 합계</th>
                       <th>실제 지출</th>
                       <th>잔액</th>
-                      <th>진척도</th>
+                      <th>사용률</th>
                       <th>상태</th>
                       <th>관리</th>
                     </tr>
@@ -2413,7 +2419,8 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
                 </table>
                 </div>
               </div>
-            </div>
+              </div>
+            )}
           </>
         )}
       </div>
