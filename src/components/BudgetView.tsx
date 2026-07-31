@@ -538,6 +538,7 @@ const CompactStat: React.FC<{
   icon: React.ReactNode;
 }> = ({ label, value, sub, iconColor = 'var(--text-secondary)', valueColor, icon }) => (
   <div
+    className="compact-stat"
     style={{
       padding: '16px 18px',
       borderRadius: '12px',
@@ -548,6 +549,7 @@ const CompactStat: React.FC<{
     }}
   >
     <div
+      className="compact-stat-header"
       style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -555,15 +557,12 @@ const CompactStat: React.FC<{
         marginBottom: '10px'
       }}
     >
-      <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>
-        {label}
-      </span>
+      <span className="compact-stat-label">{label}</span>
       <span style={{ color: iconColor, display: 'flex' }}>{icon}</span>
     </div>
     <div
+      className="compact-stat-value"
       style={{
-        fontSize: '20px',
-        fontWeight: '800',
         color: valueColor ?? 'var(--text-primary)',
         letterSpacing: '-0.4px',
         lineHeight: 1.2
@@ -571,18 +570,7 @@ const CompactStat: React.FC<{
     >
       {value}
     </div>
-    {sub && (
-      <div
-        style={{
-          fontSize: '11px',
-          color: 'var(--text-muted)',
-          marginTop: '6px',
-          fontWeight: '500'
-        }}
-      >
-        {sub}
-      </div>
-    )}
+    {sub && <div className="compact-stat-sub">{sub}</div>}
   </div>
 );
 
@@ -1507,7 +1495,10 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <div
+          className="budget-header-actions"
+          style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}
+        >
           <MonthYearNavigator
             date={currentDate}
             onDateChange={setCurrentDate}

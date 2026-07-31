@@ -3,7 +3,6 @@ import {
   Search,
   PenSquare,
   Eye,
-  HelpCircle,
   Clock,
   Flame,
   AlertCircle,
@@ -147,36 +146,20 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite,
   return (
     <div className="fade-in">
       <div className="dashboard-view-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div
+        <div style={{ textAlign: 'center', width: '100%' }}>
+          <h1
             style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '10px',
-              background: 'var(--purple-bg)',
-              color: 'var(--purple)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
+              fontSize: '22px',
+              fontWeight: '800',
+              color: 'var(--text-primary)',
+              letterSpacing: '-0.5px'
             }}
           >
-            <HelpCircle size={20} />
-          </div>
-          <div>
-            <h1
-              style={{
-                fontSize: '22px',
-                fontWeight: '800',
-                color: 'var(--text-primary)',
-                letterSpacing: '-0.5px'
-              }}
-            >
-              Q&A 게시판
-            </h1>
-            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-              살림·재테크 궁금증을 다른 엄마들과 함께 해결해요
-            </p>
-          </div>
+            Q&A 게시판
+          </h1>
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+            살림·재테크 궁금증을 다른 엄마들과 함께 해결해요
+          </p>
         </div>
 
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -205,9 +188,9 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite,
             <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>최근 7일</span>
           </div>
           <div
+            className="hot-post-grid"
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
               gap: '12px'
             }}
           >
@@ -403,9 +386,9 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite,
         </div>
       ) : (
         <div
+          className="board-card-grid"
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
             gap: '20px'
           }}
         >

@@ -637,7 +637,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
             </div>
           </div>
 
-          <div className="card">
+          <div className="card comparison-avg-card">
             <div className="card-header-row">
               <span className="card-title">평균 {config.label} 비교</span>
             </div>
@@ -843,6 +843,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
           </div>
 
           <div
+            className="filter-grid"
             style={{
               display: 'grid',
               gridTemplateColumns: '1fr 1fr 2fr',
@@ -881,7 +882,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
             </div>
 
             {locationMode ? (
-              <div>
+              <div className="filter-grid-amount">
                 <label className="filter-label">
                   반경:{' '}
                   <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
@@ -899,14 +900,14 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
                 />
               </div>
             ) : (
-              <div>
+              <div className="filter-grid-amount">
                 <label className="filter-label">
                   월 총 {config.label} 금액 구간:{' '}
                   <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
                     {formatKRW(minAmount)}원 ~ {formatKRW(maxAmount)}원
                   </span>
                 </label>
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', minWidth: 0 }}>
                   <input
                     type="range"
                     min={0}
@@ -916,7 +917,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
                     onChange={(e) =>
                       setMinAmount(Math.min(Number(e.target.value), maxAmount))
                     }
-                    style={{ flex: 1, accentColor: config.accentColor }}
+                    style={{ flex: 1, minWidth: 0, width: '100%', accentColor: config.accentColor }}
                   />
                   <input
                     type="range"
@@ -927,7 +928,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
                     onChange={(e) =>
                       setMaxAmount(Math.max(Number(e.target.value), minAmount))
                     }
-                    style={{ flex: 1, accentColor: config.accentColor }}
+                    style={{ flex: 1, minWidth: 0, width: '100%', accentColor: config.accentColor }}
                   />
                 </div>
               </div>
@@ -935,9 +936,9 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
           </div>
         </div>
 
-        <div className="card" style={{ marginTop: '24px' }}>
+        <div className="card public-users-card" style={{ marginTop: '24px' }}>
           <div className="card-header-row">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
               <div
                 style={{
                   width: '36px',
@@ -948,6 +949,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  flexShrink: 0,
                 }}
               >
                 <Users size={18} />
