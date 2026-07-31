@@ -21,6 +21,7 @@ import { authApi, notificationApi, setAuthExpiredHandler, tokenStorage, userApi 
 import { useNotificationSync } from './hooks/useNotificationSync';
 import { clearMyUserIdCache } from './lib/boardApi';
 import { Construction } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 
 type BoardMode = 'list' | 'detail' | 'write' | 'my';
 
@@ -53,6 +54,7 @@ function App() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => tokenStorage.hasToken());
   const [needsSocialProfileSetup, setNeedsSocialProfileSetup] = useState(false);
   const [activeTab, setActiveTab] = useState<string>(readTabFromUrl);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const [knowhowMode, setKnowhowMode] = useState<BoardMode>('list');
   const [knowhowPostId, setKnowhowPostId] = useState<number | null>(null);
@@ -71,6 +73,12 @@ function App() {
     if (result.ok && result.data !== null) {
       setUnreadNotificationCount(result.data);
     }
+  }, []);
+
+  useEffect(() => {
+    const native = Capacitor.isNativePlatform();
+    document.body.classList.toggle('is-native', native);
+    document.body.classList.toggle('is-web', !native);
   }, []);
 
   useEffect(() => {
@@ -161,6 +169,7 @@ function App() {
     setQnaMode('list');
     setQnaPostId(null);
     setGroupBuyFocusId(options?.groupPurchaseId ?? null);
+    setDrawerOpen(false);
   };
 
   const goToCategorySettings = () => {
@@ -408,7 +417,13 @@ function App() {
   return (
     <div className="app-layout">
       {/* Sidebar Navigation */}
-      <Sidebar activeTab={activeTab} setActiveTab={handleTabChange} onLogout={handleLogout} />
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={handleTabChange}
+        onLogout={handleLogout}
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+      />
 
       {/* Main Container */}
       <div className="main-container">
@@ -416,6 +431,7 @@ function App() {
         <Header
           unreadCount={unreadNotificationCount}
           onOpenNotifications={() => handleTabChange('notifications')}
+          onOpenDrawer={() => setDrawerOpen(true)}
         />
 
         {/* Dashboard Content */}

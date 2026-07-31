@@ -492,9 +492,9 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
       </div>
 
       <div
+        className="notif-summary-grid"
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
           gap: '16px',
           marginBottom: '24px'
         }}
