@@ -15,6 +15,7 @@ import { NotificationView } from './components/NotificationView';
 import { BudgetView } from './components/BudgetView';
 import { AssetView, type AssetActiveSection } from './components/AssetView';
 import { LoginView } from './components/LoginView';
+import { SocialSignupCompleteView } from './components/SocialSignupCompleteView';
 import { MyPageView } from './components/MyPageView';
 import { authApi, notificationApi, setAuthExpiredHandler, tokenStorage, userApi } from './api';
 import { useNotificationSync } from './hooks/useNotificationSync';
@@ -50,6 +51,7 @@ function writeTabToUrl(tab: string) {
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => tokenStorage.hasToken());
+  const [needsSocialProfileSetup, setNeedsSocialProfileSetup] = useState(false);
   const [activeTab, setActiveTab] = useState<string>(readTabFromUrl);
 
   const [knowhowMode, setKnowhowMode] = useState<BoardMode>('list');
@@ -106,6 +108,9 @@ function App() {
         const rememberMe = tokenStorage.consumePendingRememberMe() ?? true;
         tokenStorage.setTokens(accessToken, refreshToken, 'social-login', rememberMe);
         setIsLoggedIn(true);
+        if (params.get('isNewUser') === 'true') {
+          setNeedsSocialProfileSetup(true);
+        }
         refreshUnreadCount();
       }
       window.history.replaceState({}, document.title, '/');
@@ -390,6 +395,14 @@ function App() {
 
   if (!isLoggedIn) {
     return <LoginView onLoginSuccess={() => setIsLoggedIn(true)} />;
+  }
+
+  if (needsSocialProfileSetup) {
+    return (
+      <SocialSignupCompleteView
+        onComplete={() => setNeedsSocialProfileSetup(false)}
+      />
+    );
   }
 
   return (

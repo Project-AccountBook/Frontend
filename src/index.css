@@ -375,6 +375,19 @@ a {
   background: #f8fafc;
 }
 
+.budget-detail-table-wrap .custom-table tfoot tr.budget-detail-total-row td {
+  border-top: 2px solid var(--border);
+  background: #f8fafc;
+  font-weight: 700;
+  color: var(--text-primary);
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.budget-detail-table-wrap .custom-table tfoot tr.budget-detail-total-row td:first-child {
+  color: var(--text-secondary);
+}
+
 /* Progress bar */
 .progress-bar-container {
   width: 100%;
