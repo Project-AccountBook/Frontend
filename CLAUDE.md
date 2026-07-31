@@ -2,22 +2,38 @@
 
 기존 React + Vite 웹앱을 Capacitor 로 iOS/Android 앱으로 배포하기 위한 실전 순서.
 
-## 진행 상태
+## 진행 상태 (2026-07-31 기준)
 
+### 완료
 - ✅ 1. Capacitor 설치 & 초기화
 - ✅ 2. 네이티브 플랫폼 추가 (iOS/Android)
-- ✅ 3. 개발 워크플로우 (스크립트 정리 완료)
-- ✅ 4. `package.json` 스크립트
-- ✅ 5. 필수 플러그인 설치 (9종) + `npx cap sync`
-- ⏳ 5-1. 토큰 저장소 안전화 (Preferences 어댑터) — 미착수
-- ⏳ 5-2. FCM 푸시 알림 — 미착수 (Firebase Console 설정 필요)
-- ⏳ 5-3. 이미지 업로드 (Camera 플러그인 연동) — 미착수
-- ⏳ 6. OAuth2 딥링크 — 미착수
-- ✅ 7. CORS (백엔드) — `capacitor://localhost`, `http://localhost` 허용 추가
-- ⏳ 8. 스플래시 & 아이콘 — 미착수 (소스 이미지 필요)
-- ⏳ 9. 반응형·안전영역 — 미착수
-- ⏳ 10. 배포 (TestFlight / Play Console) — 미착수
-- ⏳ 11. 릴리즈 후 업데이트 전략 — 미착수
+- ✅ 3. 개발 워크플로우 스크립트
+- ✅ 4. `package.json` 스크립트 (`app:sync`, `app:ios`, `app:android`)
+- ✅ 5. 필수 플러그인 9종 설치 + `npx cap sync`
+- ✅ 7. CORS (백엔드) — `capacitor://localhost`, `http://localhost` 허용
+- ✅ 9. 반응형·안전영역 — `viewport-fit=cover` + `env(safe-area-inset-*)` 로 노치/홈 인디케이터 대응
+- ✅ **웹/앱 UI 분리** — `Capacitor.isNativePlatform()` 기반 `is-native`/`is-web` body 클래스 부여. CSS 에서 `.is-native` 셀렉터로 앱 전용 스타일 적용 (창 크기 무관)
+- ✅ **사이드바 → 드로어 UI** — 앱에서 사이드바를 fixed off-screen 으로 두고 헤더의 MODI 로고 버튼 탭 시 슬라이드-인. 백드롭 오버레이·자동 닫기 지원
+- ✅ **iOS 시뮬레이터 빌드·실행 검증** (iPhone 17 Pro, xcodebuild + SPM)
+- ✅ **로그인 · JWT 인증 흐름 검증** (앱에서 실제 로그인 성공)
+- ✅ **모바일 UI 튜닝** (하위 태스크):
+  - 자산 비교 탭: 헤더 세로 스택+중앙 정렬, 필터 select `-webkit-appearance:none` + 커스텀 화살표 (년/월 렌더 이슈 해결), 금액 슬라이더 카드 안 가둠, 공개 사용자 카드 헤더 세로 스택, 평균 비교 카드 전체 콘텐츠 중앙정렬 + 카드 폭 통일
+  - 예산 관리 탭: `budget-header-actions` 중앙 정렬, `CompactStat` 폰트/패딩 축소 (계획합계·실제지출 한 줄)
+  - Q&A · 노하우 탭: HOT 게시글 그리드 앱에서 1열 스택, 게시글 카드 2열 → 1열, 페이지 헤더 아이콘 제거 + 타이틀 정중앙
+  - 알림 탭: 상단 3열 요약 → 1열
+  - 공통: `.card` padding 24→16, 좌우 여백 32→12, `dashboard-view-header` 세로 스택 + 중앙 정렬
+
+### 미착수 (배포 크리티컬 패스)
+- ⏳ **5-1. 토큰 저장소 안전화** — 현재 웹뷰 localStorage 그대로 사용 중. `Preferences` 어댑터로 감싸는 async 리팩터 필요 (호출부: `tokenStorage.ts`, `client.ts`, `LoginView.tsx`, `App.tsx` 초기 부팅 렌더링 순서 조정). **배포 전 필수** (앱 삭제 시 세션 유실 방지, 백업 노출 방지)
+- ⏳ **5-2. FCM 푸시 알림** — 백엔드 인프라 존재. 앱에서 `PushNotifications.register()` + `GoogleService-Info.plist` / `google-services.json` 발급 + Firebase Console + Xcode Capability 설정 필요
+- ⏳ **5-3. 이미지 업로드 (Camera 플러그인)** — `KnowhowWriteView`, `QnaWriteView` 등에서 `Camera.getPhoto()` 로 대체
+- ⏳ **6. OAuth2 딥링크** — 카카오/구글 로그인 앱 지원용. 커스텀 스킴 `com.jointliving.app://oauth2/redirect` 를 Info.plist / AndroidManifest.xml / 각 OAuth 콘솔 / Spring Security whitelist 에 등록 필요
+- ⏳ **8. 스플래시 & 아이콘** — 현재 Capacitor 기본. MODI 로고로 교체 필요 (`resources/icon.png` 1024², `resources/splash.png` 2732²)
+- ⏳ **10. 배포** — Apple Developer ($99/년) + Play Console ($25) 계정 필요. TestFlight / Play 내부테스트 트랙 업로드
+- ⏳ **11. OTA 업데이트** — Optional. `@capgo/capacitor-updater` 등
+
+### 개발 진행률: 약 50%
+"쓸 만한 앱 배포"까지 남은 크리티컬 패스: **토큰저장소 → OAuth 딥링크 → 아이콘 → TestFlight 업로드** (약 3~5일 예상)
 
 
 ## 사전 준비물
