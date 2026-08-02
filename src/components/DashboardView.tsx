@@ -16,6 +16,7 @@ import {
   mapGoalProgressFromApi
 } from '../lib/accountGoalStorage';
 import type {
+  BudgetResponse,
   BudgetSummaryResponse,
   CategoryAmountResponse,
   DashboardResponse,
@@ -32,11 +33,15 @@ interface CategoryData {
   color: string;
 }
 
-interface SubCategoryItem {
-  name: string;
-  percent: number;
-  value: number;
-  color: string;
+interface BudgetVsActualItem {
+  categoryId: number;
+  categoryName: string;
+  categoryArchived?: boolean;
+  planned: number;
+  actual: number;
+  remaining: number;
+  progress: number;
+  status: 'over' | 'warning' | 'ok';
 }
 
 interface MonthlyFlowRow {
@@ -50,7 +55,11 @@ interface MonthlyFlowRow {
 interface DashboardViewProps {
   onViewAllGroupBuys?: () => void;
   onGoToGoalSettings?: () => void;
+  onGoToBudget?: () => void;
 }
+
+const BUDGET_VS_ACTUAL_LIMIT = 5;
+const BUDGET_WARNING_THRESHOLD = 85;
 
 const DASHBOARD_GROUP_BUY_LIMIT = 3;
 const MONTHLY_FLOW_CHART_SLOTS = 6;
@@ -140,6 +149,66 @@ function buildTransferCategoryItems(transactions: TransactionResponse[]): { name
   return Array.from(map.entries())
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value);
+}
+
+function formatCategoryDisplayName(name: string, archived?: boolean) {
+  return archived ? `${name} (보관됨)` : name;
+}
+
+function mapBudgetVsActualItems(budgets: BudgetResponse[]): BudgetVsActualItem[] {
+  return budgets
+    .map((item) => {
+      const planned = toNumber(item.totalPlannedBudget);
+      const actual = toNumber(item.actualExpense);
+      const remaining = toNumber(item.remainingBudget);
+      const progress =
+        item.progress != null
+          ? Math.round(toNumber(item.progress))
+          : planned > 0
+            ? Math.round((actual / planned) * 100)
+            : 0;
+      const status: BudgetVsActualItem['status'] =
+        remaining < 0 ? 'over' : progress >= BUDGET_WARNING_THRESHOLD ? 'warning' : 'ok';
+
+      return {
+        categoryId: item.categoryId,
+        categoryName: item.categoryName,
+        categoryArchived: item.categoryArchived,
+        planned,
+        actual,
+        remaining,
+        progress,
+        status
+      };
+    })
+    .filter((item) => item.planned > 0)
+    .sort((a, b) => {
+      if (a.status === 'over' && b.status !== 'over') return -1;
+      if (a.status !== 'over' && b.status === 'over') return 1;
+      if (a.status === 'over' && b.status === 'over') {
+        return a.remaining - b.remaining;
+      }
+      return b.progress - a.progress;
+    })
+    .slice(0, BUDGET_VS_ACTUAL_LIMIT);
+}
+
+function budgetStatusLabel(status: BudgetVsActualItem['status']) {
+  if (status === 'over') return '초과';
+  if (status === 'warning') return '주의';
+  return '여유';
+}
+
+function budgetStatusColor(status: BudgetVsActualItem['status']) {
+  if (status === 'over') return 'var(--red)';
+  if (status === 'warning') return '#ea580c';
+  return 'var(--green)';
+}
+
+function budgetBarColor(status: BudgetVsActualItem['status']) {
+  if (status === 'over') return 'var(--red)';
+  if (status === 'warning') return '#f59e0b';
+  return 'var(--blue)';
 }
 
 function buildMonthlyFlowRows(trends: DashboardResponse['trends']): MonthlyFlowRow[] {
@@ -269,11 +338,11 @@ function buildFallbackDashboard(
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   onViewAllGroupBuys,
-  onGoToGoalSettings
+  onGoToGoalSettings,
+  onGoToBudget
 }) => {
   const [activeCategoryTab, setActiveCategoryTab] = useState('지출');
   const [hoveredDonutSlice, setHoveredDonutSlice] = useState<number | null>(null);
-  const [hoveredSubSlice, setHoveredSubSlice] = useState<number | null>(null);
   const [selectedDate, setSelectedDate] = useState(() => new Date());
 
   const [loading, setLoading] = useState(true);
@@ -282,6 +351,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [portfolio, setPortfolio] = useState<MyPortfolioResponse | null>(null);
   const [prevPortfolio, setPrevPortfolio] = useState<MyPortfolioResponse | null>(null);
   const [accounts, setAccounts] = useState<AccountResponse[]>([]);
+  const [budgetItems, setBudgetItems] = useState<BudgetResponse[]>([]);
   const [loadWarning, setLoadWarning] = useState<string | null>(null);
   const [chartTooltip, setChartTooltip] = useState<ChartTooltipState | null>(null);
   const [hoveredFlowIndex, setHoveredFlowIndex] = useState<number | null>(null);
@@ -303,6 +373,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       setLoading(true);
       setError(null);
       setLoadWarning(null);
+      setBudgetItems([]);
 
       const prevYm = shiftYearMonth(yearMonth, -1);
 
@@ -312,13 +383,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         const monthStart = `${yearMonth}-01`;
         const monthEnd = `${yearMonth}-${String(lastDay).padStart(2, '0')}`;
 
-        const [dashboardRes, portfolioRes, prevPortfolioRes, accounts, txPage] = await Promise.all([
-          dashboardApi.getDashboard(yearMonth),
-          portfolioApi.getMyPortfolio(yearMonth),
-          portfolioApi.getMyPortfolio(prevYm),
-          getAccounts().catch(() => []),
-          fetchAllUserTransactionsInRange(monthStart, monthEnd).catch(() => ({ content: [] }))
-        ]);
+        const [dashboardRes, portfolioRes, prevPortfolioRes, accounts, txPage, budgetStatusRes] =
+          await Promise.all([
+            dashboardApi.getDashboard(yearMonth),
+            portfolioApi.getMyPortfolio(yearMonth),
+            portfolioApi.getMyPortfolio(prevYm),
+            getAccounts().catch(() => []),
+            fetchAllUserTransactionsInRange(monthStart, monthEnd).catch(() => ({ content: [] })),
+            budgetApi
+              .getMonthlyStatus(yearMonth)
+              .catch(() => ({ ok: false as const, status: 0, data: null, error: null }))
+          ]);
 
         if (cancelled) return;
 
@@ -354,6 +429,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         setPortfolio(portfolioRes.data);
         setPrevPortfolio(prevPortfolioRes.ok ? prevPortfolioRes.data : null);
         setAccounts(accounts);
+        setBudgetItems(budgetStatusRes.ok && budgetStatusRes.data ? budgetStatusRes.data : []);
         if (dashboardData.allocation) {
           setMonthlyAllocation(mapDashboardAllocation(dashboardData.allocation));
         }
@@ -496,24 +572,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     };
   }, [dashboard, expenseCategoryItems, incomeCategoryItems, transferCategoryItems]);
 
-  const subCategories: SubCategoryItem[] = useMemo(() => {
-    const topFive = dashboard?.categoryExpenses
-      ? Object.entries(dashboard.categoryExpenses)
-          .map(([name, value]) => ({ name, value: Math.abs(toNumber(value)) }))
-          .sort((a, b) => b.value - a.value)
-          .slice(0, 5)
-      : expenseCategoryItems.slice(0, 5);
+  const budgetVsActualItems = useMemo(
+    () => mapBudgetVsActualItems(budgetItems),
+    [budgetItems]
+  );
 
-    const total = topFive.reduce((acc, item) => acc + item.value, 0);
-    if (total <= 0) return [];
-
-    return topFive.map((item, index) => ({
-      name: item.name,
-      percent: Math.round((item.value / total) * 100),
-      value: item.value,
-      color: CATEGORY_COLORS[index % CATEGORY_COLORS.length]
-    }));
-  }, [dashboard, expenseCategoryItems]);
+  const overBudgetCount = useMemo(
+    () => budgetItems.filter((item) => toNumber(item.totalPlannedBudget) > 0 && toNumber(item.remainingBudget) < 0).length,
+    [budgetItems]
+  );
 
   const monthlyFlowData = useMemo(
     () => buildMonthlyFlowRows(dashboard?.trends ?? []),
@@ -569,9 +636,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   let accumulatedPercent = 0;
   const radius = 35;
   const circumference = 2 * Math.PI * radius;
-
-  const totalSubVal = subCategories.reduce((acc, curr) => acc + curr.value, 0);
-  let accumulatedSubPercent = 0;
 
   if (loading) {
     return (
@@ -756,74 +820,72 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <div className="card">
             <div className="card-header-row">
-              <span className="card-title">지출 카테고리 상세 (상위 5개)</span>
+              <span className="card-title">예산 현황</span>
+              <span className="stat-label">
+                {overBudgetCount > 0 ? `${overBudgetCount}개 초과` : '카테고리별 소진율'}
+              </span>
             </div>
 
-            {subCategories.length === 0 ? (
-              <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>
-                지출 카테고리 데이터가 없습니다.
+            {budgetVsActualItems.length === 0 ? (
+              <div className="goal-empty-state">
+                <p>이번 달 설정된 카테고리 예산이 없습니다.</p>
+                <span className="goal-empty-hint">예산 관리에서 카테고리별 예산을 설정하면 소진율을 확인할 수 있습니다.</span>
+                {onGoToBudget && (
+                  <button type="button" className="btn-goal-settings-link" onClick={onGoToBudget}>
+                    예산 설정하기
+                  </button>
+                )}
               </div>
             ) : (
               <>
-                <div className="donut-chart-container">
-                  <svg viewBox="0 0 100 100" width="100%" height="100%">
-                    {subCategories.map((slice, index) => {
-                      const sliceRatio = slice.value / totalSubVal;
-                      const strokeDashoffset = circumference - (accumulatedSubPercent / 100) * circumference;
-                      const strokeDasharray = `${sliceRatio * circumference} ${circumference}`;
-                      const isHovered = hoveredSubSlice === index;
-                      accumulatedSubPercent += sliceRatio * 100;
-
-                      return (
-                        <circle
-                          key={slice.name}
-                          cx="50"
-                          cy="50"
-                          r={radius}
-                          fill="transparent"
-                          stroke={slice.color}
-                          strokeWidth={isHovered ? 14 : 10}
-                          strokeDasharray={strokeDasharray}
-                          strokeDashoffset={strokeDashoffset}
-                          className="donut-segment"
-                          transform="rotate(-90 50 50)"
-                          onMouseEnter={() => setHoveredSubSlice(index)}
-                          onMouseLeave={() => setHoveredSubSlice(null)}
-                        />
-                      );
-                    })}
-                  </svg>
-                  <div className="donut-center-text">
-                    <span className="donut-center-val" style={{ fontSize: '18px' }}>
-                      {hoveredSubSlice !== null ? `${subCategories[hoveredSubSlice].percent}%` : '카테고리'}
-                    </span>
-                    <span className="donut-center-lbl" style={{ fontSize: '10px' }}>
-                      {hoveredSubSlice !== null ? subCategories[hoveredSubSlice].name : '상위 5개 항목'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="chart-legend" style={{ marginTop: '16px' }}>
-                  {subCategories.map((slice, index) => (
-                    <div
-                      key={slice.name}
-                      className="legend-item"
-                      style={{
-                        backgroundColor: hoveredSubSlice === index ? '#f1f5f9' : 'transparent',
-                        padding: '6px 10px'
-                      }}
-                      onMouseEnter={() => setHoveredSubSlice(index)}
-                      onMouseLeave={() => setHoveredSubSlice(null)}
-                    >
-                      <div className="legend-dot-label">
-                        <div className="legend-dot" style={{ backgroundColor: slice.color }} />
-                        <span className="legend-name" style={{ fontSize: '12px' }}>{slice.name}</span>
-                        <span className="legend-percent" style={{ fontSize: '12px' }}>{slice.percent}%</span>
+                <div className="asset-progress-list budget-vs-list">
+                  {budgetVsActualItems.map((item) => (
+                    <div key={item.categoryId} className="asset-progress-item">
+                      <div className="asset-progress-header">
+                        <div className="budget-vs-title-row">
+                          <span className="asset-progress-name">
+                            {formatCategoryDisplayName(item.categoryName, item.categoryArchived)}
+                          </span>
+                          <span
+                            className={`budget-vs-badge budget-vs-badge--${item.status}`}
+                          >
+                            {budgetStatusLabel(item.status)}
+                          </span>
+                        </div>
+                        <span
+                          className="asset-progress-val"
+                          style={{ color: budgetStatusColor(item.status) }}
+                        >
+                          {item.progress}%
+                        </span>
                       </div>
-                      <span className="legend-val" style={{ fontSize: '12px' }}>{formatKRW(slice.value)}</span>
+                      <div className="progress-bar-container">
+                        <div
+                          className="progress-bar-fill"
+                          style={{
+                            width: `${Math.min(100, Math.max(item.progress, item.actual > 0 ? 4 : 0))}%`,
+                            backgroundColor: budgetBarColor(item.status)
+                          }}
+                        />
+                      </div>
+                      <div className="budget-vs-meta">
+                        <span>
+                          {formatKRW(item.actual)}원 / {formatKRW(item.planned)}원
+                        </span>
+                        <span style={{ color: budgetStatusColor(item.status) }}>
+                          {item.status === 'over'
+                            ? `${formatKRW(Math.abs(item.remaining))}원 초과`
+                            : `${formatKRW(item.remaining)}원 남음`}
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>
+                {onGoToBudget && (
+                  <button type="button" className="btn-goal-settings-link subtle" onClick={onGoToBudget}>
+                    예산 관리 보기
+                  </button>
+                )}
               </>
             )}
           </div>

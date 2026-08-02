@@ -287,6 +287,7 @@ function App() {
           <DashboardView
             onViewAllGroupBuys={() => handleTabChange('groupbuy')}
             onGoToGoalSettings={goToGoalSettings}
+            onGoToBudget={() => handleTabChange('budget')}
           />
         );
       case 'history':
