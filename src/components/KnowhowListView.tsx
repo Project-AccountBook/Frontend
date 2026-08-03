@@ -3,7 +3,6 @@ import {
   Search,
   PenSquare,
   Eye,
-  Lightbulb,
   TrendingUp,
   Clock,
   ChevronLeft,
@@ -139,36 +138,20 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
   return (
     <div className="fade-in">
       <div className="dashboard-view-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div
+        <div style={{ textAlign: 'center', width: '100%' }}>
+          <h1
             style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '10px',
-              background: 'var(--blue-bg)',
-              color: 'var(--blue)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
+              fontSize: '22px',
+              fontWeight: '800',
+              color: 'var(--text-primary)',
+              letterSpacing: '-0.5px'
             }}
           >
-            <Lightbulb size={20} />
-          </div>
-          <div>
-            <h1
-              style={{
-                fontSize: '22px',
-                fontWeight: '800',
-                color: 'var(--text-primary)',
-                letterSpacing: '-0.5px'
-              }}
-            >
-              노하우 공유
-            </h1>
-            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-              엄마들의 살림·재테크·육아 노하우를 나눠보세요
-            </p>
-          </div>
+            노하우 공유
+          </h1>
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+            엄마들의 살림·재테크·육아 노하우를 나눠보세요
+          </p>
         </div>
 
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -197,9 +180,9 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
             <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>최근 7일</span>
           </div>
           <div
+            className="hot-post-grid"
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
               gap: '12px'
             }}
           >
@@ -395,9 +378,9 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
         </div>
       ) : (
         <div
+          className="board-card-grid"
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
             gap: '20px'
           }}
         >

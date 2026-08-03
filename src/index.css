@@ -375,6 +375,19 @@ a {
   background: #f8fafc;
 }
 
+.budget-detail-table-wrap .custom-table tfoot tr.budget-detail-total-row td {
+  border-top: 2px solid var(--border);
+  background: #f8fafc;
+  font-weight: 700;
+  color: var(--text-primary);
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.budget-detail-table-wrap .custom-table tfoot tr.budget-detail-total-row td:first-child {
+  color: var(--text-secondary);
+}
+
 /* Progress bar */
 .progress-bar-container {
   width: 100%;
@@ -690,6 +703,39 @@ a {
   z-index: 100;
 }
 
+/* Mobile drawer — native app only */
+.sidebar-backdrop {
+  display: none;
+}
+
+.is-native .sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  padding-top: calc(24px + env(safe-area-inset-top));
+  transform: translateX(-100%);
+  transition: transform 220ms ease;
+  box-shadow: 4px 0 24px rgba(15, 23, 42, 0.12);
+}
+.is-native .sidebar.open {
+  transform: translateX(0);
+}
+.is-native .sidebar-backdrop {
+  display: block;
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  z-index: 99;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease;
+}
+.is-native .sidebar-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .sidebar-logo {
   display: flex;
   align-items: center;
@@ -788,6 +834,262 @@ a {
   gap: 16px;
   margin-left: auto;
   margin-right: 130px;
+}
+
+.header-logo-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  border-radius: 10px;
+  background: transparent;
+  border: none;
+  padding: 4px 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.header-logo-btn img {
+  display: block;
+  height: 24px;
+  width: auto;
+  object-fit: contain;
+}
+
+/* Native app: 상단 안전영역(노치) 아래로 헤더 내리기 + 로고 버튼 노출 */
+.is-native .header {
+  padding: 0 16px;
+  padding-top: env(safe-area-inset-top);
+  height: calc(70px + env(safe-area-inset-top));
+}
+.is-native .header-logo-btn {
+  display: inline-flex;
+}
+.is-native .header-right {
+  margin-right: 0;
+}
+.is-native .header-status-badge {
+  display: none;
+}
+
+/* Native app: 콘텐츠 하단 안전영역(홈 인디케이터) 대응 */
+.is-native .dashboard-content {
+  padding-bottom: calc(32px + env(safe-area-inset-bottom));
+  padding-left: 12px;
+  padding-right: 12px;
+}
+/* Native app: 카드 여백 축소로 화면 활용도 향상 */
+.is-native .card {
+  padding: 16px;
+}
+
+/* Native app: 상단 헤더(탭/필터) 세로 스택 + 중앙 정렬 */
+.is-native .dashboard-view-header {
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+.is-native .dashboard-view-header > * {
+  width: 100%;
+  justify-content: center;
+}
+.is-native .dashboard-view-header h1,
+.is-native .dashboard-view-header p {
+  text-align: center;
+}
+.is-native .dashboard-view-tabs {
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+.is-native .dashboard-tab-btn {
+  padding: 6px 10px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.is-native .dashboard-date-selector {
+  padding: 6px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.is-native .sub-tabs-container {
+  margin-left: auto;
+  margin-right: auto;
+  flex-wrap: nowrap;
+  max-width: 100%;
+}
+.is-native .sub-tab-btn {
+  padding: 6px 12px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* Native app: stat-card 내용 중앙 정렬 */
+.is-native .stat-card {
+  text-align: center;
+}
+.is-native .stat-card .card-header-row {
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.is-native .stat-card .icon-wrapper {
+  margin-bottom: 0;
+}
+
+/* CompactStat 기본 (웹) */
+.compact-stat-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.compact-stat-value {
+  font-size: 20px;
+  font-weight: 800;
+}
+.compact-stat-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 6px;
+  font-weight: 500;
+}
+
+/* Native app: 예산 헤더 액션 및 CompactStat 축소 */
+.is-native .budget-header-actions {
+  justify-content: center;
+  width: 100%;
+}
+.is-native .compact-stat-label {
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.is-native .compact-stat-value {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.is-native .compact-stat-sub {
+  font-size: 10px;
+}
+.is-native .compact-stat {
+  padding: 12px 10px !important;
+}
+.is-native .compact-stat-header {
+  margin-bottom: 6px !important;
+}
+
+/* 자산 비교: 1열 grid 에서 span 2 인라인 스타일 무효화하여 모든 카드 동일 폭 */
+.is-native .dashboard-grid-3 > .card {
+  grid-column: 1 / -1 !important;
+}
+
+/* Q&A / 노하우 게시글 카드 그리드 - 웹 2열, 앱 1열 */
+.board-card-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.is-native .board-card-grid {
+  grid-template-columns: 1fr;
+}
+
+/* HOT 게시글 - 웹 3열, 앱 1열 */
+.hot-post-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.is-native .hot-post-grid {
+  grid-template-columns: 1fr;
+}
+
+/* 알림 요약 - 웹 3열, 앱 1열 */
+.notif-summary-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.is-native .notif-summary-grid {
+  grid-template-columns: 1fr;
+}
+
+/* 자산 비교: 평균 비교 카드 전체 콘텐츠 중앙 정렬 */
+.is-native .comparison-avg-card {
+  text-align: center;
+}
+.is-native .comparison-avg-card .card-header-row {
+  justify-content: center;
+}
+.is-native .comparison-avg-card .asset-progress-header {
+  justify-content: center;
+  gap: 12px;
+}
+
+/* 자산 비교: 공개 예산 필터 - 연도/월 select 압축 + iOS 네이티브 렌더링 제거 */
+.is-native .filter-select {
+  -webkit-appearance: none;
+  appearance: none;
+  padding: 0 24px 0 8px;
+  font-size: 12px;
+  font-family: var(--font-sans);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%2364748b' d='M5 6L0 0h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+}
+
+/* 자산 비교: 금액 구간 라벨의 값 부분을 새 줄로 이동, 카드 밖 방지 */
+.is-native .filter-label {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.is-native .filter-label span {
+  display: block;
+  margin-top: 4px;
+  word-break: break-all;
+  font-size: 11px;
+}
+
+/* 자산 비교: 공개 사용자 월 총 예산 카드 - 한 줄에 맞도록 축소 */
+.is-native .public-user-budget-lbl {
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.is-native .public-user-budget-val {
+  font-size: 14px;
+  white-space: nowrap;
+}
+.is-native .public-user-budget-row {
+  gap: 8px;
+}
+
+/* 자산 비교: 필터 그리드 - 네이티브에서 연도/월 두 열 + 금액 구간 아래로 스택 */
+.is-native .filter-grid {
+  grid-template-columns: 1fr 1fr !important;
+}
+.is-native .filter-grid-amount {
+  grid-column: 1 / -1;
+  min-width: 0;
+  overflow: hidden;
+}
+.is-native .filter-grid-amount input[type='range'] {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* 자산 비교: 공개 사용자 카드 헤더 - 세로 스택 + 한글 단어 경계 보존 */
+.is-native .public-users-card .card-header-row {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.is-native .public-users-card .card-title {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  font-size: 14px;
+}
+.is-native .public-users-card .stat-label {
+  font-size: 11px;
 }
 
 .header-icon-btn {
