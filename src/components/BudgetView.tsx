@@ -671,7 +671,7 @@ const CategoryProgressCard: React.FC<{
             </span>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '6px' }}>
+          <div className="budget-amount-row">
             <AmountCell label="지출" value={item.actualExpense} />
             <AmountCell label="예산" value={item.totalPlannedBudget} />
             <AmountCell
@@ -1967,13 +1967,7 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
             </span>
           )}
         </div>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-            gap: '12px'
-          }}
-        >
+        <div className="budget-summary-grid">
           <CompactStat
             label="계획 합계"
             value={`${formatKRW(summaryValues.totalPlannedBudgetSum)}원`}
@@ -2228,13 +2222,7 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
               </div>
             )}
             {categoryViewMode === 'graph' ? (
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
-                  gap: '12px'
-                }}
-              >
+              <div className="budget-category-grid">
                 {filtered.map((item) => (
                   <CategoryProgressCard
                     key={item.id}

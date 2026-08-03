@@ -343,6 +343,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const [activeCategoryTab, setActiveCategoryTab] = useState('지출');
   const [hoveredDonutSlice, setHoveredDonutSlice] = useState<number | null>(null);
+  const [mobileSection, setMobileSection] = useState<'analysis' | 'goals' | 'groupbuy'>('analysis');
   const [selectedDate, setSelectedDate] = useState(() => new Date());
 
   const [loading, setLoading] = useState(true);
@@ -654,7 +655,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   }
 
   return (
-    <div className="fade-in">
+    <div className="fade-in dashboard-page">
       <div className="dashboard-view-header">
         <MonthYearNavigator date={selectedDate} onDateChange={setSelectedDate} />
       </div>
@@ -725,8 +726,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
+      <div className="dashboard-body" data-mobile-section={mobileSection}>
+        <nav className="dashboard-mobile-tabs" aria-label="대시보드 섹션">
+          {(
+            [
+              { id: 'analysis' as const, label: '분석' },
+              { id: 'goals' as const, label: '목표·자산' },
+              { id: 'groupbuy' as const, label: '공동구매' }
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={`dashboard-mobile-tab ${mobileSection === tab.id ? 'active' : ''}`}
+              onClick={() => setMobileSection(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+
       <div className="dashboard-grid-3">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div className="dashboard-col dashboard-section dashboard-section--analysis">
           <div className="card">
             <div className="card-header-row">
               <span className="card-title">카테고리 비율</span>
@@ -891,7 +912,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div className="dashboard-col dashboard-section dashboard-section--analysis">
           <div className="card">
             <div className="card-header-row">
               <span className="card-title">월별 현금흐름 분석</span>
@@ -1016,7 +1037,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div className="dashboard-col dashboard-section dashboard-section--goals">
           <div className="card">
             <div className="card-header-row">
               <span className="card-title">목표 달성률</span>
@@ -1150,10 +1171,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: '24px' }}>
+      <div className="card dashboard-section dashboard-section--groupbuy dashboard-groupbuy-card">
         <div className="card-header-row">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#eff6ff', color: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="dashboard-groupbuy-title-wrap">
+            <div className="dashboard-groupbuy-icon">
               <ShoppingBag size={18} />
             </div>
             <span className="card-title">동네 공동구매 현황</span>
@@ -1161,7 +1182,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <button
             type="button"
             onClick={onViewAllGroupBuys}
-            style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', fontWeight: '600', color: 'var(--text-secondary)', background: '#f8fafc', border: '1px solid var(--border)', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer' }}
+            className="dashboard-groupbuy-more-btn"
           >
             <span>전체보기</span>
             <ArrowUpRight size={14} />
@@ -1169,11 +1190,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {groupBuyLoading ? (
-          <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>
+          <div className="dashboard-empty-inline">
             공동구매 현황을 불러오는 중…
           </div>
         ) : groupBuys.length === 0 ? (
-          <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>
+          <div className="dashboard-empty-inline">
             진행 중인 동네 공동구매가 없습니다.
           </div>
         ) : (
@@ -1205,6 +1226,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           ))}
         </div>
         )}
+      </div>
       </div>
     </div>
   );

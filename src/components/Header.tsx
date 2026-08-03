@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bell } from 'lucide-react';
+import { Bell, Menu } from 'lucide-react';
 import modiLogo from '../assets/modi-logo.png';
 
 interface HeaderProps {
@@ -18,16 +18,20 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="header-left">
         <button
           type="button"
-          className="header-logo-btn"
+          className="header-menu-btn"
           aria-label="메뉴 열기"
           onClick={onOpenDrawer}
         >
-          <img src={modiLogo} alt="MODI" />
+          <Menu size={22} strokeWidth={2.25} />
         </button>
         <div className="header-status-badge">
           <span className="pulsing-dot"></span>
           <span>가계부 접속중</span>
         </div>
+      </div>
+
+      <div className="header-brand" aria-hidden="false">
+        <img src={modiLogo} alt="MODI" className="header-brand-logo" />
       </div>
 
       <div className="header-right">

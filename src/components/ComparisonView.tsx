@@ -842,15 +842,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
             )}
           </div>
 
-          <div
-            className="filter-grid"
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr 2fr',
-              gap: '16px',
-              alignItems: 'end',
-            }}
-          >
+          <div className="filter-grid filter-grid-3">
             <div>
               <label className="filter-label">연도</label>
               <select
@@ -1578,12 +1570,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
           </div>
 
           <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: locationMode ? '1fr 1fr 2fr' : '1fr 1fr 1fr 2fr',
-              gap: '16px',
-              alignItems: 'end',
-            }}
+            className={`filter-grid ${locationMode ? 'filter-grid-3' : 'filter-grid-4'}`}
           >
             <div>
               <label className="filter-label">연도</label>
@@ -1616,7 +1603,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
             </div>
 
             {locationMode ? (
-              <div>
+              <div className="filter-grid-amount">
                 <label className="filter-label">
                   반경:{' '}
                   <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
@@ -1651,7 +1638,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
                   </select>
                 </div>
 
-                <div>
+                <div className="filter-grid-amount">
                   <label className="filter-label">
                     월 총 {METRIC_CONFIGS[overallFilterMetric].label} 금액 구간:{' '}
                     <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
