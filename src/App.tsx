@@ -82,6 +82,15 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const mq = window.matchMedia('(max-width: 1100px)');
+    const onChange = () => {
+      if (!mq.matches) setDrawerOpen(false);
+    };
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  useEffect(() => {
     setAuthExpiredHandler(() => {
       setIsLoggedIn(false);
       setActiveTab('dashboard');
@@ -287,6 +296,7 @@ function App() {
           <DashboardView
             onViewAllGroupBuys={() => handleTabChange('groupbuy')}
             onGoToGoalSettings={goToGoalSettings}
+            onGoToBudget={() => handleTabChange('budget')}
           />
         );
       case 'history':

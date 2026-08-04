@@ -1433,7 +1433,7 @@ export const GroupBuyView: React.FC<{
               <h3>공동구매 글쓰기</h3>
               <X size={20} className="modal-close-btn" onClick={() => setIsCreateModalOpen(false)} />
             </div>
-            <form onSubmit={handleCreateSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', padding: '20px' }}>
+            <form onSubmit={handleCreateSubmit} className="groupbuy-create-form">
               {/* 왼쪽 단 */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div>

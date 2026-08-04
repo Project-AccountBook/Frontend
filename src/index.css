@@ -157,23 +157,317 @@ a {
   gap: 24px;
 }
 
-@media (max-width: 1200px) {
-  .dashboard-grid-3 {
+.dashboard-col {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
+.dashboard-mobile-tabs {
+  display: none;
+}
+
+.dashboard-groupbuy-card {
+  margin-top: 24px;
+}
+
+.dashboard-groupbuy-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dashboard-groupbuy-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #3b82f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.dashboard-groupbuy-more-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.dashboard-groupbuy-more-btn:hover {
+  background: #f1f5f9;
+  color: var(--text-primary);
+}
+
+.dashboard-empty-inline {
+  padding: 28px 12px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+/* 자산 비교 요약 카드: 넓은 화면 3열, 좁으면 2+1 (대시보드형) */
+.comparison-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  margin-top: 24px;
+}
+
+@media (max-width: 1400px) {
+  .comparison-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .comparison-summary-grid > .stat-card:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .comparison-summary-grid > .stat-card {
+    padding: 16px;
+  }
+
+  .comparison-summary-grid > .stat-card .card-header-row {
+    margin-bottom: 8px;
+  }
+
+  .comparison-summary-grid > .stat-card .card-title {
+    font-size: 13px;
+  }
+
+  .comparison-summary-grid > .stat-card .icon-wrapper {
+    width: 34px;
+    height: 34px;
+    margin-bottom: 0;
+  }
+
+  .comparison-summary-grid > .stat-card .icon-wrapper svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .comparison-summary-grid > .stat-card .stat-value {
+    font-size: 20px;
+    overflow-wrap: anywhere;
+  }
+
+  .comparison-summary-grid > .stat-card .stat-label {
+    font-size: 11px;
   }
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1100px) {
+  .comparison-summary-grid {
+    gap: 10px;
+  }
+
+  .comparison-summary-grid > .stat-card {
+    padding: 14px;
+  }
+
+  .comparison-summary-grid > .stat-card .card-title {
+    font-size: 12px;
+  }
+
+  .comparison-summary-grid > .stat-card .stat-value {
+    font-size: 17px;
+  }
+
+  .comparison-summary-grid > .stat-card .stat-label {
+    font-size: 10px;
+  }
+}
+
+/* Sidebar(~260px)를 감안해 뷰포트 기준을 여유 있게 접음 */
+@media (max-width: 1400px) {
   .dashboard-grid-4 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .dashboard-grid-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-grid-4 > .stat-card {
+    padding: 16px;
+  }
+
+  .dashboard-grid-4 > .stat-card .card-header-row {
+    margin-bottom: 8px;
+  }
+
+  .dashboard-grid-4 > .stat-card .card-title {
+    font-size: 13px;
+  }
+
+  .dashboard-grid-4 > .stat-card .icon-wrapper {
+    width: 34px;
+    height: 34px;
+    margin-bottom: 0;
+  }
+
+  .dashboard-grid-4 > .stat-card .icon-wrapper svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .dashboard-grid-4 > .stat-card .stat-value {
+    font-size: 20px;
+    overflow-wrap: anywhere;
+  }
+
+  .dashboard-grid-4 > .stat-card .stat-sub,
+  .dashboard-grid-4 > .stat-card .stat-label {
+    font-size: 11px;
+  }
+
+  .dashboard-grid-3 .card-header-row {
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .bar-chart-stat-val {
+    font-size: 14px;
+    overflow-wrap: anywhere;
+  }
+
+  .bar-chart-stats {
+    padding: 12px;
+  }
+
+  .dashboard-monthly-table th,
+  .dashboard-monthly-table td {
+    padding: 10px 8px;
+    font-size: 12px;
+  }
+
+  .legend-name {
+    overflow-wrap: anywhere;
+  }
+
+  .card:hover {
+    transform: none;
+  }
+}
+
+@media (max-width: 1100px) {
+  .dashboard-grid-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-grid-3 > .dashboard-col > .card,
+  .dashboard-grid-3 > .card {
+    grid-column: auto;
+  }
+}
+
+/*
+ * 좁은 4:3 · 세로 태블릿 / 작은 가로 (≤1100)
+ * → 본문 1열 + 여백 축소
+ * 큰 아이패드 가로(예: 12.9" 1366×1024)는 아래 규칙으로 2열 유지
+ */
+@media (max-aspect-ratio: 4/3) and (max-width: 1100px) {
+  .dashboard-grid-3 {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    margin-top: 16px;
+  }
+
+  .dashboard-col {
+    gap: 16px;
+  }
+
+  .dashboard-grid-4 {
+    gap: 12px;
+  }
+
+  .dashboard-content {
+    padding: 16px 18px 24px;
+  }
+
+  .dashboard-grid-3 .card {
+    padding: 16px;
+  }
+
+  .donut-chart-container {
+    height: 160px;
+  }
+
+  .svg-bar-chart-container {
+    height: 170px;
+  }
+
+  .goal-summary-strip {
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .goal-summary-value {
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+
+  .bar-chart-stats {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .dashboard-view-header {
+    margin-bottom: 16px;
+  }
+}
+
+/*
+ * 큰 태블릿 가로 (아이패드 에어·프로 랜드스케이프 등)
+ * 사이드바를 유지한 채 본문 2열로 화면을 채움
+ */
+@media (min-width: 1101px) and (max-width: 1400px) {
+  .dashboard-grid-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+  }
+
+  .dashboard-col {
+    gap: 18px;
+  }
+
+  .dashboard-content {
+    padding: 20px 24px 28px;
+  }
+
+  .dashboard-grid-3 .card-header-row {
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .bar-chart-stats {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .goal-summary-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 768px) {
-
-  .dashboard-grid-3,
   .dashboard-grid-4 {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
   }
 
   .dashboard-content {
@@ -271,6 +565,8 @@ a {
   font-weight: 800;
   letter-spacing: -0.5px;
   margin-top: 4px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .stat-sub {
@@ -807,12 +1103,14 @@ a {
   justify-content: flex-start;
   padding: 0 32px;
   z-index: 99;
+  position: relative;
 }
 
 .header-left {
   display: flex;
   align-items: center;
   gap: 16px;
+  z-index: 1;
 }
 
 .header-status-badge {
@@ -828,42 +1126,66 @@ a {
   font-weight: 700;
 }
 
+.header-brand {
+  display: none;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.header-brand-logo {
+  display: block;
+  height: 26px;
+  width: auto;
+  object-fit: contain;
+}
+
 .header-right {
   display: flex;
   align-items: center;
   gap: 16px;
   margin-left: auto;
   margin-right: 130px;
+  z-index: 1;
 }
 
-.header-logo-btn {
+.header-menu-btn {
   display: none;
   align-items: center;
   justify-content: center;
+  width: 40px;
   height: 40px;
   border-radius: 10px;
-  background: transparent;
-  border: none;
-  padding: 4px 8px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 0;
   cursor: pointer;
   flex-shrink: 0;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
 }
 
-.header-logo-btn img {
-  display: block;
-  height: 24px;
-  width: auto;
-  object-fit: contain;
+.header-menu-btn:hover {
+  background: var(--border-hover);
+  border-color: var(--border-hover);
 }
 
-/* Native app: 상단 안전영역(노치) 아래로 헤더 내리기 + 로고 버튼 노출 */
+/* Native app: 상단 안전영역(노치) 아래로 헤더 내리기 + 햄버거 메뉴 노출 */
 .is-native .header {
   padding: 0 16px;
   padding-top: env(safe-area-inset-top);
   height: calc(70px + env(safe-area-inset-top));
 }
-.is-native .header-logo-btn {
+.is-native .header-menu-btn {
   display: inline-flex;
+}
+.is-native .header-brand {
+  display: flex;
+  top: calc(env(safe-area-inset-top) + 35px);
 }
 .is-native .header-right {
   margin-right: 0;
@@ -925,18 +1247,31 @@ a {
   white-space: nowrap;
 }
 
-/* Native app: stat-card 내용 중앙 정렬 */
+/* Native app: stat-card 컴팩트 (가시성 유지, 중앙정렬 제거) */
 .is-native .stat-card {
-  text-align: center;
+  padding: 14px;
 }
 .is-native .stat-card .card-header-row {
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 .is-native .stat-card .icon-wrapper {
+  width: 32px;
+  height: 32px;
   margin-bottom: 0;
+}
+.is-native .stat-card .icon-wrapper svg {
+  width: 16px;
+  height: 16px;
+}
+.is-native .stat-value {
+  font-size: 18px;
+}
+.is-native .stat-card .card-title {
+  font-size: 12px;
+}
+.is-native .stat-sub,
+.is-native .stat-card .stat-label {
+  font-size: 11px;
 }
 
 /* CompactStat 기본 (웹) */
@@ -1621,19 +1956,26 @@ a {
 .asset-progress-header {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
   font-size: 12px;
   font-weight: 500;
   color: var(--text-secondary);
+  min-width: 0;
 }
 
 .asset-progress-name {
   font-weight: 600;
   color: var(--text-primary);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .asset-progress-val {
   color: var(--text-primary);
   font-weight: 700;
+  flex-shrink: 0;
+  text-align: right;
 }
 
 /* Dashboard goal achievement (프로토타입) */
@@ -1663,6 +2005,7 @@ a {
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
+  max-width: 100%;
 }
 
 .goal-investment-rate-badge {
@@ -1739,6 +2082,62 @@ a {
   display: flex;
   justify-content: space-between;
   gap: 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+
+.budget-vs-list {
+  margin-bottom: 4px;
+}
+
+.budget-vs-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+  margin-right: 8px;
+}
+
+.budget-vs-title-row .asset-progress-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.budget-vs-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  line-height: 1.4;
+}
+
+.budget-vs-badge--over {
+  background: var(--red-bg);
+  color: var(--red);
+  border: 1px solid var(--red-border);
+}
+
+.budget-vs-badge--warning {
+  background: #fff7ed;
+  color: #ea580c;
+  border: 1px solid #fed7aa;
+}
+
+.budget-vs-badge--ok {
+  background: var(--green-bg);
+  color: var(--green);
+  border: 1px solid var(--green-border);
+}
+
+.budget-vs-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
   font-size: 11px;
   color: var(--text-secondary);
   flex-wrap: wrap;
@@ -2228,6 +2627,59 @@ a {
   color: var(--primary);
   border-bottom-color: var(--primary);
   font-weight: 700;
+}
+
+@media (max-width: 1100px) {
+  .asset-tabs-container {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    overflow: visible;
+    border-bottom: none;
+    padding: 4px;
+    background: #f1f5f9;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+
+  .asset-tab-btn {
+    justify-content: center;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 6px;
+    border-bottom: none;
+    border-radius: 9px;
+    white-space: normal;
+    text-align: center;
+    font-size: 11px;
+    line-height: 1.25;
+    min-width: 0;
+  }
+
+  .asset-tab-btn:hover {
+    border-radius: 9px;
+  }
+
+  .asset-tab-btn.active {
+    background: #ffffff;
+    color: var(--primary);
+    border-bottom-color: transparent;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  }
+
+  .asset-tab-btn svg {
+    flex-shrink: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .asset-tabs-container {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mypage-mobile-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .asset-panel {
@@ -3333,6 +3785,51 @@ a {
   opacity: 0.4;
 }
 
+.mypage-mobile-nav {
+  display: none;
+}
+
+.mypage-mobile-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 6px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  line-height: 1.25;
+  text-align: center;
+  cursor: pointer;
+  min-width: 0;
+  transition: background var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.mypage-mobile-tab span {
+  word-break: keep-all;
+}
+
+.mypage-mobile-tab.active {
+  background: #ffffff;
+  color: var(--blue);
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.mypage-mobile-tab.danger {
+  color: var(--red);
+}
+
+.mypage-mobile-tab.danger.active {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
 /* Panel */
 .mypage-panel {
   background: var(--bg-card);
@@ -4016,6 +4513,7 @@ a {
   padding: 1px 5px;
   width: fit-content;
   max-width: 100%;
+  box-sizing: border-box;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4215,12 +4713,14 @@ a {
 
 .calendar-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 1px;
   background: var(--border);
   border: 1px solid var(--border);
   border-radius: 14px;
   overflow: hidden;
+  width: 100%;
+  min-width: 0;
 }
 
 .cal-weekday {
@@ -4230,6 +4730,7 @@ a {
   font-size: 12px;
   font-weight: 700;
   color: var(--text-secondary);
+  min-width: 0;
 }
 
 .cal-weekday.sunday {
@@ -4243,6 +4744,7 @@ a {
 .cal-day-cell {
   background: var(--bg-card);
   min-height: 90px;
+  min-width: 0;
   padding: 8px;
   cursor: pointer;
   transition: background 0.15s;
@@ -4250,6 +4752,7 @@ a {
   flex-direction: column;
   gap: 4px;
   position: relative;
+  overflow: hidden;
 }
 
 .cal-day-cell.empty {
@@ -4339,6 +4842,14 @@ a {
   flex-direction: column;
   gap: 2px;
   margin-top: 2px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.cal-account-chip-name,
+.cal-account-chip-amts {
+  min-width: 0;
 }
 
 .cal-income-dot,
@@ -4349,7 +4860,11 @@ a {
   border-radius: 4px;
   padding: 1px 5px;
   display: inline-block;
-  width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cal-income-dot {
@@ -4377,11 +4892,12 @@ a {
 
 .cal-detail-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   padding: 14px 18px;
   border-bottom: 1px solid var(--border);
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .cal-detail-header-actions {
@@ -5027,18 +5543,17 @@ a {
     grid-template-columns: 1fr;
   }
 
+  .mypage-mobile-nav {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    padding: 4px;
+    background: #f1f5f9;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+
   .mypage-sidenav {
-    flex-direction: row;
-    overflow-x: auto;
-    padding: 6px;
-    gap: 4px;
-  }
-
-  .mypage-sidenav-item {
-    flex-shrink: 0;
-  }
-
-  .mypage-sidenav-arrow {
     display: none;
   }
 
@@ -5839,4 +6354,737 @@ a {
   font-size: 13px;
   font-weight: 700;
   color: var(--text-primary);
+}
+
+/* ── Responsive layout utilities (shared web + native) ── */
+.filter-grid {
+  display: grid;
+  gap: 16px;
+  align-items: end;
+}
+
+.filter-grid-3 {
+  grid-template-columns: 1fr 1fr 2fr;
+}
+
+.filter-grid-4 {
+  grid-template-columns: 1fr 1fr 1fr 2fr;
+}
+
+.budget-amount-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.budget-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.budget-category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.groupbuy-create-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  padding: 20px;
+}
+
+/*
+ * Web tablet / mid window (≤1100px) — covers ~4:3 widths where sidebar + content fight
+ * Drawer + stacked layouts for browser and short landscape windows.
+ */
+@media (max-width: 1100px) {
+  .app-layout {
+    overflow-x: clip;
+  }
+
+  /* Drawer sidebar */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: min(280px, 85vw);
+    height: 100%;
+    min-height: 100vh;
+    padding-top: 24px;
+    transform: translateX(-100%);
+    transition: transform 220ms ease;
+    box-shadow: 4px 0 24px rgba(15, 23, 42, 0.12);
+    z-index: 200;
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.4);
+    z-index: 199;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 220ms ease;
+  }
+
+  .sidebar-backdrop.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .app-layout:has(.sidebar.open) .dashboard-content {
+    overflow: hidden;
+  }
+
+  /* Header */
+  .header {
+    padding: 0 16px;
+    height: 60px;
+  }
+
+  .header-menu-btn {
+    display: inline-flex;
+  }
+
+  .header-brand {
+    display: flex;
+  }
+
+  .header-right {
+    margin-right: 0;
+  }
+
+  .header-status-badge {
+    display: none;
+  }
+
+  .dashboard-content {
+    padding: 12px 14px 24px;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  /* Page headers / tabs */
+  .dashboard-view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .dashboard-view-header > * {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .dashboard-view-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 6px;
+    max-width: 100%;
+    scrollbar-width: none;
+  }
+
+  .dashboard-view-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .dashboard-tab-btn {
+    padding: 6px 10px;
+    font-size: 11px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .dashboard-date-selector {
+    padding: 6px 10px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .sub-tabs-container {
+    margin-left: 0;
+    margin-right: 0;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    max-width: 100%;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .sub-tab-btn {
+    padding: 6px 12px;
+    font-size: 11px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* Grids: content cards stack; summary stays 2×2 */
+  .board-card-grid,
+  .hot-post-grid,
+  .notif-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-grid-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-grid-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .dashboard-grid-3 > .card {
+    grid-column: 1 / -1 !important;
+  }
+
+  /* Dashboard summary cards — compact 2×2 */
+  .dashboard-grid-4 > .stat-card {
+    padding: 14px;
+  }
+
+  .dashboard-grid-4 > .stat-card .card-header-row {
+    margin-bottom: 6px;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .dashboard-grid-4 > .stat-card .card-title {
+    font-size: 12px;
+    line-height: 1.3;
+  }
+
+  .dashboard-grid-4 > .stat-card .icon-wrapper {
+    width: 30px;
+    height: 30px;
+    margin-bottom: 0;
+    border-radius: 8px;
+    flex-shrink: 0;
+  }
+
+  .dashboard-grid-4 > .stat-card .icon-wrapper svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .dashboard-grid-4 > .stat-card .stat-value {
+    font-size: 17px;
+    letter-spacing: -0.3px;
+  }
+
+  .dashboard-grid-4 > .stat-card .stat-sub,
+  .dashboard-grid-4 > .stat-card .stat-label {
+    font-size: 10px;
+    margin-top: 4px;
+    line-height: 1.35;
+  }
+
+  .form-group-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .accounts-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .budget-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .budget-category-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .groupbuy-create-form {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+
+  .filter-grid-3,
+  .filter-grid-4,
+  .filter-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .filter-grid-amount {
+    grid-column: 1 / -1;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .filter-grid-amount input[type='range'] {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .filter-label {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .filter-label span {
+    display: block;
+    margin-top: 4px;
+    word-break: break-all;
+    font-size: 11px;
+  }
+
+  .filter-select {
+    -webkit-appearance: none;
+    appearance: none;
+    padding: 0 24px 0 8px;
+    font-size: 12px;
+    max-width: 100%;
+  }
+
+  /* Comparison / public users */
+  .comparison-avg-card {
+    text-align: center;
+  }
+
+  .comparison-avg-card .card-header-row {
+    justify-content: center;
+  }
+
+  .comparison-avg-card .asset-progress-header {
+    justify-content: center;
+    gap: 12px;
+  }
+
+  .public-users-card .card-header-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .public-users-card .card-title {
+    word-break: keep-all;
+    overflow-wrap: break-word;
+    font-size: 14px;
+  }
+
+  .public-user-budget-lbl {
+    font-size: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .public-user-budget-val {
+    font-size: 14px;
+    white-space: nowrap;
+  }
+
+  /* My page */
+  .mypage-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .mypage-mobile-nav {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    padding: 4px;
+    background: #f1f5f9;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+
+  .mypage-sidenav {
+    display: none;
+  }
+
+  .mypage-profile-grid,
+  .mypage-form {
+    grid-template-columns: 1fr;
+  }
+
+  .mypage-panel {
+    padding: 20px 16px;
+  }
+
+  /* Group buy */
+  .groupbuy-budget-link-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 16px;
+  }
+
+  .groupbuy-budget-right {
+    align-items: flex-start;
+    width: 100%;
+  }
+
+  .groupbuy-filter-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* Budget compact stats */
+  .budget-header-actions {
+    justify-content: flex-start;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .compact-stat {
+    padding: 12px 10px !important;
+  }
+
+  .compact-stat-label {
+    font-size: 10px;
+  }
+
+  .compact-stat-value {
+    font-size: 14px;
+  }
+
+  .compact-stat-sub {
+    font-size: 10px;
+  }
+
+  /* Cards / rows that often overflow */
+  .card-header-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* Charts */
+  .svg-bar-chart-container {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    padding: 0 4px 24px;
+    overflow-x: auto;
+  }
+
+  .bar-chart-stats {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .goal-summary-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .goal-rate-badges {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .dashboard-grid-3 .card-header-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* Tables */
+  .table-responsive {
+    margin: 0 -4px;
+  }
+
+  /* Modals */
+  .modal-content {
+    width: calc(100% - 24px);
+    max-width: 100%;
+    margin: 12px;
+    max-height: calc(100vh - 24px);
+  }
+
+  .modal-body {
+    padding: 16px;
+  }
+
+  .detail-modal-layout {
+    grid-template-columns: 1fr;
+  }
+
+  /* Login */
+  .login-wrapper {
+    padding: 12px;
+    align-items: flex-start;
+    padding-top: 32px;
+  }
+
+  .login-card-container {
+    padding: 28px 20px;
+    border-radius: 18px;
+  }
+
+  .login-title {
+    font-size: 20px;
+  }
+
+  /* Calendar: keep original cell size; only prevent text from stretching the grid */
+  .cal-month-picker {
+    width: min(300px, calc(100vw - 32px));
+  }
+
+  .calendar-wrapper {
+    min-width: 0;
+  }
+
+  .cal-account-chip-name {
+    display: none;
+  }
+
+  .cal-detail-title {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-content {
+    padding: 10px 10px 20px;
+  }
+
+  .card {
+    padding: 14px;
+    border-radius: 12px;
+  }
+
+  .dashboard-grid-4 {
+    gap: 8px;
+  }
+
+  .dashboard-grid-4 > .stat-card {
+    padding: 12px;
+  }
+
+  .dashboard-grid-4 > .stat-card .stat-value {
+    font-size: 15px;
+  }
+
+  .dashboard-grid-4 > .stat-card .card-title {
+    font-size: 11px;
+  }
+
+  .bar-chart-stats,
+  .goal-summary-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .budget-amount-row {
+    gap: 4px;
+  }
+
+  .header {
+    height: 56px;
+    padding: 0 12px;
+  }
+
+  .dashboard-view-header h1 {
+    font-size: 18px;
+  }
+}
+
+/* ── Dashboard mobile: tabs + denser / paired cards ── */
+@media (max-width: 1100px) {
+  .dashboard-mobile-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    margin: 14px 0 12px;
+    padding: 4px;
+    background: #f1f5f9;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+
+  .dashboard-mobile-tab {
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 700;
+    font-family: var(--font-sans);
+    padding: 10px 8px;
+    border-radius: 9px;
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast);
+  }
+
+  .dashboard-mobile-tab.active {
+    background: #ffffff;
+    color: var(--text-primary);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  }
+
+  .dashboard-body[data-mobile-section='analysis'] .dashboard-section--goals,
+  .dashboard-body[data-mobile-section='analysis'] .dashboard-section--groupbuy {
+    display: none !important;
+  }
+
+  .dashboard-body[data-mobile-section='goals'] .dashboard-section--analysis,
+  .dashboard-body[data-mobile-section='goals'] .dashboard-section--groupbuy {
+    display: none !important;
+  }
+
+  .dashboard-body[data-mobile-section='groupbuy'] .dashboard-grid-3 {
+    display: none !important;
+  }
+
+  .dashboard-body .dashboard-grid-3 {
+    gap: 12px;
+    margin-top: 0;
+  }
+
+  .dashboard-body .dashboard-col {
+    gap: 12px;
+  }
+
+  .dashboard-body .dashboard-section .card {
+    padding: 14px;
+  }
+
+  .dashboard-body .card-header-row {
+    margin-bottom: 12px;
+  }
+
+  .dashboard-body .card-title {
+    font-size: 14px;
+  }
+
+  .dashboard-body .donut-chart-container {
+    height: 150px;
+  }
+
+  .dashboard-body .chart-legend {
+    margin-top: 12px;
+    gap: 6px;
+  }
+
+  .dashboard-body .legend-item {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+
+  .dashboard-body .trend-line-hint {
+    display: none;
+  }
+
+  .dashboard-body .svg-bar-chart-container {
+    height: 160px;
+  }
+
+  /* 분석: 카테고리 비율 · 예산 현황 나란히 2열 */
+  .dashboard-body[data-mobile-section='analysis'] .dashboard-grid-3 {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .dashboard-body[data-mobile-section='analysis'] .dashboard-section--analysis:first-child {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .dashboard-body[data-mobile-section='analysis'] .dashboard-section--analysis:first-child .card {
+    padding: 12px;
+    min-width: 0;
+  }
+
+  .dashboard-body[data-mobile-section='analysis'] .dashboard-section--analysis:first-child .card-title {
+    font-size: 13px;
+  }
+
+  .dashboard-body[data-mobile-section='analysis'] .dashboard-section--analysis:first-child .sub-tab-btn {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .dashboard-body[data-mobile-section='analysis'] .dashboard-section--analysis:first-child .donut-chart-container {
+    height: 130px;
+  }
+
+  .dashboard-body[data-mobile-section='analysis'] .dashboard-section--analysis:first-child .donut-center-val {
+    font-size: 16px;
+  }
+
+  .dashboard-body[data-mobile-section='analysis'] .dashboard-section--analysis:first-child .legend-item {
+    padding: 4px 6px;
+    font-size: 11px;
+  }
+
+  .dashboard-body[data-mobile-section='analysis'] .dashboard-section--analysis:first-child .legend-val {
+    font-size: 11px;
+  }
+
+  .dashboard-body[data-mobile-section='analysis'] .dashboard-section--analysis:first-child .budget-vs-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .dashboard-groupbuy-card {
+    margin-top: 0;
+  }
+
+  /* 목표·자산: 나란히 2열 */
+  .dashboard-body[data-mobile-section='goals'] .dashboard-grid-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-body[data-mobile-section='goals'] .dashboard-section--goals {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .dashboard-body[data-mobile-section='goals'] .dashboard-section--goals .card {
+    padding: 12px;
+    min-width: 0;
+  }
+
+  .dashboard-body[data-mobile-section='goals'] .goal-rate-badges {
+    gap: 4px;
+  }
+
+  .dashboard-body[data-mobile-section='goals'] .goal-savings-rate-badge,
+  .dashboard-body[data-mobile-section='goals'] .goal-investment-rate-badge {
+    font-size: 10px;
+    padding: 3px 7px;
+  }
+
+  .dashboard-body[data-mobile-section='goals'] .goal-summary-strip {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    margin: 10px 0 12px;
+    padding: 8px;
+  }
+
+  .dashboard-body[data-mobile-section='goals'] .goal-summary-value {
+    font-size: 12px;
+  }
+
+  .dashboard-body[data-mobile-section='goals'] .asset-summary-value {
+    font-size: 15px;
+  }
+
+  .dashboard-body[data-mobile-section='groupbuy'] .group-buy-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .dashboard-empty-inline {
+    padding: 20px 8px;
+  }
+}
+
+/* 아주 좁은 폰: 목표·자산만 세로 (카드 안 텍스트가 더 김) */
+@media (max-width: 420px) {
+  .dashboard-body[data-mobile-section='goals'] .dashboard-section--goals {
+    grid-template-columns: 1fr;
+  }
 }

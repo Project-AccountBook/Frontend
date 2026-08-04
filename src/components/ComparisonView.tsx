@@ -552,7 +552,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
 
     return (
       <>
-        <div className="dashboard-grid-3">
+        <div className="comparison-summary-grid">
           <div className={`card stat-card ${config.themeClass}`}>
             <div className="card-header-row">
               <span className="card-title">내 월 총 {config.label}</span>
@@ -842,15 +842,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
             )}
           </div>
 
-          <div
-            className="filter-grid"
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr 2fr',
-              gap: '16px',
-              alignItems: 'end',
-            }}
-          >
+          <div className="filter-grid filter-grid-3">
             <div>
               <label className="filter-label">연도</label>
               <select
@@ -1203,7 +1195,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
           </div>
         </div>
 
-        <div className="dashboard-grid-3" style={{ marginTop: 0 }}>
+        <div className="comparison-summary-grid" style={{ marginTop: 0 }}>
           <div className={`card stat-card ${config.themeClass}`}>
             <div className="card-header-row">
               <span className="card-title">내 월 총 {config.label}</span>
@@ -1441,7 +1433,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
 
     return (
       <>
-        <div className="dashboard-grid-3">
+        <div className="comparison-summary-grid">
           {rows.map((row) => {
             const diff = row.my - row.avg;
             const isLess = diff < 0;
@@ -1578,12 +1570,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
           </div>
 
           <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: locationMode ? '1fr 1fr 2fr' : '1fr 1fr 1fr 2fr',
-              gap: '16px',
-              alignItems: 'end',
-            }}
+            className={`filter-grid ${locationMode ? 'filter-grid-3' : 'filter-grid-4'}`}
           >
             <div>
               <label className="filter-label">연도</label>
@@ -1616,7 +1603,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
             </div>
 
             {locationMode ? (
-              <div>
+              <div className="filter-grid-amount">
                 <label className="filter-label">
                   반경:{' '}
                   <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
@@ -1651,7 +1638,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
                   </select>
                 </div>
 
-                <div>
+                <div className="filter-grid-amount">
                   <label className="filter-label">
                     월 총 {METRIC_CONFIGS[overallFilterMetric].label} 금액 구간:{' '}
                     <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
@@ -1916,7 +1903,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
           </div>
         </div>
 
-        <div className="dashboard-grid-3">
+        <div className="comparison-summary-grid">
           {sections.map((sec) => {
             const diff = sec.my - sec.target;
             const isLess = diff < 0;

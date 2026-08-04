@@ -704,7 +704,20 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
     return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(val);
   };
 
-  const formatCalAmt = (val: number) => val.toLocaleString('ko-KR');
+  const formatCalAmt = (val: number) => {
+    const n = Math.abs(Math.round(val));
+    if (n >= 100_000_000) {
+      const eok = n / 100_000_000;
+      const rounded = eok >= 10 ? Math.round(eok) : Math.round(eok * 10) / 10;
+      return `${rounded}억`;
+    }
+    if (n >= 10_000) {
+      const man = n / 10_000;
+      const rounded = man >= 10 ? Math.round(man) : Math.round(man * 10) / 10;
+      return `${rounded}만`;
+    }
+    return n.toLocaleString('ko-KR');
+  };
 
   const getAccountColor = (accountId: number) => {
     const idx = accounts.findIndex((a) => a.id === accountId);
@@ -1241,13 +1254,20 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                                     key={summary.accountId}
                                     className="cal-account-chip"
                                     style={{ background: color.bg, color: color.dot }}
-                                    title={summary.accountName}
+                                    title={[
+                                      summary.accountName,
+                                      summary.income > 0 ? `+${formatCalAmt(summary.income)}` : '',
+                                      summary.expense > 0 ? `-${formatCalAmt(summary.expense)}` : '',
+                                      summary.transferAmount > 0 ? `↔${formatCalAmt(summary.transferAmount)}` : ''
+                                    ].filter(Boolean).join(' ')}
                                   >
                                     <span className="cal-account-dot" style={{ background: color.dot }} />
-                                    {getAccountShortName(summary.accountName)}
-                                    {summary.income > 0 && ` +${formatCalAmt(summary.income)}`}
-                                    {summary.expense > 0 && ` -${formatCalAmt(summary.expense)}`}
-                                    {summary.transferAmount > 0 && ` ↔${formatCalAmt(summary.transferAmount)}`}
+                                    <span className="cal-account-chip-name">{getAccountShortName(summary.accountName)}</span>
+                                    <span className="cal-account-chip-amts">
+                                      {summary.income > 0 && ` +${formatCalAmt(summary.income)}`}
+                                      {summary.expense > 0 && ` -${formatCalAmt(summary.expense)}`}
+                                      {summary.transferAmount > 0 && ` ↔${formatCalAmt(summary.transferAmount)}`}
+                                    </span>
                                   </span>
                                 );
                               })}
