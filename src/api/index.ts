@@ -17,5 +17,5 @@ export {
 } from './compareApi';
 export { locationApi } from './locationApi';
 export { notificationApi } from './notificationApi';
-export { tokenStorage } from './tokenStorage';
+export { tokenStorage, initTokenStorage } from './tokenStorage';
 export type * from './types';
