@@ -20,8 +20,11 @@ import { MyPageView } from './components/MyPageView';
 import { authApi, notificationApi, setAuthExpiredHandler, tokenStorage, userApi } from './api';
 import { useNotificationSync } from './hooks/useNotificationSync';
 import { clearMyUserIdCache } from './lib/boardApi';
+import { NATIVE_OAUTH_SCHEME } from './lib/oauth';
 import { Construction } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app';
+import { Browser } from '@capacitor/browser';
 
 type BoardMode = 'list' | 'detail' | 'write' | 'my';
 
@@ -107,23 +110,51 @@ function App() {
     return () => window.removeEventListener('hashchange', syncTabFromUrl);
   }, []);
 
-  useEffect(() => {
-    if (window.location.pathname === '/oauth2/redirect') {
-      const params = new URLSearchParams(window.location.search);
+  const handleOAuthCallback = useCallback(
+    (params: URLSearchParams) => {
       const accessToken = params.get('accessToken');
       const refreshToken = params.get('refreshToken');
-      if (accessToken && refreshToken) {
-        const rememberMe = tokenStorage.consumePendingRememberMe() ?? true;
-        tokenStorage.setTokens(accessToken, refreshToken, 'social-login', rememberMe);
-        setIsLoggedIn(true);
-        if (params.get('isNewUser') === 'true') {
-          setNeedsSocialProfileSetup(true);
-        }
-        refreshUnreadCount();
+      if (!accessToken || !refreshToken) return false;
+
+      const rememberMe = tokenStorage.consumePendingRememberMe() ?? true;
+      tokenStorage.setTokens(accessToken, refreshToken, 'social-login', rememberMe);
+      setIsLoggedIn(true);
+      if (params.get('isNewUser') === 'true') {
+        setNeedsSocialProfileSetup(true);
       }
+      refreshUnreadCount();
+      return true;
+    },
+    [refreshUnreadCount],
+  );
+
+  useEffect(() => {
+    if (window.location.pathname === '/oauth2/redirect') {
+      handleOAuthCallback(new URLSearchParams(window.location.search));
       window.history.replaceState({}, document.title, '/');
     }
-  }, []);
+  }, [handleOAuthCallback]);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    const handlePromise = CapacitorApp.addListener('appUrlOpen', ({ url }) => {
+      if (!url.startsWith(`${NATIVE_OAUTH_SCHEME}://oauth2/redirect`)) return;
+
+      // 커스텀 스킴은 표준 URL 파서로 host/pathname 이 흔들리므로 쿼리만 잘라낸다.
+      const queryIndex = url.indexOf('?');
+      const params = new URLSearchParams(queryIndex >= 0 ? url.slice(queryIndex + 1) : '');
+
+      const consumed = handleOAuthCallback(params);
+      if (consumed) {
+        void Browser.close();
+      }
+    });
+
+    return () => {
+      void handlePromise.then((handle) => handle.remove());
+    };
+  }, [handleOAuthCallback]);
 
   useEffect(() => {
     if (isLoggedIn) {

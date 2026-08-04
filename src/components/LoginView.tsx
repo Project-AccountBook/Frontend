@@ -1,7 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { Mail, Lock, AlertCircle, Loader2, User, Calendar, MapPin, CheckCircle, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
 import { authApi, tokenStorage, userApi } from '../api';
 import { API_BASE_URL } from '../api/config';
+import { NATIVE_OAUTH_REDIRECT_URI } from '../lib/oauth';
 import { openAddressSearch } from '../utils/daumPostcode';
 import modiLogo from '../assets/modi-logo.png';
 
@@ -183,7 +186,18 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   // --- Login Submit ---
   const handleSocialLogin = (provider: 'kakao' | 'naver' | 'google') => {
     tokenStorage.setPendingRememberMe(rememberMe);
-    window.location.href = `${API_BASE_URL}/oauth2/authorization/${provider}?redirect_uri=${encodeURIComponent(window.location.origin + '/oauth2/redirect')}`;
+    const redirectUri = Capacitor.isNativePlatform()
+      ? NATIVE_OAUTH_REDIRECT_URI
+      : `${window.location.origin}/oauth2/redirect`;
+    const url = `${API_BASE_URL}/oauth2/authorization/${provider}?redirect_uri=${encodeURIComponent(redirectUri)}`;
+
+    if (Capacitor.isNativePlatform()) {
+      // 시스템 브라우저(SFSafariViewController / Custom Tabs)에서 OAuth 진행.
+      // 완료 후 커스텀 스킴 콜백은 App.tsx 의 appUrlOpen 리스너가 처리.
+      void Browser.open({ url });
+    } else {
+      window.location.href = url;
+    }
   };
 
   // Skip down to the button hrefs (we need to replace them too, but we will just rely on handleSocialLogin or fix them individually)
