@@ -43,6 +43,7 @@ interface GroupBuyItem {
   price: number;
   views: number;
   bookmarks: number;
+  creatorId: number;
   creator: string;
   creatorTemp: string;
   distance: string;
@@ -52,6 +53,12 @@ interface GroupBuyItem {
   imageUrl?: string;
 }
 
+interface Account {
+  id: number;
+  accountName: string;
+  currentBalance: number;
+}
+
 interface Comment {
   id: number;
   sender: string;
@@ -59,110 +66,6 @@ interface Comment {
   date: string;
 }
 
-const MOCK_ITEMS: GroupBuyItem[] = [
-  {
-    id: 1,
-    category: '생활용품',
-    status: '모집중 (D-2)',
-    statusType: 'blue',
-    title: '친환경 세탁세제 대용량 공구',
-    progress: 125,
-    currentParticipants: 25,
-    targetParticipants: 20,
-    price: 15000,
-    views: 142,
-    bookmarks: 12,
-    creator: '서교동 썬더맘',
-    creatorTemp: '37.8℃',
-    distance: '0.5km',
-    description: '유기농 식물성 성분으로 만든 고농축 친환경 세탁 세제입니다. 대용량 3L 제품이며 배송비가 비싸서 동네 분들과 함께 저렴하게 구매하고자 공구를 모집합니다. 퇴근 시간 서교 초등학교 정문 앞에서 전달 가능해요!',
-    deadline: '2026-06-24 18:00',
-    imageColor: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)'
-  },
-  {
-    id: 2,
-    category: '식품',
-    status: '마감임박 (D-1)',
-    statusType: 'red',
-    title: '제주 유기농 흑돼지 삼겹살 1kg',
-    progress: 85,
-    currentParticipants: 17,
-    targetParticipants: 20,
-    price: 28000,
-    views: 241,
-    bookmarks: 24,
-    creator: '망원동 육식주의자',
-    creatorTemp: '39.2℃',
-    distance: '0.8km',
-    description: '제주도 농장에서 직송하는 무항생제 명품 흑돼지 삼겹살 1kg입니다. 진공 포장 후 아이스박스에 꼼꼼히 배송됩니다. 양이 1인가구가 먹기에는 너무 많아 분할 구매하실 이웃을 구해요. 수령 시간 조율 가능합니다!',
-    deadline: '2026-06-23 20:00',
-    imageColor: 'linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%)'
-  },
-  {
-    id: 3,
-    category: '육아용품',
-    status: '모집중 (D-4)',
-    statusType: 'blue',
-    title: '프리미엄 아기 물티슈 10팩 박스',
-    progress: 60,
-    currentParticipants: 6,
-    targetParticipants: 10,
-    price: 19800,
-    views: 98,
-    bookmarks: 8,
-    creator: '서교동 두아이아빠',
-    creatorTemp: '36.5℃',
-    distance: '1.2km',
-    description: '피부 저극 없는 유기농 엠보싱 물티슈 10팩들이 한 박스 공구 진행합니다. 박스 크기가 커서 택배비 절약용으로 공구 올려봐요. 합정역 3번출구 근처에서 전달해 드립니다.',
-    deadline: '2026-06-26 12:00',
-    imageColor: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)'
-  },
-  {
-    id: 4,
-    category: '가전',
-    status: '모집중 (D-7)',
-    statusType: 'blue',
-    title: '가성비 무선 에어 서큘레이터',
-    progress: 40,
-    currentParticipants: 2,
-    targetParticipants: 5,
-    price: 49000,
-    views: 112,
-    bookmarks: 15,
-    creator: '홍대입구 싱글남',
-    creatorTemp: '37.0℃',
-    distance: '1.4km',
-    description: '소음이 적고 풍량이 강해 서브 에어컨 대용으로 좋은 무선 서큘레이터입니다. 공동구매 5대 이상 묶음 시 대당 4.9만원 특가 구매 가능하다고 하여 멤버 모집합니다. 박스째 미개봉 상태로 드립니다.',
-    deadline: '2026-06-29 18:00',
-    imageColor: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)'
-  },
-  {
-    id: 5,
-    category: '생필품',
-    status: '진행완료',
-    statusType: 'grey',
-    title: '친환경 대나무 화장지 30롤',
-    progress: 100,
-    currentParticipants: 15,
-    targetParticipants: 15,
-    price: 12000,
-    views: 185,
-    bookmarks: 9,
-    creator: '합정동 환경지킴이',
-    creatorTemp: '38.0℃',
-    distance: '2.1km',
-    description: '먼지가 나지 않는 100% 천연 대나무 3겹 데코 화장지 30롤입니다. 모집 인원이 모두 찬 상태이며, 현재 제품 주문이 들어가 다음 주 월요일부터 순차 양도 예정입니다.',
-    deadline: '2026-06-20 15:00',
-    imageColor: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)'
-  }
-];
-
-const FALLBACK_CATEGORIES: GroupPurchaseCategoryResponse[] = [
-  { id: 1, name: '식품', sortOrder: 1, createdAt: '', updatedAt: '' },
-  { id: 2, name: '생활용품', sortOrder: 2, createdAt: '', updatedAt: '' },
-  { id: 3, name: '육아용품', sortOrder: 3, createdAt: '', updatedAt: '' },
-  { id: 4, name: '가전', sortOrder: 4, createdAt: '', updatedAt: '' },
-];
 
 export const GroupBuyView: React.FC<{
   initialGroupPurchaseId?: number | null;
@@ -188,11 +91,11 @@ export const GroupBuyView: React.FC<{
   };
 
   // States
-  const [items, setItems] = useState<GroupBuyItem[]>(MOCK_ITEMS);
+  const [items, setItems] = useState<GroupBuyItem[]>([]);
 
-  const [categories, setCategories] = useState<GroupPurchaseCategoryResponse[]>(FALLBACK_CATEGORIES);
-  const [userLocationText, setUserLocationText] = useState('서울시 마포구 서교동');
-  const [userBudget, setUserBudget] = useState(3140894);
+  const [categories, setCategories] = useState<GroupPurchaseCategoryResponse[]>([]);
+  const [userLocationText, setUserLocationText] = useState('위치 정보 불러오는 중...');
+  const [userBudget, setUserBudget] = useState(0);
   const [userBookmarks, setUserBookmarks] = useState<number[]>([]);
   const [participatedItems, setParticipatedItems] = useState<number[]>([]);
   const [interestCategories, setInterestCategories] = useState<InterestCategoryResponse[]>([]);
@@ -201,9 +104,14 @@ export const GroupBuyView: React.FC<{
   const [sortBy, setSortBy] = useState('latest');
   const [distanceLimit, setDistanceLimit] = useState('1.5km');
   const [showBookmarksOnly, setShowBookmarksOnly] = useState(false);
+  const [showMyPostsOnly, setShowMyPostsOnly] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [selectedItem, setSelectedItem] = useState<GroupBuyItem | null>(null);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [showLeaveConfirmation, setShowLeaveConfirmation] = useState(false);
+  const [userAccounts, setUserAccounts] = useState<Account[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Report States
@@ -229,7 +137,8 @@ export const GroupBuyView: React.FC<{
     maxParticipants: '10',
     deadline: '',
     pickupLocation: '',
-    imageUrl: ''
+    imageUrl: '',
+    accountId: ''
   });
 
   const [isUploading, setIsUploading] = useState(false);
@@ -328,6 +237,7 @@ export const GroupBuyView: React.FC<{
         const profileRes = await fetchWithAuth('/api/v1/users/me');
         if (profileRes.success && profileRes.data) {
           setUserLocationText(profileRes.data.address || '서울시 마포구 서교동');
+          setCurrentUserId(profileRes.data.id || null);
         }
       } catch (err) {
         console.error("Failed to load profile:", err);
@@ -424,6 +334,7 @@ export const GroupBuyView: React.FC<{
       price: bp.price,
       views: bp.viewCount,
       bookmarks: 0,
+      creatorId: bp.creatorId,
       creator: bp.creatorNickname || '이웃',
       creatorTemp: '36.5℃',
       distance: '0.8km',
@@ -618,6 +529,22 @@ export const GroupBuyView: React.FC<{
   };
 
   // Handle Create Submit
+  const fetchAccountsForCreate = async () => {
+    try {
+      const res = await fetchWithAuth('/api/v1/account');
+      setUserAccounts(res);
+      if (res && res.length > 0) {
+        setCreateForm(prev => ({ ...prev, accountId: String(res[0].id) }));
+      }
+    } catch(e) { console.error(e); }
+  };
+
+  useEffect(() => {
+    if (isCreateModalOpen) {
+      fetchAccountsForCreate();
+    }
+  }, [isCreateModalOpen]);
+
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!createForm.title || !createForm.categoryId || !createForm.content || !createForm.price || !createForm.deadline || !createForm.pickupLocation) {
@@ -638,6 +565,7 @@ export const GroupBuyView: React.FC<{
         maxParticipants: Number(createForm.maxParticipants),
         deadline: formattedDeadline,
         pickupLocation: createForm.pickupLocation,
+        accountId: Number(createForm.accountId),
         imageUrl: createForm.imageUrl
       };
 
@@ -651,7 +579,8 @@ export const GroupBuyView: React.FC<{
         triggerToast('공동구매 글이 성공적으로 등록되었습니다!');
         fetchGroupPurchases(); // refresh list
         setCreateForm({
-          title: '', categoryId: '', content: '', price: '', minParticipants: '1', maxParticipants: '10', deadline: '', pickupLocation: '', imageUrl: ''
+          title: '', categoryId: '', content: '', price: '', minParticipants: '1', maxParticipants: '10', deadline: '', pickupLocation: '', imageUrl: '',
+    accountId: ''
         });
       }
     } catch (err: any) {
@@ -684,11 +613,20 @@ export const GroupBuyView: React.FC<{
   };
 
   // Click Participate
-  const handleParticipateClick = () => {
+  const handleParticipateClick = async () => {
     if (!selectedItem) return;
     if (participatedItems.includes(selectedItem.id)) {
       triggerToast('이미 신청을 완료한 공동구매입니다.');
       return;
+    }
+    try {
+      const res = await fetchWithAuth('/api/v1/account');
+      setUserAccounts(res);
+      if (res && res.length > 0) {
+        setSelectedAccountId(res[0].id);
+      }
+    } catch (e) {
+      console.error("Failed to fetch accounts", e);
     }
     setShowConfirmation(true);
   };
@@ -698,8 +636,14 @@ export const GroupBuyView: React.FC<{
     if (!selectedItem) return;
 
     try {
+      if (!selectedAccountId) {
+        alert('결제 계좌를 선택해주세요.');
+        return;
+      }
       const res = await fetchWithAuth(`/api/v1/group-purchases/${selectedItem.id}/join`, {
-        method: 'POST'
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId: selectedAccountId })
       });
       if (res.success) {
         const joinData = res.data;
@@ -721,6 +665,33 @@ export const GroupBuyView: React.FC<{
       console.error("Failed to join group purchase:", err);
       alert(err.message || '공동구매 신청에 실패했습니다.');
       setShowConfirmation(false);
+    }
+  };
+
+  // Leave (Cancel) Participation
+  const handleLeaveClick = () => {
+    if (!selectedItem) return;
+    setShowLeaveConfirmation(true);
+  };
+
+  const handleConfirmLeave = async () => {
+    if (!selectedItem) return;
+    try {
+      const res = await fetchWithAuth(`/api/v1/group-purchases/${selectedItem.id}/leave`, {
+        method: 'POST'
+      });
+      if (res.success) {
+        triggerToast('신청 취소 완료! 환불 내역이 기입되었습니다.');
+        fetchBudget();
+        fetchUserWishedAndJoinedIds();
+        fetchGroupPurchases();
+        setSelectedItem(prev => prev ? { ...prev, currentParticipants: Math.max(0, prev.currentParticipants - 1) } : null);
+        setShowLeaveConfirmation(false);
+      }
+    } catch (err: any) {
+      console.error("Failed to leave group purchase:", err);
+      alert(err.message || '취소에 실패했습니다.');
+      setShowLeaveConfirmation(false);
     }
   };
 
@@ -760,6 +731,7 @@ export const GroupBuyView: React.FC<{
     .filter(item => {
       if (activeCategoryName && item.category !== activeCategoryName) return false;
       if (showBookmarksOnly && !userBookmarks.includes(item.id)) return false;
+      if (showMyPostsOnly && item.creatorId !== currentUserId) return false;
       return true;
     })
     .sort((a, b) => {
@@ -871,6 +843,7 @@ export const GroupBuyView: React.FC<{
             <option value="1.5km">반경 1.5km 내</option>
             <option value="3.0km">반경 3.0km 내</option>
             <option value="5.0km">반경 5.0km 내</option>
+            <option value="전체">전체 보기</option>
           </select>
 
           {/* bookmark toggle */}
@@ -879,6 +852,25 @@ export const GroupBuyView: React.FC<{
             className={`groupbuy-toggle-btn ${showBookmarksOnly ? 'active' : ''}`}
           >
             찜 목록
+          </button>
+
+                    {/* my posts toggle */}
+          <button
+            onClick={() => setShowMyPostsOnly(!showMyPostsOnly)}
+            className={`groupbuy-toggle-btn ${showMyPostsOnly ? 'active' : ''}`}
+            style={{ marginRight: '8px' }}
+          >
+            내가 쓴 글
+          </button>
+
+          {/* create groupbuy btn */}
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="groupbuy-action-btn"
+            style={{ backgroundColor: '#ff7e36', color: 'white', border: 'none', display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}
+          >
+            <Plus size={16} />
+            <span>공동구매 글쓰기</span>
           </button>
 
 
@@ -1117,9 +1109,26 @@ export const GroupBuyView: React.FC<{
 
                   {/* Participate CTA with integrated Budget Link check */}
                   {participatedItems.includes(selectedItem.id) ? (
-                    <button className="detail-btn-participate completed" disabled>
-                      <span>신청 완료한 공동구매</span>
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button className="detail-btn-participate completed" disabled style={{ flex: 1 }}>
+                        <span>신청 완료한 공동구매</span>
+                      </button>
+                      <button 
+                        onClick={handleLeaveClick}
+                        style={{ 
+                          background: '#fef2f2', 
+                          color: '#ef4444', 
+                          border: '1px solid #fca5a5', 
+                          borderRadius: '12px', 
+                          padding: '0 20px', 
+                          fontWeight: '700',
+                          fontSize: '14px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        신청 취소
+                      </button>
+                    </div>
                   ) : selectedItem.statusType === 'grey' ? (
                     <button className="detail-btn-participate completed" disabled>
                       <span>마감된 공동구매</span>
@@ -1168,22 +1177,28 @@ export const GroupBuyView: React.FC<{
               <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '8px' }}>공동구매 신청을 완료할까요?</h3>
               
               <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', textAlign: 'left', fontSize: '13px', margin: '16px 0', border: '1px solid var(--border)' }}>
+                <div style={{ marginBottom: '12px' }}>
+                  <div style={{ color: 'var(--text-secondary)', marginBottom: '8px', fontWeight: '600' }}>결제 계좌 선택:</div>
+                  <select
+                    value={selectedAccountId || ''}
+                    onChange={(e) => setSelectedAccountId(Number(e.target.value))}
+                    style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border)', outline: 'none' }}
+                  >
+                    {userAccounts.map(acc => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.accountName} (잔고: {formatKRW(acc.currentBalance)}원)
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
                   <span style={{ color: 'var(--text-secondary)' }}>참여 금액:</span>
                   <span style={{ fontWeight: '700' }}>{formatKRW(selectedItem.price)}원</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>현재 예산 잔액:</span>
-                  <span style={{ fontWeight: '700' }}>{formatKRW(userBudget)}원</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border)', paddingTop: '6px', marginTop: '6px' }}>
-                  <span style={{ color: 'var(--text-secondary)', fontWeight: '600' }}>참여 후 예산 잔액:</span>
-                  <span style={{ fontWeight: '700', color: 'var(--blue)' }}>{formatKRW(userBudget - selectedItem.price)}원</span>
-                </div>
               </div>
 
               <p style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-                신청이 즉시 확정되며, 가계부 예산에서 가출금 됩니다. 공구 최종 모집 완료 시 지출 내역에 자동 기입됩니다.
+                신청과 동시에 가계부 예산에서 즉시 차감(지출 기입)됩니다. 신청 취소 또는 모집 무산 시 자동으로 환불 처리됩니다.
               </p>
 
               <div className="form-actions" style={{ justifyContent: 'center' }}>
@@ -1211,7 +1226,78 @@ export const GroupBuyView: React.FC<{
                     fontWeight: '700'
                   }}
                 >
-                  신청 확정
+                  참여 결제하기
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5-2. LEAVE CONFIRMATION POPUP */}
+      {showLeaveConfirmation && selectedItem && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="modal-content small">
+            <div className="modal-header">
+              <span className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Wallet size={18} />
+                <span>가계부 예산 환불 안내</span>
+              </span>
+              <X size={18} className="modal-close-btn" onClick={() => setShowLeaveConfirmation(false)} />
+            </div>
+            <div className="modal-body" style={{ textAlign: 'center' }}>
+              <div style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: '50%',
+                background: '#fee2e2',
+                color: '#ef4444',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '16px'
+              }}>
+                <CheckCircle2 size={24} />
+              </div>
+              <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '8px' }}>정말로 신청을 취소할까요?</h3>
+              
+              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', textAlign: 'left', fontSize: '13px', margin: '16px 0', border: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>환불 예정 금액:</span>
+                  <span style={{ fontWeight: '700', color: 'var(--blue)' }}>+{formatKRW(selectedItem.price)}원</span>
+                </div>
+              </div>
+
+              <p style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                취소 시 가계부에 환불 내역(수입)이 자동으로 기입되며, 즉시 예산이 복구됩니다.
+              </p>
+
+              <div className="form-actions" style={{ justifyContent: 'center' }}>
+                <button 
+                  onClick={() => setShowLeaveConfirmation(false)}
+                  style={{
+                    background: '#f1f5f9',
+                    color: 'var(--text-primary)',
+                    padding: '10px 24px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: '700'
+                  }}
+                >
+                  돌아가기
+                </button>
+                <button 
+                  onClick={handleConfirmLeave}
+                  style={{
+                    background: '#ef4444',
+                    color: 'white',
+                    padding: '10px 24px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: '700'
+                  }}
+                >
+                  신청 취소하기
                 </button>
               </div>
             </div>
@@ -1337,30 +1423,7 @@ export const GroupBuyView: React.FC<{
         </div>
       )}
 
-      {/* 6.5 FAB (Floating Action Button) */}
-      <button
-        onClick={() => setIsCreateModalOpen(true)}
-        style={{
-          position: 'fixed',
-          bottom: '24px',
-          right: '24px',
-          width: '56px',
-          height: '56px',
-          borderRadius: '28px',
-          backgroundColor: '#ff7e36',
-          color: 'white',
-          border: 'none',
-          boxShadow: '0 4px 12px rgba(255, 126, 54, 0.4)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          zIndex: 90
-        }}
-        title="글쓰기"
-      >
-        <Plus size={28} />
-      </button>
+      
 
       {/* 6.6 Create Modal */}
       {isCreateModalOpen && (

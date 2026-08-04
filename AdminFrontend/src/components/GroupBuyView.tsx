@@ -43,6 +43,7 @@ interface GroupBuyItem {
   price: number;
   views: number;
   bookmarks: number;
+  creatorId: number;
   creator: string;
   creatorTemp: string;
   distance: string;
@@ -50,6 +51,12 @@ interface GroupBuyItem {
   deadline: string;
   imageColor: string;
   imageUrl?: string;
+}
+
+interface Account {
+  id: number;
+  accountName: string;
+  currentBalance: number;
 }
 
 interface Comment {
@@ -62,6 +69,7 @@ interface Comment {
 const MOCK_ITEMS: GroupBuyItem[] = [
   {
     id: 1,
+    creatorId: 0,
     category: '생활용품',
     status: '모집중 (D-2)',
     statusType: 'blue',
@@ -81,6 +89,7 @@ const MOCK_ITEMS: GroupBuyItem[] = [
   },
   {
     id: 2,
+    creatorId: 0,
     category: '식품',
     status: '마감임박 (D-1)',
     statusType: 'red',
@@ -100,6 +109,7 @@ const MOCK_ITEMS: GroupBuyItem[] = [
   },
   {
     id: 3,
+    creatorId: 0,
     category: '육아용품',
     status: '모집중 (D-4)',
     statusType: 'blue',
@@ -119,6 +129,7 @@ const MOCK_ITEMS: GroupBuyItem[] = [
   },
   {
     id: 4,
+    creatorId: 0,
     category: '가전',
     status: '모집중 (D-7)',
     statusType: 'blue',
@@ -138,6 +149,7 @@ const MOCK_ITEMS: GroupBuyItem[] = [
   },
   {
     id: 5,
+    creatorId: 0,
     category: '생필품',
     status: '진행완료',
     statusType: 'grey',
@@ -201,11 +213,15 @@ export const GroupBuyView: React.FC<{
   const [sortBy, setSortBy] = useState('latest');
   const [distanceLimit, setDistanceLimit] = useState('1.5km');
   const [showBookmarksOnly, setShowBookmarksOnly] = useState(false);
-  const [showParticipatedOnly, setShowParticipatedOnly] = useState(false);
+  const [showMyPostsOnly, setShowMyPostsOnly] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+
   
   const [selectedItem, setSelectedItem] = useState<GroupBuyItem | null>(null);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [userAccounts, setUserAccounts] = useState<Account[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Report States
@@ -231,7 +247,8 @@ export const GroupBuyView: React.FC<{
     maxParticipants: '10',
     deadline: '',
     pickupLocation: '',
-    imageUrl: ''
+    imageUrl: '',
+    accountId: ''
   });
 
   const [isUploading, setIsUploading] = useState(false);
@@ -330,6 +347,7 @@ export const GroupBuyView: React.FC<{
         const profileRes = await fetchWithAuth('/api/v1/users/me');
         if (profileRes.success && profileRes.data) {
           setUserLocationText(profileRes.data.address || '서울시 마포구 서교동');
+          setCurrentUserId(profileRes.data.id || null);
         }
       } catch (err) {
         console.error("Failed to load profile:", err);
@@ -426,6 +444,7 @@ export const GroupBuyView: React.FC<{
       price: bp.price,
       views: bp.viewCount,
       bookmarks: 0,
+      creatorId: bp.creatorId,
       creator: bp.creatorNickname || '이웃',
       creatorTemp: '36.5℃',
       distance: '0.8km',
@@ -620,6 +639,22 @@ export const GroupBuyView: React.FC<{
   };
 
   // Handle Create Submit
+  const fetchAccountsForCreate = async () => {
+    try {
+      const res = await fetchWithAuth('/api/v1/account');
+      setUserAccounts(res);
+      if (res && res.length > 0) {
+        setCreateForm(prev => ({ ...prev, accountId: String(res[0].id) }));
+      }
+    } catch(e) { console.error(e); }
+  };
+
+  useEffect(() => {
+    if (isCreateModalOpen) {
+      fetchAccountsForCreate();
+    }
+  }, [isCreateModalOpen]);
+
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!createForm.title || !createForm.categoryId || !createForm.content || !createForm.price || !createForm.deadline || !createForm.pickupLocation) {
@@ -640,6 +675,7 @@ export const GroupBuyView: React.FC<{
         maxParticipants: Number(createForm.maxParticipants),
         deadline: formattedDeadline,
         pickupLocation: createForm.pickupLocation,
+        accountId: Number(createForm.accountId),
         imageUrl: createForm.imageUrl
       };
 
@@ -653,7 +689,8 @@ export const GroupBuyView: React.FC<{
         triggerToast('공동구매 글이 성공적으로 등록되었습니다!');
         fetchGroupPurchases(); // refresh list
         setCreateForm({
-          title: '', categoryId: '', content: '', price: '', minParticipants: '1', maxParticipants: '10', deadline: '', pickupLocation: '', imageUrl: ''
+          title: '', categoryId: '', content: '', price: '', minParticipants: '1', maxParticipants: '10', deadline: '', pickupLocation: '', imageUrl: '',
+    accountId: ''
         });
       }
     } catch (err: any) {
@@ -686,11 +723,20 @@ export const GroupBuyView: React.FC<{
   };
 
   // Click Participate
-  const handleParticipateClick = () => {
+  const handleParticipateClick = async () => {
     if (!selectedItem) return;
     if (participatedItems.includes(selectedItem.id)) {
       triggerToast('이미 신청을 완료한 공동구매입니다.');
       return;
+    }
+    try {
+      const res = await fetchWithAuth('/api/v1/account');
+      setUserAccounts(res);
+      if (res && res.length > 0) {
+        setSelectedAccountId(res[0].id);
+      }
+    } catch (e) {
+      console.error("Failed to fetch accounts", e);
     }
     setShowConfirmation(true);
   };
@@ -700,8 +746,14 @@ export const GroupBuyView: React.FC<{
     if (!selectedItem) return;
 
     try {
+      if (!selectedAccountId) {
+        alert('결제 계좌를 선택해주세요.');
+        return;
+      }
       const res = await fetchWithAuth(`/api/v1/group-purchases/${selectedItem.id}/join`, {
-        method: 'POST'
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId: selectedAccountId })
       });
       if (res.success) {
         const joinData = res.data;
@@ -723,6 +775,29 @@ export const GroupBuyView: React.FC<{
       console.error("Failed to join group purchase:", err);
       alert(err.message || '공동구매 신청에 실패했습니다.');
       setShowConfirmation(false);
+    }
+  };
+
+  // Leave (Cancel) Participation
+  const handleLeaveClick = async () => {
+    if (!selectedItem) return;
+    if (confirm('정말로 신청을 취소하시겠습니까?')) {
+      try {
+        const res = await fetchWithAuth(`/api/v1/group-purchases/${selectedItem.id}/leave`, {
+          method: 'POST'
+        });
+        if (res.success) {
+          triggerToast('신청이 취소되었습니다.');
+          fetchBudget();
+          fetchUserWishedAndJoinedIds();
+          fetchGroupPurchases();
+          // Update selectedItem current participants safely
+          setSelectedItem(prev => prev ? { ...prev, currentParticipants: Math.max(0, prev.currentParticipants - 1) } : null);
+        }
+      } catch (err: any) {
+        console.error("Failed to leave group purchase:", err);
+        alert(err.message || '취소에 실패했습니다.');
+      }
     }
   };
 
@@ -762,7 +837,8 @@ export const GroupBuyView: React.FC<{
     .filter(item => {
       if (activeCategoryName && item.category !== activeCategoryName) return false;
       if (showBookmarksOnly && !userBookmarks.includes(item.id)) return false;
-      if (showParticipatedOnly && !participatedItems.includes(item.id)) return false;
+      if (showMyPostsOnly && item.creatorId !== currentUserId) return false;
+
       return true;
     })
     .sort((a, b) => {
@@ -874,6 +950,7 @@ export const GroupBuyView: React.FC<{
             <option value="1.5km">반경 1.5km 내</option>
             <option value="3.0km">반경 3.0km 내</option>
             <option value="5.0km">반경 5.0km 내</option>
+            <option value="전체">전체 보기</option>
           </select>
 
           {/* bookmark toggle */}
@@ -884,24 +961,24 @@ export const GroupBuyView: React.FC<{
             찜 목록
           </button>
 
-          {/* participating toggle */}
+
+                              {/* my posts toggle */}
           <button
-            onClick={() => setShowParticipatedOnly(!showParticipatedOnly)}
-            className={`groupbuy-toggle-btn ${showParticipatedOnly ? 'active' : ''}`}
+            onClick={() => setShowMyPostsOnly(!showMyPostsOnly)}
+            className={`groupbuy-toggle-btn ${showMyPostsOnly ? 'active' : ''}`}
+            style={{ marginRight: '8px' }}
           >
-            신청 내역
+            내가 쓴 글
           </button>
 
-          {/* request modal btn */}
+          {/* create groupbuy btn */}
           <button
-            onClick={() => {
-              setFormType('request');
-              setShowRequestModal(true);
-            }}
+            onClick={() => setIsCreateModalOpen(true)}
             className="groupbuy-action-btn"
+            style={{ backgroundColor: '#ff7e36', color: 'white', border: 'none', display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}
           >
             <Plus size={16} />
-            <span>신청 / 제보</span>
+            <span>공동구매 글쓰기</span>
           </button>
         </div>
       </div>
@@ -1138,9 +1215,26 @@ export const GroupBuyView: React.FC<{
 
                   {/* Participate CTA with integrated Budget Link check */}
                   {participatedItems.includes(selectedItem.id) ? (
-                    <button className="detail-btn-participate completed" disabled>
-                      <span>신청 완료한 공동구매</span>
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button className="detail-btn-participate completed" disabled style={{ flex: 1 }}>
+                        <span>신청 완료한 공동구매</span>
+                      </button>
+                      <button 
+                        onClick={handleLeaveClick}
+                        style={{ 
+                          background: '#fef2f2', 
+                          color: '#ef4444', 
+                          border: '1px solid #fca5a5', 
+                          borderRadius: '12px', 
+                          padding: '0 20px', 
+                          fontWeight: '700',
+                          fontSize: '14px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        신청 취소
+                      </button>
+                    </div>
                   ) : selectedItem.statusType === 'grey' ? (
                     <button className="detail-btn-participate completed" disabled>
                       <span>마감된 공동구매</span>
@@ -1189,22 +1283,28 @@ export const GroupBuyView: React.FC<{
               <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '8px' }}>공동구매 신청을 완료할까요?</h3>
               
               <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', textAlign: 'left', fontSize: '13px', margin: '16px 0', border: '1px solid var(--border)' }}>
+                <div style={{ marginBottom: '12px' }}>
+                  <div style={{ color: 'var(--text-secondary)', marginBottom: '8px', fontWeight: '600' }}>결제 계좌 선택:</div>
+                  <select
+                    value={selectedAccountId || ''}
+                    onChange={(e) => setSelectedAccountId(Number(e.target.value))}
+                    style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border)', outline: 'none' }}
+                  >
+                    {userAccounts.map(acc => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.accountName} (잔고: {formatKRW(acc.currentBalance)}원)
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
                   <span style={{ color: 'var(--text-secondary)' }}>참여 금액:</span>
                   <span style={{ fontWeight: '700' }}>{formatKRW(selectedItem.price)}원</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>현재 예산 잔액:</span>
-                  <span style={{ fontWeight: '700' }}>{formatKRW(userBudget)}원</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border)', paddingTop: '6px', marginTop: '6px' }}>
-                  <span style={{ color: 'var(--text-secondary)', fontWeight: '600' }}>참여 후 예산 잔액:</span>
-                  <span style={{ fontWeight: '700', color: 'var(--blue)' }}>{formatKRW(userBudget - selectedItem.price)}원</span>
-                </div>
               </div>
 
               <p style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-                신청이 즉시 확정되며, 가계부 예산에서 가출금 됩니다. 공구 최종 모집 완료 시 지출 내역에 자동 기입됩니다.
+                신청과 동시에 가계부 예산에서 즉시 차감(지출 기입)됩니다. 신청 취소 또는 모집 무산 시 자동으로 환불 처리됩니다.
               </p>
 
               <div className="form-actions" style={{ justifyContent: 'center' }}>
@@ -1358,30 +1458,7 @@ export const GroupBuyView: React.FC<{
         </div>
       )}
 
-      {/* 6.5 FAB (Floating Action Button) */}
-      <button
-        onClick={() => setIsCreateModalOpen(true)}
-        style={{
-          position: 'fixed',
-          bottom: '24px',
-          right: '24px',
-          width: '56px',
-          height: '56px',
-          borderRadius: '28px',
-          backgroundColor: '#ff7e36',
-          color: 'white',
-          border: 'none',
-          boxShadow: '0 4px 12px rgba(255, 126, 54, 0.4)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          zIndex: 90
-        }}
-        title="글쓰기"
-      >
-        <Plus size={28} />
-      </button>
+      
 
       {/* 6.6 Create Modal */}
       {isCreateModalOpen && (
