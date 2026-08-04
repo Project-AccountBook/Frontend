@@ -1,25 +1,38 @@
+import { Capacitor } from '@capacitor/core';
+import { Preferences } from '@capacitor/preferences';
+
 const ACCESS_TOKEN_KEY = 'accessToken';
 const REFRESH_TOKEN_KEY = 'refreshToken';
 const USER_EMAIL_KEY = 'userEmail';
 const REMEMBER_ME_PENDING_KEY = 'authRememberMePending';
 
-function getStorageWithToken(): Storage | null {
+const isNative = Capacitor.isNativePlatform();
+
+type Cache = {
+  accessToken: string | null;
+  refreshToken: string | null;
+  userEmail: string | null;
+};
+
+const cache: Cache = { accessToken: null, refreshToken: null, userEmail: null };
+
+function getWebStorageWithToken(): Storage | null {
   if (localStorage.getItem(ACCESS_TOKEN_KEY)) return localStorage;
   if (sessionStorage.getItem(ACCESS_TOKEN_KEY)) return sessionStorage;
   return null;
 }
 
-function getActiveStorage(): Storage {
-  return getStorageWithToken() ?? localStorage;
+function getWebActiveStorage(): Storage {
+  return getWebStorageWithToken() ?? localStorage;
 }
 
-function clearFromStorage(storage: Storage) {
+function clearWebStorage(storage: Storage) {
   storage.removeItem(ACCESS_TOKEN_KEY);
   storage.removeItem(REFRESH_TOKEN_KEY);
   storage.removeItem(USER_EMAIL_KEY);
 }
 
-function setInStorage(
+function setWebStorage(
   storage: Storage,
   accessToken: string,
   refreshToken: string,
@@ -32,11 +45,60 @@ function setInStorage(
   }
 }
 
+async function persistNative(
+  accessToken: string,
+  refreshToken: string,
+  email?: string,
+) {
+  const tasks: Promise<unknown>[] = [
+    Preferences.set({ key: ACCESS_TOKEN_KEY, value: accessToken }),
+    Preferences.set({ key: REFRESH_TOKEN_KEY, value: refreshToken }),
+  ];
+  if (email !== undefined) {
+    tasks.push(Preferences.set({ key: USER_EMAIL_KEY, value: email }));
+  }
+  await Promise.all(tasks);
+}
+
+async function clearNative() {
+  await Promise.all([
+    Preferences.remove({ key: ACCESS_TOKEN_KEY }),
+    Preferences.remove({ key: REFRESH_TOKEN_KEY }),
+    Preferences.remove({ key: USER_EMAIL_KEY }),
+  ]);
+}
+
+/**
+ * 앱 부팅 시 토큰을 스토리지에서 in-memory 캐시로 로드한다.
+ * 캐시가 채워지기 전에 렌더링되면 로그인 상태가 초기화된 것처럼 보이므로
+ * `main.tsx` 에서 이 함수를 await 한 뒤 앱을 렌더해야 한다.
+ */
+export async function initTokenStorage(): Promise<void> {
+  if (isNative) {
+    const [at, rt, em] = await Promise.all([
+      Preferences.get({ key: ACCESS_TOKEN_KEY }),
+      Preferences.get({ key: REFRESH_TOKEN_KEY }),
+      Preferences.get({ key: USER_EMAIL_KEY }),
+    ]);
+    cache.accessToken = at.value;
+    cache.refreshToken = rt.value;
+    cache.userEmail = em.value;
+    return;
+  }
+
+  const storage = getWebStorageWithToken();
+  if (storage) {
+    cache.accessToken = storage.getItem(ACCESS_TOKEN_KEY);
+    cache.refreshToken = storage.getItem(REFRESH_TOKEN_KEY);
+    cache.userEmail = storage.getItem(USER_EMAIL_KEY);
+  }
+}
+
 export const tokenStorage = {
-  getAccessToken: () => getActiveStorage().getItem(ACCESS_TOKEN_KEY),
-  getRefreshToken: () => getActiveStorage().getItem(REFRESH_TOKEN_KEY),
-  getUserEmail: () => getActiveStorage().getItem(USER_EMAIL_KEY),
-  hasToken: () => getStorageWithToken() !== null,
+  getAccessToken: () => cache.accessToken,
+  getRefreshToken: () => cache.refreshToken,
+  getUserEmail: () => cache.userEmail,
+  hasToken: () => cache.accessToken !== null,
 
   setTokens: (
     accessToken: string,
@@ -44,28 +106,51 @@ export const tokenStorage = {
     email?: string,
     rememberMe?: boolean,
   ) => {
+    cache.accessToken = accessToken;
+    cache.refreshToken = refreshToken;
+    if (email !== undefined) {
+      cache.userEmail = email;
+    }
+
+    if (isNative) {
+      void persistNative(accessToken, refreshToken, email);
+      return;
+    }
+
     const target =
       rememberMe === undefined
-        ? getActiveStorage()
+        ? getWebActiveStorage()
         : rememberMe
           ? localStorage
           : sessionStorage;
 
     const other = target === localStorage ? sessionStorage : localStorage;
-    clearFromStorage(other);
-    setInStorage(target, accessToken, refreshToken, email);
+    clearWebStorage(other);
+    setWebStorage(target, accessToken, refreshToken, email);
   },
 
   clear: () => {
-    clearFromStorage(localStorage);
-    clearFromStorage(sessionStorage);
+    cache.accessToken = null;
+    cache.refreshToken = null;
+    cache.userEmail = null;
+
+    if (isNative) {
+      void clearNative();
+      return;
+    }
+
+    clearWebStorage(localStorage);
+    clearWebStorage(sessionStorage);
   },
 
   setPendingRememberMe: (rememberMe: boolean) => {
+    // 네이티브 앱은 항상 영속 저장이므로 rememberMe 플래그가 무의미하다.
+    if (isNative) return;
     sessionStorage.setItem(REMEMBER_ME_PENDING_KEY, rememberMe ? '1' : '0');
   },
 
   consumePendingRememberMe: (): boolean | undefined => {
+    if (isNative) return true;
     const value = sessionStorage.getItem(REMEMBER_ME_PENDING_KEY);
     sessionStorage.removeItem(REMEMBER_ME_PENDING_KEY);
     if (value === null) return undefined;
