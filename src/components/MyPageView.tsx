@@ -715,7 +715,21 @@ export const MyPageView: React.FC<MyPageViewProps> = ({ onOpenBoard }) => {
       </div>
 
       <div className="mypage-layout">
-        {/* Sidebar tabs */}
+        <nav className="mypage-mobile-nav" aria-label="설정 메뉴">
+          {tabs.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveTab(id)}
+              className={`mypage-mobile-tab ${activeTab === id ? 'active' : ''} ${id === 'withdraw' ? 'danger' : ''}`}
+            >
+              <Icon size={15} />
+              <span>{label}</span>
+            </button>
+          ))}
+        </nav>
+
+        {/* Sidebar tabs (desktop) */}
         <aside className="mypage-sidenav">
           {tabs.map(({ id, label, icon: Icon }) => (
             <button

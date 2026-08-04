@@ -218,6 +218,79 @@ a {
   font-size: 13px;
 }
 
+/* 자산 비교 요약 카드: 넓은 화면 3열, 좁으면 2+1 (대시보드형) */
+.comparison-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  margin-top: 24px;
+}
+
+@media (max-width: 1400px) {
+  .comparison-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .comparison-summary-grid > .stat-card:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .comparison-summary-grid > .stat-card {
+    padding: 16px;
+  }
+
+  .comparison-summary-grid > .stat-card .card-header-row {
+    margin-bottom: 8px;
+  }
+
+  .comparison-summary-grid > .stat-card .card-title {
+    font-size: 13px;
+  }
+
+  .comparison-summary-grid > .stat-card .icon-wrapper {
+    width: 34px;
+    height: 34px;
+    margin-bottom: 0;
+  }
+
+  .comparison-summary-grid > .stat-card .icon-wrapper svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .comparison-summary-grid > .stat-card .stat-value {
+    font-size: 20px;
+    overflow-wrap: anywhere;
+  }
+
+  .comparison-summary-grid > .stat-card .stat-label {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .comparison-summary-grid {
+    gap: 10px;
+  }
+
+  .comparison-summary-grid > .stat-card {
+    padding: 14px;
+  }
+
+  .comparison-summary-grid > .stat-card .card-title {
+    font-size: 12px;
+  }
+
+  .comparison-summary-grid > .stat-card .stat-value {
+    font-size: 17px;
+  }
+
+  .comparison-summary-grid > .stat-card .stat-label {
+    font-size: 10px;
+  }
+}
+
 /* Sidebar(~260px)를 감안해 뷰포트 기준을 여유 있게 접음 */
 @media (max-width: 1400px) {
   .dashboard-grid-4 {
@@ -2556,6 +2629,59 @@ a {
   font-weight: 700;
 }
 
+@media (max-width: 1100px) {
+  .asset-tabs-container {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    overflow: visible;
+    border-bottom: none;
+    padding: 4px;
+    background: #f1f5f9;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+
+  .asset-tab-btn {
+    justify-content: center;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 6px;
+    border-bottom: none;
+    border-radius: 9px;
+    white-space: normal;
+    text-align: center;
+    font-size: 11px;
+    line-height: 1.25;
+    min-width: 0;
+  }
+
+  .asset-tab-btn:hover {
+    border-radius: 9px;
+  }
+
+  .asset-tab-btn.active {
+    background: #ffffff;
+    color: var(--primary);
+    border-bottom-color: transparent;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  }
+
+  .asset-tab-btn svg {
+    flex-shrink: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .asset-tabs-container {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mypage-mobile-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .asset-panel {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -3657,6 +3783,51 @@ a {
 .mypage-sidenav-arrow {
   margin-left: auto;
   opacity: 0.4;
+}
+
+.mypage-mobile-nav {
+  display: none;
+}
+
+.mypage-mobile-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 6px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  line-height: 1.25;
+  text-align: center;
+  cursor: pointer;
+  min-width: 0;
+  transition: background var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.mypage-mobile-tab span {
+  word-break: keep-all;
+}
+
+.mypage-mobile-tab.active {
+  background: #ffffff;
+  color: var(--blue);
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.mypage-mobile-tab.danger {
+  color: var(--red);
+}
+
+.mypage-mobile-tab.danger.active {
+  background: var(--red-bg);
+  color: var(--red);
 }
 
 /* Panel */
@@ -5372,18 +5543,17 @@ a {
     grid-template-columns: 1fr;
   }
 
+  .mypage-mobile-nav {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    padding: 4px;
+    background: #f1f5f9;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+
   .mypage-sidenav {
-    flex-direction: row;
-    overflow-x: auto;
-    padding: 6px;
-    gap: 4px;
-  }
-
-  .mypage-sidenav-item {
-    flex-shrink: 0;
-  }
-
-  .mypage-sidenav-arrow {
     display: none;
   }
 
@@ -6521,18 +6691,17 @@ a {
     grid-template-columns: 1fr;
   }
 
+  .mypage-mobile-nav {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    padding: 4px;
+    background: #f1f5f9;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+
   .mypage-sidenav {
-    flex-direction: row;
-    overflow-x: auto;
-    padding: 6px;
-    gap: 4px;
-  }
-
-  .mypage-sidenav-item {
-    flex-shrink: 0;
-  }
-
-  .mypage-sidenav-arrow {
     display: none;
   }
 

@@ -552,7 +552,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
 
     return (
       <>
-        <div className="dashboard-grid-3">
+        <div className="comparison-summary-grid">
           <div className={`card stat-card ${config.themeClass}`}>
             <div className="card-header-row">
               <span className="card-title">내 월 총 {config.label}</span>
@@ -1195,7 +1195,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
           </div>
         </div>
 
-        <div className="dashboard-grid-3" style={{ marginTop: 0 }}>
+        <div className="comparison-summary-grid" style={{ marginTop: 0 }}>
           <div className={`card stat-card ${config.themeClass}`}>
             <div className="card-header-row">
               <span className="card-title">내 월 총 {config.label}</span>
@@ -1433,7 +1433,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
 
     return (
       <>
-        <div className="dashboard-grid-3">
+        <div className="comparison-summary-grid">
           {rows.map((row) => {
             const diff = row.my - row.avg;
             const isLess = diff < 0;
@@ -1903,7 +1903,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
           </div>
         </div>
 
-        <div className="dashboard-grid-3">
+        <div className="comparison-summary-grid">
           {sections.map((sec) => {
             const diff = sec.my - sec.target;
             const isLess = diff < 0;
