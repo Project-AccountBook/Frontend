@@ -31,6 +31,7 @@ interface GroupBuyPost {
   status: '모집중' | '성공' | '무산' | '신고됨';
 }
 
+
 interface Category {
   id: number;
   name: string;
@@ -38,6 +39,7 @@ interface Category {
   sortOrder: number;
   createdAt: string;
 }
+
 
 interface Report {
   id: number;
