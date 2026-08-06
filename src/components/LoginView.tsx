@@ -220,8 +220,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     setLoadingLabel('로그인 중...');
     try {
       const result = await authApi.login({ email: email.trim(), password });
-      if (result.ok && result.data) {
-        tokenStorage.setTokens(result.data.accessToken, result.data.refreshToken, email, rememberMe);
+      if (result.ok && result.data?.accessToken) {
+        tokenStorage.setTokens(result.data.accessToken, email, rememberMe);
         onLoginSuccess();
       } else {
         setErrorMsg(result.error || '로그인에 실패했습니다. 이메일과 비밀번호를 확인해 주세요.');
