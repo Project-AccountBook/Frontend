@@ -572,7 +572,7 @@ export const MyPageView: React.FC<MyPageViewProps> = ({ onOpenBoard }) => {
     try {
       const result = await authApi.login({ email: profile.email, password: currentPassword });
       if (result.ok && result.data) {
-        tokenStorage.setTokens(result.data.accessToken, result.data.refreshToken);
+        tokenStorage.setTokens(result.data.accessToken, profile.email);
         setIsCurrentPasswordVerified(true);
         setPwSuccess('현재 비밀번호가 확인되었습니다. 새 비밀번호를 입력해 주세요.');
         setTimeout(() => setPwSuccess(null), 3000);

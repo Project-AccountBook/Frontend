@@ -122,11 +122,11 @@ function App() {
   const handleOAuthCallback = useCallback(
     (params: URLSearchParams) => {
       const accessToken = params.get('accessToken');
-      const refreshToken = params.get('refreshToken');
-      if (!accessToken || !refreshToken) return false;
+
+      if (!accessToken) return false;
 
       const rememberMe = tokenStorage.consumePendingRememberMe() ?? true;
-      tokenStorage.setTokens(accessToken, refreshToken, 'social-login', rememberMe);
+      tokenStorage.setTokens(accessToken, 'social-login', rememberMe);
       setIsLoggedIn(true);
       if (params.get('isNewUser') === 'true') {
         setNeedsSocialProfileSetup(true);
