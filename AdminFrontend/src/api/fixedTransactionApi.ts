@@ -5,7 +5,11 @@ export type FrequencyType = 'WEEKLY' | 'MONTHLY' | 'YEARLY';
 
 export interface FixedTransactionResponse {
   id: number;
+  accountId: number;
   accountName: string;
+  targetAccountId?: number | null;
+  targetAccountName?: string | null;
+  categoryId: number;
   categoryName: string;
   type: TransactionType;
   amount: number;
@@ -20,6 +24,7 @@ export interface FixedTransactionResponse {
 
 export interface FixedTransactionRequest {
   accountId: number;
+  targetAccountId?: number;
   categoryId: number;
   type: TransactionType;
   amount: number;
@@ -44,7 +49,7 @@ export async function getFixedTransactions(): Promise<FixedTransactionResponse[]
   const res = await authFetch('/api/v1/fixed-transactions');
   const data: ApiResponse<FixedTransactionResponse[]> = await res.json();
   if (!res.ok || !data.success) {
-    throw new Error(data.error ?? '고정 수입/지출 목록을 불러오는 데 실패했습니다.');
+    throw new Error(data.error ?? '고정 거래 목록을 불러오는 데 실패했습니다.');
   }
   return data.data.map(normalizeFixedTransaction);
 }
@@ -66,7 +71,7 @@ export async function createFixedTransaction(request: FixedTransactionRequest): 
   });
   const data: ApiResponse<number> = await res.json();
   if (!res.ok || !data.success) {
-    throw new Error(data.error ?? '고정 수입/지출 등록에 실패했습니다.');
+    throw new Error(data.error ?? '고정 거래 등록에 실패했습니다.');
   }
   return data.data;
 }
@@ -80,7 +85,7 @@ export async function updateFixedTransaction(id: number, request: FixedTransacti
   });
   const data: ApiResponse<null> = await res.json();
   if (!res.ok || !data.success) {
-    throw new Error(data.error ?? '고정 수입/지출 수정에 실패했습니다.');
+    throw new Error(data.error ?? '고정 거래 수정에 실패했습니다.');
   }
 }
 
@@ -104,6 +109,6 @@ export async function deleteFixedTransaction(id: number): Promise<void> {
   });
   const data: ApiResponse<null> = await res.json();
   if (!res.ok || !data.success) {
-    throw new Error(data.error ?? '고정 수입/지출 삭제에 실패했습니다.');
+    throw new Error(data.error ?? '고정 거래 삭제에 실패했습니다.');
   }
 }

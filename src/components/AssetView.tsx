@@ -239,7 +239,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
       const data = await getFixedTransactions();
       setFixedTransactions(data);
     } catch (err) {
-      setFixedError(err instanceof Error ? err.message : '고정 수입/지출 목록을 불러오는 데 실패했습니다.');
+      setFixedError(err instanceof Error ? err.message : '고정 거래 목록을 불러오는 데 실패했습니다.');
     } finally {
       setFixedLoading(false);
     }
@@ -361,9 +361,15 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
     } else if (activeSection === 'fixed') {
       const fx = fixedTransactions.find(f => f.id === id);
       if (fx) {
-        const accountId = findAccountIdByName(fx.accountName);
-        const categoryId = findCategoryIdByName(fx.categoryName, fx.type);
+        const accountId = fx.accountId ?? findAccountIdByName(fx.accountName);
+        const categoryId = fx.categoryId ?? findCategoryIdByName(fx.categoryName, fx.type);
         if (accountId) setFormAccount(accountId.toString());
+        if (fx.type === 'TRANSFER' && fx.targetAccountId != null) {
+          setFormTargetAccount(fx.targetAccountId.toString());
+        } else if (fx.type === 'TRANSFER' && fx.targetAccountName) {
+          const targetId = findAccountIdByName(fx.targetAccountName);
+          if (targetId) setFormTargetAccount(targetId.toString());
+        }
         if (categoryId) setFormCategory(categoryId.toString());
         setFormType(fx.type);
         setFormAmount(fx.amount.toString());
@@ -428,9 +434,9 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
 
   const handleDeleteItem = async (id: number): Promise<boolean> => {
     const confirmMessage = activeSection === 'accounts'
-      ? '이 계좌를 삭제하시겠습니까?\n\n· 연결된 고정 수입/지출은 함께 삭제됩니다.\n· 기존 거래 내역 및 예산 설정 내역은 계좌명과 함께 보존됩니다.'
+      ? '이 계좌를 삭제하시겠습니까?\n\n· 연결된 고정 거래는 함께 삭제됩니다.\n· 기존 거래 내역 및 예산 설정 내역은 계좌명과 함께 보존됩니다.'
       : activeSection === 'categories'
-        ? '이 카테고리를 삭제하시겠습니까?\n\n· 연결된 고정 수입/지출은 함께 삭제됩니다.\n· 기존 거래 내역 및 예산 설정 내역은 카테고리명과 함께 보존됩니다.'
+        ? '이 카테고리를 삭제하시겠습니까?\n\n· 연결된 고정 거래는 함께 삭제됩니다.\n· 기존 거래 내역 및 예산 설정 내역은 카테고리명과 함께 보존됩니다.'
         : '정말 삭제하시겠습니까?';
 
     if (!window.confirm(confirmMessage)) return false;
@@ -547,6 +553,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
           startDate: formStartDate,
           endDate: formEndDate || undefined,
           description: formDescription,
+          ...(formType === 'TRANSFER' ? { targetAccountId: parseInt(formTargetAccount) } : {}),
         };
 
         if (modalMode === 'create') {
@@ -945,7 +952,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
           onClick={() => setActiveSection('fixed')}
         >
           <CalendarIcon size={16} />
-          <span>고정 수입/지출</span>
+          <span>고정 거래</span>
         </button>
         <button
           className={`asset-tab-btn ${activeSection === 'accounts' ? 'active' : ''}`}
@@ -1525,7 +1532,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
             <div className="section-action-bar">
               <div className="fixed-intro-card">
                 <Sparkles size={18} className="intro-icon" />
-                <span>매주·매월·매년 반복되는 수입/지출을 예약하고 자동 정합하세요.</span>
+                <span>매주·매월·매년 반복되는 수입·지출·이체를 예약하고 자동 정합하세요.</span>
               </div>
               <button className="btn-section-add" onClick={() => handleOpenAddModal()}>
                 <Plus size={14} />
@@ -1537,7 +1544,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
               {fixedLoading && (
                 <div className="table-empty-row" style={{ padding: '40px 0' }}>
                   <Loader2 size={24} className="spin-animation" />
-                  <p>고정 수입/지출 목록을 불러오는 중...</p>
+                  <p>고정 거래 목록을 불러오는 중...</p>
                 </div>
               )}
 
@@ -1588,7 +1595,11 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                             <span className="toggle-label-text">{fx.isActive ? '활성' : '비활성'}</span>
                           </button>
                         </td>
-                        <td className="font-semibold">{fx.accountName}</td>
+                        <td className="font-semibold">
+                          {fx.type === 'TRANSFER' && fx.targetAccountName
+                            ? `${fx.accountName} → ${fx.targetAccountName}`
+                            : fx.accountName}
+                        </td>
                         <td>
                           <span className="category-tag">{fx.categoryName}</span>
                         </td>
@@ -1604,7 +1615,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                           {fx.endDate && <div>종료: {fx.endDate}</div>}
                         </td>
                         <td>{fx.description || '—'}</td>
-                        <td className={`font-bold ${fx.type === 'INCOME' ? 'color-income' : 'color-expense'}`}>
+                        <td className={`font-bold ${fx.type === 'INCOME' ? 'color-income' : fx.type === 'EXPENSE' ? 'color-expense' : 'color-transfer'}`}>
                           {formatCurrency(fx.amount)}
                         </td>
                         <td>
@@ -1875,7 +1886,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
               <h3>
                 {modalMode === 'create' ? '새로운 ' : '선택한 '}
                 {activeSection === 'transactions' && '거래 내역 등록'}
-                {activeSection === 'fixed' && '고정 수입/지출 등록'}
+                {activeSection === 'fixed' && '고정 거래 등록'}
                 {activeSection === 'accounts' && '자산 계좌 정보'}
                 {activeSection === 'categories' && '카테고리 정보'}
                 {modalMode === 'edit' && ' 수정'}
@@ -1997,11 +2008,14 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                       >
                         <option value="EXPENSE">지출</option>
                         <option value="INCOME">수입</option>
+                        <option value="TRANSFER">이체</option>
                       </select>
                     </div>
 
                     <div className="form-item">
-                      <label className="form-label">연동 계좌</label>
+                      <label className="form-label">
+                        {formType === 'INCOME' ? '입금 계좌' : formType === 'TRANSFER' ? '출금 계좌' : '연동 계좌'}
+                      </label>
                       <select
                         value={formAccount}
                         onChange={(e) => setFormAccount(e.target.value)}
@@ -2013,6 +2027,21 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                       </select>
                     </div>
 
+                    {formType === 'TRANSFER' && (
+                      <div className="form-item">
+                        <label className="form-label">입금 대상 계좌</label>
+                        <select
+                          value={formTargetAccount}
+                          onChange={(e) => setFormTargetAccount(e.target.value)}
+                          className="modal-select"
+                        >
+                          {accounts.filter(a => a.id !== parseInt(formAccount)).map(acc => (
+                            <option key={acc.id} value={acc.id}>{acc.accountName}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
                     <div className="form-item">
                       <label className="form-label">카테고리</label>
                       <select
@@ -2023,6 +2052,9 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                         {categories.filter(c => c.type === formType).map(cat => (
                           <option key={cat.id} value={cat.id}>{cat.name}</option>
                         ))}
+                        {categories.filter(c => c.type === formType).length === 0 && (
+                          <option value="" disabled>카테고리를 먼저 등록하세요</option>
+                        )}
                       </select>
                     </div>
 
