@@ -1491,6 +1491,8 @@ a {
   font-size: 13px;
   font-weight: 700;
   transition: all var(--transition-fast);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .header-btn-primary:hover {
@@ -1511,6 +1513,7 @@ a {
   border: 1px solid var(--border);
   transition: all var(--transition-fast);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .header-btn-secondary:hover {

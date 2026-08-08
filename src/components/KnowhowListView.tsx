@@ -138,7 +138,7 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
   return (
     <div className="fade-in">
       <div className="dashboard-view-header">
-        <div style={{ textAlign: 'center', width: '100%' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <h1
             style={{
               fontSize: '22px',
@@ -154,7 +154,7 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }}>
           <button onClick={onViewMyPosts} className="header-btn-secondary">
             <User size={16} />
             <span>내 글</span>
