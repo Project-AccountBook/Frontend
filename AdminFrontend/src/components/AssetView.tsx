@@ -199,6 +199,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
 
   const [formAccountName, setFormAccountName] = useState<string>('');
   const [formInitialBalance, setFormInitialBalance] = useState<string>('');
+  const [formCurrentBalance, setFormCurrentBalance] = useState<string>('');
   const [formAccountRole, setFormAccountRole] = useState<AccountRole>('CHECKING');
   const [formCategoryIncludeSavings, setFormCategoryIncludeSavings] = useState<boolean>(true);
   const [formCategoryIncludeInvestment, setFormCategoryIncludeInvestment] = useState<boolean>(false);
@@ -315,6 +316,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
     setFormEndDate('');
     setFormAccountName('');
     setFormInitialBalance('');
+    setFormCurrentBalance('');
     setFormAccountRole('CHECKING');
     setFormCategoryIncludeSavings(true);
     setFormCategoryIncludeInvestment(false);
@@ -385,6 +387,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
       if (acc) {
         setFormAccountName(acc.accountName);
         setFormInitialBalance(acc.initialBalance.toString());
+        setFormCurrentBalance(acc.currentBalance.toString());
         setFormAccountRole(normalizeAccountRole(acc.role));
       }
     } else if (activeSection === 'categories') {
@@ -514,10 +517,14 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
           await updateAccount(selectedId, {
             accountName: trimmedAccountName,
             initialBalance: parseFloat(formInitialBalance) || 0,
+            currentBalance: parseFloat(formCurrentBalance) || 0,
             role: formAccountRole
           });
         }
         await fetchAccounts();
+        if (modalMode === 'edit') {
+          await fetchTransactions();
+        }
         setShowModal(false);
         resetFormFields();
         return;
@@ -2171,11 +2178,17 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
 
                   {modalMode === 'edit' && selectedId !== null && (
                     <div className="form-item">
-                      <label className="form-label">현재 잔고</label>
-                      <div className="modal-readonly-value">
-                        {formatCurrency(accounts.find((a) => a.id === selectedId)?.currentBalance ?? 0)}
-                      </div>
-                      <p className="form-hint">거래 내역에 따라 자동 계산됩니다. 직접 수정할 수 없습니다.</p>
+                      <label className="form-label">현재 잔고 (원)</label>
+                      <input
+                        type="number"
+                        required
+                        min="0"
+                        placeholder="현재 계좌 잔액 입력"
+                        value={formCurrentBalance}
+                        onChange={(e) => setFormCurrentBalance(e.target.value)}
+                        className="modal-input"
+                      />
+                      <p className="form-hint">변경한 금액과 기존 잔고의 차이는 오늘 날짜의 ‘잔고 조정’ 내역으로 자동 기록됩니다.</p>
                     </div>
                   )}
 
@@ -2184,14 +2197,25 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                     <input
                       type="number"
                       required
+                      min="0"
                       placeholder="초기 가입/등록 잔액 입력"
                       value={formInitialBalance}
-                      onChange={(e) => setFormInitialBalance(e.target.value)}
+                      onChange={(e) => {
+                        const previousInitialBalance = parseFloat(formInitialBalance) || 0;
+                        const nextInitialBalance = parseFloat(e.target.value) || 0;
+                        const currentBalance = parseFloat(formCurrentBalance) || 0;
+                        setFormInitialBalance(e.target.value);
+                        if (modalMode === 'edit') {
+                          setFormCurrentBalance(
+                            String(currentBalance + nextInitialBalance - previousInitialBalance)
+                          );
+                        }
+                      }}
                       className="modal-input"
                     />
                     {modalMode === 'edit' && (
                       <p className="form-hint">
-                        초기 잔고만 수정할 수 있으며, 변경 시 현재 잔고도 같은 금액만큼 함께 조정됩니다.
+                        초기 잔고를 변경하면 현재 잔고도 같은 차액만큼 조정되며, 잔고 조정 내역이 기록됩니다.
                       </p>
                     )}
                   </div>

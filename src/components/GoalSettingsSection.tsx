@@ -127,6 +127,7 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
       await updateAccount(editingAccountId, {
         accountName: account.accountName,
         initialBalance: Number(account.initialBalance),
+        currentBalance: Number(account.currentBalance),
         role: formRole
       });
 
@@ -163,6 +164,7 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
       await updateAccount(editingAccountId, {
         accountName: account.accountName,
         initialBalance: Number(account.initialBalance),
+        currentBalance: Number(account.currentBalance),
         role: formRole
       });
       await clearAccountGoal(editingAccountId);

@@ -20,6 +20,13 @@ export interface AccountRequest {
   role?: AccountRole;
 }
 
+export interface AccountUpdateRequest {
+  accountName: string;
+  initialBalance: number;
+  currentBalance: number;
+  role?: AccountRole;
+}
+
 export interface AccountGoalRequest {
   goalAmount: number;
   goalDate?: string | null;
@@ -58,7 +65,7 @@ export async function createAccount(request: AccountRequest): Promise<number> {
 }
 
 /** PATCH /api/v1/account/{accountId} */
-export async function updateAccount(accountId: number, request: AccountRequest): Promise<void> {
+export async function updateAccount(accountId: number, request: AccountUpdateRequest): Promise<void> {
   const res = await authFetch(`/api/v1/account/${accountId}`, {
     method: 'PATCH',
     headers: jsonHeaders,
