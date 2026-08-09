@@ -3,6 +3,8 @@ import {
   ReceiptText,
   Calendar as CalendarIcon,
   Wallet,
+  CreditCard,
+  Landmark,
   Tag,
   Plus,
   Trash2,
@@ -18,7 +20,6 @@ import {
   Target,
   Loader2,
   AlertCircle,
-  SlidersHorizontal,
   ArrowUpRight,
   ArrowDownRight
 } from 'lucide-react';
@@ -27,13 +28,13 @@ import {
   createAccount,
   updateAccount,
   deleteAccount,
-  type AccountResponse
+  type AccountResponse,
+  type AccountKind
 } from '../api/accountApi';
 import {
   getCategories,
   createCategory,
   updateCategory,
-  updateCategoryAllocation,
   deleteCategory,
   type CategoryResponse,
   type TransactionType
@@ -75,6 +76,14 @@ type Category = CategoryResponse;
 type Transaction = TransactionResponse;
 type FixedTransaction = FixedTransactionResponse;
 
+const ACCOUNT_KIND_LABELS: Record<AccountKind, string> = {
+  ASSET: '자산계좌',
+  CREDIT_CARD: '신용카드',
+  LOAN: '대출'
+};
+
+const normalizeAccountKind = (kind: AccountKind | null | undefined): AccountKind => kind ?? 'ASSET';
+
 const getMonthRange = (year: number, month: number) => {
   const mm = String(month + 1).padStart(2, '0');
   const lastDay = new Date(year, month + 1, 0).getDate();
@@ -105,6 +114,10 @@ const ACCOUNT_COLOR_PALETTE = [
   { dot: '#ec4899', bg: 'rgba(236, 72, 153, 0.14)' },
   { dot: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.14)' },
 ];
+const ARCHIVED_ACCOUNT_COLOR = {
+  dot: '#64748b',
+  bg: 'rgba(100, 116, 139, 0.14)',
+};
 
 type DayAccountSummary = {
   accountId: number;
@@ -178,8 +191,6 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
   const [listPage, setListPage] = useState(1);
 
   const [showModal, setShowModal] = useState<boolean>(false);
-  const [showAllocationModal, setShowAllocationModal] = useState<boolean>(false);
-  const [allocationCategoryId, setAllocationCategoryId] = useState<number | null>(null);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
@@ -201,8 +212,10 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
   const [formInitialBalance, setFormInitialBalance] = useState<string>('');
   const [formCurrentBalance, setFormCurrentBalance] = useState<string>('');
   const [formAccountRole, setFormAccountRole] = useState<AccountRole>('CHECKING');
-  const [formCategoryIncludeSavings, setFormCategoryIncludeSavings] = useState<boolean>(true);
-  const [formCategoryIncludeInvestment, setFormCategoryIncludeInvestment] = useState<boolean>(false);
+  const [formAccountKind, setFormAccountKind] = useState<AccountKind>('ASSET');
+  const [formCreditLimit, setFormCreditLimit] = useState<string>('');
+  const [formLoanLimit, setFormLoanLimit] = useState<string>('');
+  const [formLoanAlreadyDisbursed, setFormLoanAlreadyDisbursed] = useState(true);
 
   const [formCategoryName, setFormCategoryName] = useState<string>('');
   const [formCategoryType, setFormCategoryType] = useState<TransactionType>('EXPENSE');
@@ -291,6 +304,34 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
     }
   }, [formType, categories, showModal, activeSection, formCategory]);
 
+  useEffect(() => {
+    if (formType !== 'INCOME') return;
+    const selectedAccount = accounts.find((account) => account.id.toString() === formAccount);
+    if (!selectedAccount || normalizeAccountKind(selectedAccount.kind) === 'ASSET') return;
+    const assetAccount = accounts.find((account) => normalizeAccountKind(account.kind) === 'ASSET');
+    setFormAccount(assetAccount?.id.toString() ?? '');
+  }, [formType, formAccount, accounts]);
+
+  useEffect(() => {
+    if (formType !== 'TRANSFER') return;
+    const source = accounts.find((account) => account.id.toString() === formAccount);
+    const target = accounts.find((account) => account.id.toString() === formTargetAccount);
+    const assetAccounts = accounts.filter((account) => normalizeAccountKind(account.kind) === 'ASSET');
+
+    if (source && normalizeAccountKind(source.kind) === 'LOAN') {
+      if (!target || normalizeAccountKind(target.kind) !== 'ASSET') {
+        setFormTargetAccount(assetAccounts.find((account) => account.id !== source.id)?.id.toString() ?? '');
+      }
+      return;
+    }
+
+    if (target && normalizeAccountKind(target.kind) === 'LOAN') {
+      if (!source || normalizeAccountKind(source.kind) !== 'ASSET') {
+        setFormAccount(assetAccounts.find((account) => account.id !== target.id)?.id.toString() ?? '');
+      }
+    }
+  }, [formType, formAccount, formTargetAccount, accounts]);
+
   const findAccountIdByName = (name: string) =>
     accounts.find((a) => a.accountName === name)?.id;
 
@@ -318,8 +359,10 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
     setFormInitialBalance('');
     setFormCurrentBalance('');
     setFormAccountRole('CHECKING');
-    setFormCategoryIncludeSavings(true);
-    setFormCategoryIncludeInvestment(false);
+    setFormAccountKind('ASSET');
+    setFormCreditLimit('');
+    setFormLoanLimit('');
+    setFormLoanAlreadyDisbursed(true);
     setFormCategoryName('');
     setFormCategoryType('EXPENSE');
   };
@@ -329,10 +372,6 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
     resetFormFields();
     if (options?.categoryType) {
       setFormCategoryType(options.categoryType);
-      if (options.categoryType === 'TRANSFER') {
-        setFormCategoryIncludeSavings(true);
-        setFormCategoryIncludeInvestment(false);
-      }
     }
     if (options?.transactionDate) setFormDate(options.transactionDate);
     setShowModal(true);
@@ -385,9 +424,14 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
     } else if (activeSection === 'accounts') {
       const acc = accounts.find(a => a.id === id);
       if (acc) {
+        const kind = normalizeAccountKind(acc.kind);
         setFormAccountName(acc.accountName);
-        setFormInitialBalance(acc.initialBalance.toString());
-        setFormCurrentBalance(acc.currentBalance.toString());
+        setFormAccountKind(kind);
+        setFormInitialBalance((kind === 'ASSET' ? acc.initialBalance : Math.abs(acc.initialBalance)).toString());
+        setFormCurrentBalance((kind === 'ASSET' ? acc.currentBalance : Math.abs(acc.currentBalance)).toString());
+        setFormCreditLimit(kind === 'CREDIT_CARD' && acc.creditLimit != null ? String(acc.creditLimit) : '');
+        setFormLoanLimit(kind === 'LOAN' && acc.loanLimit != null ? String(acc.loanLimit) : '');
+        setFormLoanAlreadyDisbursed(kind === 'LOAN' && (Number(acc.disbursedAmount) || 0) > 0);
         setFormAccountRole(normalizeAccountRole(acc.role));
       }
     } else if (activeSection === 'categories') {
@@ -395,44 +439,9 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
       if (cat) {
         setFormCategoryName(cat.name);
         setFormCategoryType(cat.type);
-        if (cat.type === 'TRANSFER') {
-          setFormCategoryIncludeSavings(cat.includeInSavingsRate);
-          setFormCategoryIncludeInvestment(cat.includeInInvestmentRate);
-        }
       }
     }
     setShowModal(true);
-  };
-
-  const handleOpenAllocationModal = (category: Category) => {
-    setAllocationCategoryId(category.id);
-    setFormCategoryIncludeSavings(category.includeInSavingsRate);
-    setFormCategoryIncludeInvestment(category.includeInInvestmentRate);
-    setShowAllocationModal(true);
-  };
-
-  const handleCloseAllocationModal = () => {
-    setShowAllocationModal(false);
-    setAllocationCategoryId(null);
-  };
-
-  const handleSubmitAllocation = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (allocationCategoryId == null) return;
-
-    setSubmitting(true);
-    try {
-      await updateCategoryAllocation(allocationCategoryId, {
-        includeInSavingsRate: formCategoryIncludeSavings,
-        includeInInvestmentRate: formCategoryIncludeInvestment
-      });
-      await fetchCategories();
-      handleCloseAllocationModal();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : '저축률·투자율 설정에 실패했습니다.');
-    } finally {
-      setSubmitting(false);
-    }
   };
 
   const handleDeleteItem = async (id: number): Promise<boolean> => {
@@ -499,6 +508,24 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
     try {
       if (activeSection === 'accounts') {
         const trimmedAccountName = formAccountName.trim();
+        const enteredInitialBalance = parseFloat(formInitialBalance) || 0;
+        const balanceSign = formAccountKind === 'ASSET' ? 1 : -1;
+        const initialBalance = formAccountKind === 'LOAN'
+          ? (formLoanAlreadyDisbursed ? -enteredInitialBalance : 0)
+          : enteredInitialBalance * balanceSign;
+        const currentBalance = (parseFloat(formCurrentBalance) || 0) * balanceSign;
+        const creditLimit =
+          formAccountKind === 'CREDIT_CARD' && formCreditLimit.trim()
+            ? parseFloat(formCreditLimit)
+            : null;
+        const loanLimit =
+          formAccountKind === 'LOAN' && formLoanLimit.trim()
+            ? parseFloat(formLoanLimit)
+            : null;
+        const selectedAccount = selectedId == null ? null : accounts.find((account) => account.id === selectedId);
+        const disbursedAmount = modalMode === 'create'
+          ? (formLoanAlreadyDisbursed ? enteredInitialBalance : 0)
+          : Math.max(0, Number(selectedAccount?.disbursedAmount) || 0);
         const isDuplicateAccount = accounts.some(
           (a) => a.accountName.trim() === trimmedAccountName && a.id !== selectedId
         );
@@ -506,18 +533,33 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
           alert('이미 존재하는 계좌 이름입니다.');
           return;
         }
+        if (formAccountKind === 'LOAN' && (loanLimit == null || loanLimit <= 0)) {
+          alert('총 대출 금액을 입력해 주세요.');
+          return;
+        }
+        if (formAccountKind === 'LOAN' && loanLimit! < disbursedAmount) {
+          alert(`총 대출 금액은 실행 금액 ${disbursedAmount.toLocaleString('ko-KR')}원보다 작을 수 없습니다.`);
+          return;
+        }
 
         if (modalMode === 'create') {
           await createAccount({
             accountName: trimmedAccountName,
-            initialBalance: parseFloat(formInitialBalance) || 0,
+            initialBalance,
+            kind: formAccountKind,
+            creditLimit,
+            loanLimit,
+            ...(formAccountKind === 'LOAN' ? { loanAlreadyDisbursed: formLoanAlreadyDisbursed } : {}),
             role: formAccountRole
           });
         } else if (selectedId !== null) {
           await updateAccount(selectedId, {
             accountName: trimmedAccountName,
-            initialBalance: parseFloat(formInitialBalance) || 0,
-            currentBalance: parseFloat(formCurrentBalance) || 0,
+            initialBalance,
+            currentBalance,
+            kind: formAccountKind,
+            creditLimit,
+            loanLimit,
             role: formAccountRole
           });
         }
@@ -584,13 +626,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
 
         const request = {
           name: trimmedCategoryName,
-          type: formCategoryType,
-          ...(formCategoryType === 'TRANSFER'
-            ? {
-                includeInSavingsRate: formCategoryIncludeSavings,
-                includeInInvestmentRate: formCategoryIncludeInvestment
-              }
-            : {})
+          type: formCategoryType
         };
 
         if (modalMode === 'create') {
@@ -722,7 +758,8 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
 
   const getAccountColor = (accountId: number) => {
     const idx = accounts.findIndex((a) => a.id === accountId);
-    return ACCOUNT_COLOR_PALETTE[(idx >= 0 ? idx : 0) % ACCOUNT_COLOR_PALETTE.length];
+    if (idx < 0) return ARCHIVED_ACCOUNT_COLOR;
+    return ACCOUNT_COLOR_PALETTE[idx % ACCOUNT_COLOR_PALETTE.length];
   };
 
   const getAccountShortName = (name: string, maxLen = 4) =>
@@ -739,6 +776,21 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
 
   const formatCategoryDisplayName = (name: string, archived?: boolean) =>
     archived ? `${name} (삭제됨)` : name;
+
+  const getTransferSourceAccounts = () => {
+    const target = accounts.find((account) => account.id.toString() === formTargetAccount);
+    return target && normalizeAccountKind(target.kind) === 'LOAN'
+      ? accounts.filter((account) => normalizeAccountKind(account.kind) === 'ASSET')
+      : accounts;
+  };
+
+  const getTransferTargetAccounts = () => {
+    const source = accounts.find((account) => account.id.toString() === formAccount);
+    return accounts.filter((account) =>
+      account.id !== source?.id
+      && (normalizeAccountKind(source?.kind) !== 'LOAN' || normalizeAccountKind(account.kind) === 'ASSET')
+    );
+  };
 
   const formatTransferRoute = (tx: Transaction) => {
     const targetName = getTransferTargetName(tx);
@@ -926,7 +978,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
               내역 및 자산 관리
             </h1>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-              거래내역, 계좌, 계좌 목표, 카테고리를 한번에 관리하세요
+              거래내역, 자산, 목표, 카테고리를 한번에 관리하세요
             </p>
           </div>
         </div>
@@ -953,14 +1005,14 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
           onClick={() => setActiveSection('accounts')}
         >
           <Wallet size={16} />
-          <span>계좌 관리</span>
+          <span>자산 관리</span>
         </button>
         <button
           className={`asset-tab-btn ${activeSection === 'goals' ? 'active' : ''}`}
           onClick={() => setActiveSection('goals')}
         >
           <Target size={16} />
-          <span>계좌 목표</span>
+          <span>목표 관리</span>
         </button>
         <button
           className={`asset-tab-btn ${activeSection === 'categories' ? 'active' : ''}`}
@@ -1629,10 +1681,10 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
         {activeSection === 'accounts' && (
           <div className="section-content fade-in">
             <div className="section-action-bar">
-              <span className="section-action-bar-title">등록된 계좌 {accounts.length}개</span>
+              <span className="section-action-bar-title">등록된 자산 {accounts.length}개</span>
               <button className="btn-section-add" onClick={() => handleOpenAddModal()} disabled={accountsLoading}>
                 <Plus size={14} />
-                자산계좌 추가
+                자산 추가
               </button>
             </div>
 
@@ -1656,7 +1708,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
             {!accountsLoading && !accountsError && accounts.length === 0 && (
               <div className="table-empty-row" style={{ padding: '40px 0' }}>
                 <Info size={20} />
-                <p>등록된 계좌가 없습니다. 자산계좌를 추가해 주세요.</p>
+                <p>등록된 자산이 없습니다. 자산을 추가해 주세요.</p>
               </div>
             )}
 
@@ -1664,12 +1716,27 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
               <div className="accounts-grid">
                 {accounts.map(acc => {
                   const role = normalizeAccountRole(acc.role);
+                  const kind = normalizeAccountKind(acc.kind);
+                  const usedAmount = Math.abs(acc.currentBalance);
+                  const creditLimit = Math.max(0, Number(acc.creditLimit) || 0);
+                  const loanLimit = Math.max(0, Number(acc.loanLimit) || 0);
+                  const disbursedAmount = Math.max(0, Number(acc.disbursedAmount) || 0);
 
                   return (
                   <div key={acc.id} className="account-card">
                     <div className="account-card-header">
-                      <div className="icon-circle">
-                        <Wallet size={20} />
+                      <div className="account-card-identity">
+                        <div className={`icon-circle ${kind.toLowerCase()}`}>
+                          {kind === 'ASSET' && <Wallet size={20} />}
+                          {kind === 'CREDIT_CARD' && <CreditCard size={20} />}
+                          {kind === 'LOAN' && <Landmark size={20} />}
+                        </div>
+                        <span className={`account-kind-badge ${kind.toLowerCase()}`}>
+                          {ACCOUNT_KIND_LABELS[kind]}
+                        </span>
+                        {kind === 'ASSET' && (
+                          <span className="goal-role-badge">{ACCOUNT_ROLE_LABELS[role]}</span>
+                        )}
                       </div>
                       <div className="card-actions">
                         <button className="btn-action-icon edit" onClick={() => handleOpenEditModal(acc.id)}>
@@ -1681,18 +1748,39 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                       </div>
                     </div>
                     <div className="account-card-body">
-                      <div className="account-title-row">
-                        <h3 className="account-title">{acc.accountName}</h3>
-                        <span className="goal-role-badge">{ACCOUNT_ROLE_LABELS[role]}</span>
-                      </div>
-                      <div className="balance-info-row">
+                      <h3 className="account-title">{acc.accountName}</h3>
+                      {kind === 'ASSET' && <div className="balance-info-row">
                         <span className="balance-label">초기 잔고</span>
                         <span className="balance-value balance-value-muted">{formatCurrency(acc.initialBalance)}</span>
-                      </div>
+                      </div>}
                       <div className="balance-info-row">
-                        <span className="balance-label">현재 잔고</span>
-                        <span className="balance-value">{formatCurrency(acc.currentBalance)}</span>
+                        <span className="balance-label">{kind === 'ASSET' ? '현재 잔고' : kind === 'CREDIT_CARD' ? '카드 사용액' : '대출 잔액'}</span>
+                        <span className="balance-value">{formatCurrency(kind === 'ASSET' ? acc.currentBalance : usedAmount)}</span>
                       </div>
+                      {kind === 'CREDIT_CARD' && (
+                        <>
+                          <div className="balance-info-row">
+                            <span className="balance-label">카드 한도</span>
+                            <span className="balance-value">{creditLimit > 0 ? formatCurrency(creditLimit) : '미설정'}</span>
+                          </div>
+                          <div className="balance-info-row">
+                            <span className="balance-label">남은 한도</span>
+                            <span className="balance-value">{creditLimit > 0 ? formatCurrency(Math.max(0, creditLimit - usedAmount)) : '—'}</span>
+                          </div>
+                        </>
+                      )}
+                      {kind === 'LOAN' && (
+                        <>
+                          <div className="balance-info-row">
+                            <span className="balance-label">총 대출 금액</span>
+                            <span className="balance-value">{formatCurrency(loanLimit)}</span>
+                          </div>
+                          <div className="balance-info-row">
+                            <span className="balance-label">실행 가능 금액</span>
+                            <span className="balance-value">{formatCurrency(Math.max(0, loanLimit - disbursedAmount))}</span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                   );
@@ -1813,32 +1901,16 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                     <div key={cat.id} className="category-item-row">
                       <span className="cat-name">{cat.name}</span>
                       <div className="cat-badges-actions">
-                        {cat.includeInSavingsRate && (
-                          <span className="category-savings-flag">저축률</span>
-                        )}
-                        {cat.includeInInvestmentRate && (
-                          <span className="category-investment-flag">투자율</span>
-                        )}
                         <span className={`cat-system-badge ${cat.isCustom ? 'custom' : 'default'}`}>
                           {cat.isCustom ? '사용자정의' : '기본'}
                         </span>
-                        {cat.isCustom ? (
+                        {cat.isCustom && (
                           <div className="cat-actions">
                             <button className="btn-cat-action" onClick={() => handleOpenEditModal(cat.id)}>
                               <Edit2 size={12} />
                             </button>
                             <button className="btn-cat-action delete" onClick={() => handleDeleteItem(cat.id)}>
                               <Trash2 size={12} />
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="cat-actions">
-                            <button
-                              className="btn-cat-action"
-                              onClick={() => handleOpenAllocationModal(cat)}
-                              title="저축률·투자율 설정"
-                            >
-                              <SlidersHorizontal size={12} />
                             </button>
                           </div>
                         )}
@@ -1874,7 +1946,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                 {modalMode === 'create' ? '새로운 ' : '선택한 '}
                 {activeSection === 'transactions' && '거래 내역 등록'}
                 {activeSection === 'fixed' && '고정 거래 등록'}
-                {activeSection === 'accounts' && '자산 계좌 정보'}
+                {activeSection === 'accounts' && '자산 정보'}
                 {activeSection === 'categories' && '카테고리 정보'}
                 {modalMode === 'edit' && ' 수정'}
               </h3>
@@ -1900,13 +1972,21 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                     </div>
 
                     <div className="form-item">
-                      <label className="form-label">출금 계좌</label>
+                      <label className="form-label">
+                        {formType === 'INCOME' ? '입금 계좌' : formType === 'TRANSFER' ? '출금 계좌' : '결제 계좌'}
+                      </label>
                       <select
                         value={formAccount}
                         onChange={(e) => setFormAccount(e.target.value)}
                         className="modal-select"
                       >
-                        {accounts.map(acc => (
+                        {accounts
+                          .filter((acc) => (
+                            formType === 'TRANSFER'
+                              ? getTransferSourceAccounts().some((candidate) => candidate.id === acc.id)
+                              : formType !== 'INCOME' || normalizeAccountKind(acc.kind) === 'ASSET'
+                          ))
+                          .map(acc => (
                           <option key={acc.id} value={acc.id}>{acc.accountName}</option>
                         ))}
                       </select>
@@ -1914,13 +1994,13 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
 
                     {formType === 'TRANSFER' && (
                       <div className="form-item">
-                        <label className="form-label">입금 대상 계좌 (이체 대상)</label>
+                        <label className="form-label">이체 대상</label>
                         <select
                           value={formTargetAccount}
                           onChange={(e) => setFormTargetAccount(e.target.value)}
                           className="modal-select"
                         >
-                          {accounts.filter(a => a.id !== parseInt(formAccount)).map(acc => (
+                          {getTransferTargetAccounts().map(acc => (
                             <option key={acc.id} value={acc.id}>{acc.accountName}</option>
                           ))}
                         </select>
@@ -1999,14 +2079,20 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
 
                     <div className="form-item">
                       <label className="form-label">
-                        {formType === 'INCOME' ? '입금 계좌' : formType === 'TRANSFER' ? '출금 계좌' : '연동 계좌'}
+                        {formType === 'INCOME' ? '입금 계좌' : formType === 'TRANSFER' ? '출금 계좌' : '결제 계좌'}
                       </label>
                       <select
                         value={formAccount}
                         onChange={(e) => setFormAccount(e.target.value)}
                         className="modal-select"
                       >
-                        {accounts.map(acc => (
+                        {accounts
+                          .filter((acc) => (
+                            formType === 'TRANSFER'
+                              ? getTransferSourceAccounts().some((candidate) => candidate.id === acc.id)
+                              : formType !== 'INCOME' || normalizeAccountKind(acc.kind) === 'ASSET'
+                          ))
+                          .map(acc => (
                           <option key={acc.id} value={acc.id}>{acc.accountName}</option>
                         ))}
                       </select>
@@ -2014,13 +2100,13 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
 
                     {formType === 'TRANSFER' && (
                       <div className="form-item">
-                        <label className="form-label">입금 대상 계좌</label>
+                        <label className="form-label">이체 대상</label>
                         <select
                           value={formTargetAccount}
                           onChange={(e) => setFormTargetAccount(e.target.value)}
                           className="modal-select"
                         >
-                          {accounts.filter(a => a.id !== parseInt(formAccount)).map(acc => (
+                          {getTransferTargetAccounts().map(acc => (
                             <option key={acc.id} value={acc.id}>{acc.accountName}</option>
                           ))}
                         </select>
@@ -2165,20 +2251,108 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
               {activeSection === 'accounts' && (
                 <div className="form-group-grid" style={{ gridTemplateColumns: '1fr' }}>
                   <div className="form-item">
-                    <label className="form-label">계좌 명칭</label>
+                    <label className="form-label">자산 종류</label>
+                    <select
+                      value={formAccountKind}
+                      onChange={(e) => {
+                        const nextKind = e.target.value as AccountKind;
+                        setFormAccountKind(nextKind);
+                        setFormInitialBalance(String(Math.abs(parseFloat(formInitialBalance) || 0)));
+                        setFormCurrentBalance(String(Math.abs(parseFloat(formCurrentBalance) || 0)));
+                        if (nextKind !== 'CREDIT_CARD') setFormCreditLimit('');
+                        if (nextKind !== 'LOAN') {
+                          setFormLoanLimit('');
+                          setFormLoanAlreadyDisbursed(true);
+                        }
+                        if (nextKind !== 'ASSET') setFormAccountRole('CHECKING');
+                      }}
+                      className="modal-select"
+                    >
+                      <option value="ASSET">자산계좌</option>
+                      <option value="CREDIT_CARD">신용카드</option>
+                      <option value="LOAN">대출</option>
+                    </select>
+                  </div>
+                  <div className="form-item">
+                    <label className="form-label">
+                      {formAccountKind === 'ASSET' ? '자산 명칭' : formAccountKind === 'CREDIT_CARD' ? '신용카드 명칭' : '대출 명칭'}
+                    </label>
                     <input
                       type="text"
                       required
-                      placeholder="예: 신한 급여통장, 카카오 비상금 등"
+                      placeholder={
+                        formAccountKind === 'ASSET'
+                          ? '자산 명칭을 입력해 주세요'
+                          : formAccountKind === 'CREDIT_CARD'
+                            ? '신용카드 명칭을 입력해 주세요'
+                            : '대출 명칭을 입력해 주세요'
+                      }
                       value={formAccountName}
                       onChange={(e) => setFormAccountName(e.target.value)}
                       className="modal-input"
                     />
                   </div>
 
+                  {formAccountKind === 'LOAN' && (
+                    <div className="form-item">
+                      <label className="form-label">총 대출 금액 (원)</label>
+                      <input
+                        type="number"
+                        required
+                        min={modalMode === 'edit' && selectedId !== null
+                          ? Math.max(0, Number(accounts.find((account) => account.id === selectedId)?.disbursedAmount) || 0)
+                          : 0}
+                        placeholder="처음 계약한 전체 대출 금액"
+                        value={formLoanLimit}
+                        onChange={(e) => setFormLoanLimit(e.target.value)}
+                        className="modal-input"
+                      />
+                      {modalMode === 'edit' && selectedId !== null && (
+                        <p className="form-hint">
+                          실행 금액 {formatCurrency(Math.max(0, Number(accounts.find((account) => account.id === selectedId)?.disbursedAmount) || 0))}보다 작게 설정할 수 없습니다.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {formAccountKind === 'LOAN' && modalMode === 'create' && (
+                    <div className="form-item">
+                      <label className="form-label">대출 등록 방식</label>
+                      <div className="loan-status-radio-group">
+                        <label className={`loan-status-radio${formLoanAlreadyDisbursed ? ' selected' : ''}`}>
+                          <input
+                            type="radio"
+                            name="loan-status"
+                            checked={formLoanAlreadyDisbursed}
+                            onChange={() => setFormLoanAlreadyDisbursed(true)}
+                          />
+                          <span>
+                            <strong>현재 상태만 등록</strong>
+                            <small>현재 대출 잔액부터 관리하며 과거 수령 내역은 기록하지 않습니다.</small>
+                          </span>
+                        </label>
+                        <label className={`loan-status-radio${!formLoanAlreadyDisbursed ? ' selected' : ''}`}>
+                          <input
+                            type="radio"
+                            name="loan-status"
+                            checked={!formLoanAlreadyDisbursed}
+                            onChange={() => {
+                              setFormLoanAlreadyDisbursed(false);
+                              setFormInitialBalance('0');
+                            }}
+                          />
+                          <span>
+                            <strong>대출금 수령 내역부터 기록</strong>
+                            <small>0원으로 등록한 뒤 대출에서 자산으로 이체해 받은 금액을 기록합니다.</small>
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+
                   {modalMode === 'edit' && selectedId !== null && (
                     <div className="form-item">
-                      <label className="form-label">현재 잔고 (원)</label>
+                      <label className="form-label">{formAccountKind === 'ASSET' ? '현재 잔고' : formAccountKind === 'CREDIT_CARD' ? '카드 사용액' : '현재 대출 잔액'} (원)</label>
                       <input
                         type="number"
                         required
@@ -2192,13 +2366,15 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                     </div>
                   )}
 
+                  {!(formAccountKind === 'LOAN' && modalMode === 'edit') && (
                   <div className="form-item">
-                    <label className="form-label">초기 설정 잔고 (원)</label>
+                      <label className="form-label">{formAccountKind === 'ASSET' ? '초기 설정 잔고' : formAccountKind === 'CREDIT_CARD' ? '초기 카드 사용액' : '현재 대출 잔액'} (원)</label>
                     <input
                       type="number"
                       required
                       min="0"
-                      placeholder="초기 가입/등록 잔액 입력"
+                      disabled={formAccountKind === 'LOAN' && !formLoanAlreadyDisbursed}
+                      placeholder={formAccountKind === 'LOAN' ? '현재 남은 대출 원금' : '초기 가입/등록 잔액 입력'}
                       value={formInitialBalance}
                       onChange={(e) => {
                         const previousInitialBalance = parseFloat(formInitialBalance) || 0;
@@ -2218,23 +2394,43 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                         초기 잔고를 변경하면 현재 잔고도 같은 차액만큼 조정되며, 잔고 조정 내역이 기록됩니다.
                       </p>
                     )}
+                    {formAccountKind === 'LOAN' && !formLoanAlreadyDisbursed && (
+                      <p className="form-hint">미실행 대출의 현재 남은 원금은 0원으로 등록됩니다.</p>
+                    )}
                   </div>
+                  )}
 
-                  <div className="form-item">
-                    <label className="form-label">계좌 역할</label>
-                    <select
-                      value={formAccountRole}
-                      onChange={(e) => setFormAccountRole(e.target.value as AccountRole)}
-                      className="modal-select"
-                    >
-                      {ACCOUNT_ROLE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="form-hint">저축·투자 역할은 각각 저축률·투자율 계산에 사용됩니다. 목표 금액은 「계좌 목표」 탭에서 설정하세요.</p>
-                  </div>
+                  {formAccountKind === 'CREDIT_CARD' && (
+                    <div className="form-item">
+                      <label className="form-label">카드 한도 (원, 선택)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="카드 한도 입력"
+                        value={formCreditLimit}
+                        onChange={(e) => setFormCreditLimit(e.target.value)}
+                        className="modal-input"
+                      />
+                    </div>
+                  )}
+
+                  {formAccountKind === 'ASSET' && (
+                    <div className="form-item">
+                      <label className="form-label">계좌 역할</label>
+                      <select
+                        value={formAccountRole}
+                        onChange={(e) => setFormAccountRole(e.target.value as AccountRole)}
+                        className="modal-select"
+                      >
+                        {ACCOUNT_ROLE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="form-hint">저축·투자 역할 계좌의 월간 이체 유입에서 유출을 뺀 금액으로 저축률·투자율을 계산합니다.</p>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -2257,14 +2453,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                     <label className="form-label">유형</label>
                     <select
                       value={formCategoryType}
-                      onChange={(e) => {
-                        const nextType = e.target.value as TransactionType;
-                        setFormCategoryType(nextType);
-                        if (nextType === 'TRANSFER') {
-                          setFormCategoryIncludeSavings(true);
-                          setFormCategoryIncludeInvestment(false);
-                        }
-                      }}
+                      onChange={(e) => setFormCategoryType(e.target.value as TransactionType)}
                       className="modal-select"
                     >
                       <option value="EXPENSE">지출</option>
@@ -2272,34 +2461,6 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                       <option value="TRANSFER">이체</option>
                     </select>
                   </div>
-
-                  {formCategoryType === 'TRANSFER' && (
-                    <>
-                      <div className="form-item">
-                        <label className="form-checkbox-label">
-                          <input
-                            type="checkbox"
-                            checked={formCategoryIncludeSavings}
-                            onChange={(e) => setFormCategoryIncludeSavings(e.target.checked)}
-                          />
-                          <span>저축률 계산에 포함</span>
-                        </label>
-                      </div>
-                      <div className="form-item">
-                        <label className="form-checkbox-label">
-                          <input
-                            type="checkbox"
-                            checked={formCategoryIncludeInvestment}
-                            onChange={(e) => setFormCategoryIncludeInvestment(e.target.checked)}
-                          />
-                          <span>투자율 계산에 포함</span>
-                        </label>
-                        <p className="form-hint">
-                          입금 계좌 역할과 함께 이번 달 저축률·투자율 분자에 반영됩니다.
-                        </p>
-                      </div>
-                    </>
-                  )}
                 </div>
               )}
 
@@ -2335,66 +2496,6 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                 </div>
               </div>
 
-            </form>
-          </div>
-        </div>
-      )}
-
-      {showAllocationModal && allocationCategoryId != null && (
-        <div className="asset-modal-overlay" onClick={handleCloseAllocationModal}>
-          <div className="asset-modal-content fade-in" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              className="modal-close-btn"
-              onClick={handleCloseAllocationModal}
-              aria-label="닫기"
-            >
-              <X size={18} />
-            </button>
-            <div className="modal-header">
-              <h3>이체 카테고리 저축률·투자율 설정</h3>
-            </div>
-            <form onSubmit={handleSubmitAllocation} className="modal-form">
-              <div className="form-group-grid" style={{ gridTemplateColumns: '1fr' }}>
-                <div className="form-item">
-                  <label className="form-label">카테고리</label>
-                  <div className="modal-readonly-value">
-                    {categories.find((cat) => cat.id === allocationCategoryId)?.name ?? ''}
-                  </div>
-                  <p className="form-hint">기본 카테고리는 이름·삭제를 변경할 수 없습니다.</p>
-                </div>
-                <div className="form-item">
-                  <label className="form-checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={formCategoryIncludeSavings}
-                      onChange={(e) => setFormCategoryIncludeSavings(e.target.checked)}
-                    />
-                    <span>저축률 계산에 포함</span>
-                  </label>
-                </div>
-                <div className="form-item">
-                  <label className="form-checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={formCategoryIncludeInvestment}
-                      onChange={(e) => setFormCategoryIncludeInvestment(e.target.checked)}
-                    />
-                    <span>투자율 계산에 포함</span>
-                  </label>
-                </div>
-              </div>
-              <div className="modal-footer">
-                <span />
-                <div className="modal-footer-actions">
-                  <button type="button" className="btn-secondary" onClick={handleCloseAllocationModal}>
-                    취소
-                  </button>
-                  <button type="submit" className="btn-primary" disabled={submitting}>
-                    저장
-                  </button>
-                </div>
-              </div>
             </form>
           </div>
         </div>

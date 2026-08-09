@@ -3,11 +3,17 @@ import type { AccountRole } from '../lib/accountGoalStorage';
 
 export type { AccountRole };
 
+export type AccountKind = 'ASSET' | 'CREDIT_CARD' | 'LOAN';
+
 export interface AccountResponse {
   id: number;
   accountName: string;
   initialBalance: number;
   currentBalance: number;
+  kind?: AccountKind | null;
+  creditLimit?: number | null;
+  loanLimit: number | null;
+  disbursedAmount: number | null;
   role: AccountRole;
   goalAmount: number | null;
   goalDate: string | null;
@@ -17,6 +23,10 @@ export interface AccountResponse {
 export interface AccountRequest {
   accountName: string;
   initialBalance: number;
+  kind: AccountKind;
+  creditLimit?: number | null;
+  loanLimit?: number | null;
+  loanAlreadyDisbursed?: boolean;
   role?: AccountRole;
 }
 
@@ -24,6 +34,9 @@ export interface AccountUpdateRequest {
   accountName: string;
   initialBalance: number;
   currentBalance: number;
+  kind: AccountKind;
+  creditLimit?: number | null;
+  loanLimit?: number | null;
   role?: AccountRole;
 }
 

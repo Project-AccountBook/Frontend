@@ -1,12 +1,11 @@
 import { authFetch, authRequest } from './client';
 import type {
-  CategoryAllocationRequest,
   CategoryRequest,
   CategoryResponse,
   TransactionType
 } from './types';
 
-export type { CategoryAllocationRequest, CategoryRequest, CategoryResponse, TransactionType };
+export type { CategoryRequest, CategoryResponse, TransactionType };
 
 interface ApiResponse<T> {
   success: boolean;
@@ -28,12 +27,6 @@ export const categoryApi = {
 
   update: (id: number, request: CategoryRequest) =>
     authRequest<void>(`/api/v1/categories/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(request),
-    }),
-
-  updateAllocation: (id: number, request: CategoryAllocationRequest) =>
-    authRequest<void>(`/api/v1/categories/${id}/allocation`, {
       method: 'PATCH',
       body: JSON.stringify(request),
     }),
@@ -78,22 +71,6 @@ export async function updateCategory(id: number, request: CategoryRequest): Prom
   const data: ApiResponse<null> = await res.json();
   if (!res.ok || !data.success) {
     throw new Error(data.error ?? '카테고리 수정에 실패했습니다.');
-  }
-}
-
-/** PATCH /api/v1/categories/{id}/allocation */
-export async function updateCategoryAllocation(
-  id: number,
-  request: CategoryAllocationRequest
-): Promise<void> {
-  const res = await authFetch(`/api/v1/categories/${id}/allocation`, {
-    method: 'PATCH',
-    headers: jsonHeaders,
-    body: JSON.stringify(request),
-  });
-  const data: ApiResponse<null> = await res.json();
-  if (!res.ok || !data.success) {
-    throw new Error(data.error ?? '카테고리 저축률·투자율 설정에 실패했습니다.');
   }
 }
 
