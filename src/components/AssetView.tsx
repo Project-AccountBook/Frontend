@@ -21,7 +21,9 @@ import {
   Loader2,
   AlertCircle,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  Play,
+  SkipForward
 } from 'lucide-react';
 import {
   getAccounts,
@@ -59,7 +61,10 @@ import {
   updateFixedTransaction,
   toggleFixedTransactionActive,
   deleteFixedTransaction,
+  retryFixedTransaction,
+  skipFixedTransaction,
   type FixedTransactionResponse,
+  type FixedTransactionExecutionFailure,
   type FrequencyType
 } from '../api/fixedTransactionApi';
 import { GoalSettingsSection } from './GoalSettingsSection';
@@ -498,6 +503,32 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
       await fetchFixedTransactions();
     } catch (err) {
       alert(err instanceof Error ? err.message : '활성 상태 변경에 실패했습니다.');
+    }
+  };
+
+  const getFixedFailureLabel = (reason: FixedTransactionExecutionFailure | null | undefined) => {
+    if (reason === 'CREDIT_LIMIT_EXCEEDED') return '한도 초과';
+    if (reason === 'INSUFFICIENT_BALANCE') return '잔액 부족';
+    return null;
+  };
+
+  const handleRetryFixedTransaction = async (id: number) => {
+    try {
+      await retryFixedTransaction(id);
+      await Promise.all([fetchFixedTransactions(), fetchTransactions()]);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '고정 거래 재실행에 실패했습니다.');
+      await fetchFixedTransactions();
+    }
+  };
+
+  const handleSkipFixedTransaction = async (id: number) => {
+    if (!window.confirm('이번 회차를 건너뛰고 다음 예정일로 진행할까요?')) return;
+    try {
+      await skipFixedTransaction(id);
+      await fetchFixedTransactions();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '고정 거래 건너뛰기에 실패했습니다.');
     }
   };
 
@@ -1642,17 +1673,27 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                       </td>
                     </tr>
                   ) : (
-                    fixedTransactions.map(fx => (
+                    fixedTransactions.map(fx => {
+                      const failureLabel = getFixedFailureLabel(fx.failureReason);
+                      return (
                       <tr key={fx.id} className={`hover-row ${!fx.isActive ? 'row-disabled' : ''}`}>
                         <td>
-                          <button
-                            className={`toggle-status-btn ${fx.isActive ? 'active' : ''}`}
-                            onClick={() => handleToggleFixedActive(fx.id)}
-                            title={fx.isActive ? '비활성화' : '활성화'}
-                          >
-                            <span className="toggle-slider"></span>
-                            <span className="toggle-label-text">{fx.isActive ? '활성' : '비활성'}</span>
-                          </button>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-start' }}>
+                            <button
+                              className={`toggle-status-btn ${fx.isActive ? 'active' : ''}`}
+                              onClick={() => handleToggleFixedActive(fx.id)}
+                              title={fx.isActive ? '비활성화' : '활성화'}
+                            >
+                              <span className="toggle-slider"></span>
+                              <span className="toggle-label-text">{fx.isActive ? '활성' : '비활성'}</span>
+                            </button>
+                            {failureLabel && (
+                              <span className="type-badge" style={{ background: 'var(--red-bg)', color: 'var(--red)', border: '1px solid var(--red-border)' }}>
+                                실행 실패 · {failureLabel}
+                                {fx.failedExecutionDate ? ` (${fx.failedExecutionDate})` : ''}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="font-semibold">
                           {fx.type === 'TRANSFER' && fx.targetAccountName
@@ -1679,6 +1720,24 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                         </td>
                         <td>
                           <div className="table-actions">
+                            {failureLabel && (
+                              <>
+                                <button
+                                  className="btn-action-icon"
+                                  onClick={() => handleRetryFixedTransaction(fx.id)}
+                                  title="지금 실행"
+                                >
+                                  <Play size={14} />
+                                </button>
+                                <button
+                                  className="btn-action-icon"
+                                  onClick={() => handleSkipFixedTransaction(fx.id)}
+                                  title="이번 회차 건너뛰기"
+                                >
+                                  <SkipForward size={14} />
+                                </button>
+                              </>
+                            )}
                             <button className="btn-action-icon edit" onClick={() => handleOpenEditModal(fx.id)} title="수정">
                               <Edit2 size={14} />
                             </button>
@@ -1688,7 +1747,8 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                           </div>
                         </td>
                       </tr>
-                    ))
+                      );
+                    })
                   )}
                 </tbody>
               </table>

@@ -3,6 +3,8 @@ import type { TransactionType } from './categoryApi';
 
 export type FrequencyType = 'WEEKLY' | 'MONTHLY' | 'YEARLY';
 
+export type FixedTransactionExecutionFailure = 'INSUFFICIENT_BALANCE' | 'CREDIT_LIMIT_EXCEEDED';
+
 export interface FixedTransactionResponse {
   id: number;
   accountId: number;
@@ -20,6 +22,10 @@ export interface FixedTransactionResponse {
   endDate?: string | null;
   description: string;
   isActive: boolean;
+  nextExecutionDate?: string | null;
+  lastExecutedDate?: string | null;
+  failureReason?: FixedTransactionExecutionFailure | null;
+  failedExecutionDate?: string | null;
 }
 
 export interface FixedTransactionRequest {
@@ -59,6 +65,8 @@ function normalizeFixedTransaction(fx: FixedTransactionResponse): FixedTransacti
     ...fx,
     amount: Number(fx.amount),
     description: fx.description ?? '',
+    failureReason: fx.failureReason ?? null,
+    failedExecutionDate: fx.failedExecutionDate ?? null,
   };
 }
 
@@ -110,5 +118,29 @@ export async function deleteFixedTransaction(id: number): Promise<void> {
   const data: ApiResponse<null> = await res.json();
   if (!res.ok || !data.success) {
     throw new Error(data.error ?? '고정 거래 삭제에 실패했습니다.');
+  }
+}
+
+/** POST /api/v1/fixed-transactions/{id}/retry */
+export async function retryFixedTransaction(id: number): Promise<void> {
+  const res = await authFetch(`/api/v1/fixed-transactions/${id}/retry`, {
+    method: 'POST',
+    headers: jsonHeaders,
+  });
+  const data: ApiResponse<null> = await res.json();
+  if (!res.ok || !data.success) {
+    throw new Error(data.error ?? '고정 거래 재실행에 실패했습니다.');
+  }
+}
+
+/** POST /api/v1/fixed-transactions/{id}/skip */
+export async function skipFixedTransaction(id: number): Promise<void> {
+  const res = await authFetch(`/api/v1/fixed-transactions/${id}/skip`, {
+    method: 'POST',
+    headers: jsonHeaders,
+  });
+  const data: ApiResponse<null> = await res.json();
+  if (!res.ok || !data.success) {
+    throw new Error(data.error ?? '고정 거래 건너뛰기에 실패했습니다.');
   }
 }

@@ -787,8 +787,8 @@ export const MyPageView: React.FC = () => {
                 <ToggleSwitch
                   checked={profile.isSystemAlertEnabled}
                   onChange={(v) => setProfile({ ...profile, isSystemAlertEnabled: v })}
-                  label="보안 알림"
-                  description="로그인, 비밀번호 변경 등 보안 관련 이벤트를 알려드립니다"
+                  label="시스템 알림"
+                  description="고정 거래 실행 실패, 신고 처리 결과 등 중요한 서비스 안내를 받습니다"
                 />
               </div>
 
