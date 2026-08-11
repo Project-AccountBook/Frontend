@@ -3,11 +3,17 @@ import type { AccountRole } from '../lib/accountGoalStorage';
 
 export type { AccountRole };
 
+export type AccountKind = 'ASSET' | 'CREDIT_CARD' | 'LOAN';
+
 export interface AccountResponse {
   id: number;
   accountName: string;
   initialBalance: number;
   currentBalance: number;
+  kind?: AccountKind | null;
+  creditLimit?: number | null;
+  loanLimit: number | null;
+  disbursedAmount: number | null;
   role: AccountRole;
   goalAmount: number | null;
   goalDate: string | null;
@@ -17,6 +23,20 @@ export interface AccountResponse {
 export interface AccountRequest {
   accountName: string;
   initialBalance: number;
+  kind: AccountKind;
+  creditLimit?: number | null;
+  loanLimit?: number | null;
+  loanAlreadyDisbursed?: boolean;
+  role?: AccountRole;
+}
+
+export interface AccountUpdateRequest {
+  accountName: string;
+  initialBalance: number;
+  currentBalance: number;
+  kind: AccountKind;
+  creditLimit?: number | null;
+  loanLimit?: number | null;
   role?: AccountRole;
 }
 
@@ -58,7 +78,7 @@ export async function createAccount(request: AccountRequest): Promise<number> {
 }
 
 /** PATCH /api/v1/account/{accountId} */
-export async function updateAccount(accountId: number, request: AccountRequest): Promise<void> {
+export async function updateAccount(accountId: number, request: AccountUpdateRequest): Promise<void> {
   const res = await authFetch(`/api/v1/account/${accountId}`, {
     method: 'PATCH',
     headers: jsonHeaders,

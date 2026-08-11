@@ -60,6 +60,18 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
   const [editingHasGoal, setEditingHasGoal] = useState(false);
 
   const yearMonth = formatYearMonth(new Date());
+  const assetAccounts = useMemo(
+    () => accounts.filter((account) => (account.kind ?? 'ASSET') === 'ASSET'),
+    [accounts]
+  );
+  const loanAccounts = useMemo(
+    () => accounts.filter((account) => account.kind === 'LOAN'),
+    [accounts]
+  );
+  const goalAccounts = useMemo(
+    () => [...assetAccounts, ...loanAccounts],
+    [assetAccounts, loanAccounts]
+  );
 
   const loadMetrics = useCallback(async () => {
     setMetricsLoading(true);
@@ -80,8 +92,8 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
   }, [accountsLoading, loadMetrics]);
 
   const goalProgressItems = useMemo(
-    () => mapGoalProgressFromAccounts(accounts, CATEGORY_COLORS),
-    [accounts]
+    () => mapGoalProgressFromAccounts(goalAccounts, CATEGORY_COLORS),
+    [goalAccounts]
   );
 
   const accountsWithGoalSet = goalProgressItems.length;
@@ -95,13 +107,14 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
 
   const openGoalModal = (accountId: number) => {
     const account = accounts.find((acc) => acc.id === accountId);
-    if (!account) return;
+    if (!account || account.kind === 'CREDIT_CARD') return;
+    const isLoan = account.kind === 'LOAN';
 
     setEditingAccountId(accountId);
     setFormRole(normalizeAccountRole(account.role));
-    setFormGoalAmount(account.goalAmount != null ? String(account.goalAmount) : '');
+    setFormGoalAmount(account.goalAmount != null ? String(account.goalAmount) : isLoan ? '0' : '');
     setFormGoalDate(account.goalDate ?? '');
-    setEditingHasGoal(account.goalAmount != null && Number(account.goalAmount) > 0);
+    setEditingHasGoal(account.goalAmount != null && (isLoan || Number(account.goalAmount) > 0));
     setShowGoalModal(true);
   };
 
@@ -119,14 +132,18 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
     if (!account) return;
 
     const parsedGoal = formGoalAmount.trim() ? parseFloat(formGoalAmount) : null;
+    const isLoan = account.kind === 'LOAN';
     const hasValidGoal =
-      parsedGoal != null && !Number.isNaN(parsedGoal) && parsedGoal > 0;
+      parsedGoal != null && !Number.isNaN(parsedGoal) && (isLoan ? parsedGoal >= 0 : parsedGoal > 0);
 
     setSavingGoal(true);
     try {
       await updateAccount(editingAccountId, {
         accountName: account.accountName,
         initialBalance: Number(account.initialBalance),
+        currentBalance: Number(account.currentBalance),
+        kind: account.kind ?? 'ASSET',
+        creditLimit: account.creditLimit ?? null,
         role: formRole
       });
 
@@ -143,7 +160,7 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
       await onRefreshAccounts();
       await loadMetrics();
     } catch (err) {
-      alert(err instanceof Error ? err.message : '계좌 목표 저장에 실패했습니다.');
+      alert(err instanceof Error ? err.message : '목표 저장에 실패했습니다.');
     } finally {
       setSavingGoal(false);
     }
@@ -151,7 +168,7 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
 
   const handleDeleteGoal = async () => {
     if (editingAccountId == null) return;
-    if (!window.confirm('이 계좌의 목표를 삭제하시겠습니까?\n\n계좌 역할 설정은 유지됩니다.')) {
+    if (!window.confirm('이 목표를 삭제하시겠습니까?')) {
       return;
     }
 
@@ -163,6 +180,9 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
       await updateAccount(editingAccountId, {
         accountName: account.accountName,
         initialBalance: Number(account.initialBalance),
+        currentBalance: Number(account.currentBalance),
+        kind: account.kind ?? 'ASSET',
+        creditLimit: account.creditLimit ?? null,
         role: formRole
       });
       await clearAccountGoal(editingAccountId);
@@ -170,7 +190,7 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
       await onRefreshAccounts();
       await loadMetrics();
     } catch (err) {
-      alert(err instanceof Error ? err.message : '계좌 목표 삭제에 실패했습니다.');
+      alert(err instanceof Error ? err.message : '목표 삭제에 실패했습니다.');
     } finally {
       setSavingGoal(false);
     }
@@ -184,7 +204,7 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
     return (
       <div className="table-empty-row" style={{ padding: '48px 0' }}>
         <Loader2 size={24} className="spin-animation" />
-        <p>계좌 목표 정보를 불러오는 중...</p>
+        <p>목표 정보를 불러오는 중...</p>
       </div>
     );
   }
@@ -205,15 +225,15 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
     <div className="section-content fade-in goal-settings-section">
       <div className="goal-settings-intro">
         <p>
-          계좌별 목표 금액·역할을 설정하면 대시보드에서 달성률, 저축률, 투자율을 확인할 수 있습니다.
+          자산 목표와 대출 상환 목표를 한곳에서 관리하고 달성률을 확인할 수 있습니다.
         </p>
       </div>
 
       <div className="goal-settings-summary-grid four-cols">
         <div className="goal-settings-stat-card">
-          <span className="goal-settings-stat-label">목표 설정 계좌</span>
+          <span className="goal-settings-stat-label">목표 설정 항목</span>
           <span className="goal-settings-stat-value">
-            {accountsWithGoalSet} / {accounts.length}
+            {accountsWithGoalSet} / {goalAccounts.length}
           </span>
         </div>
         <div className="goal-settings-stat-card">
@@ -244,9 +264,9 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
         </div>
       </div>
 
-      {accounts.length === 0 ? (
+      {goalAccounts.length === 0 ? (
         <div className="goal-empty-state card" style={{ marginTop: '16px' }}>
-          <p>등록된 계좌가 없습니다.</p>
+          <p>목표를 설정할 수 있는 자산계좌나 대출이 없습니다.</p>
           <button type="button" className="btn-section-add" onClick={onGoToAccounts}>
             <Wallet size={14} />
             계좌 등록하러 가기
@@ -254,16 +274,26 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
         </div>
       ) : (
         <div className="goal-account-list">
-          {accounts.map((account, index) => {
+          {goalAccounts.map((account, index) => {
+            const isLoan = account.kind === 'LOAN';
             const role = normalizeAccountRole(account.role);
             const goalAmount = account.goalAmount != null ? Number(account.goalAmount) : null;
-            const hasGoal = goalAmount != null && goalAmount > 0;
+            const hasGoal = goalAmount != null && (isLoan || goalAmount > 0);
+            const initialDebt = Math.max(0, Number(account.disbursedAmount) || 0);
+            const currentDebt = Math.abs(Number(account.currentBalance));
+            const debtProgress = goalAmount != null && initialDebt > goalAmount
+              ? Math.min(100, Math.max(0, Math.round(
+                  ((initialDebt - currentDebt) / (initialDebt - goalAmount)) * 100
+                )))
+              : goalAmount != null && currentDebt <= goalAmount ? 100 : 0;
             const progress = hasGoal
               ? account.progressPercent ??
-                Math.min(100, Math.round((account.currentBalance / goalAmount!) * 100))
+                (isLoan
+                  ? debtProgress
+                  : Math.min(100, Math.round((account.currentBalance / goalAmount!) * 100)))
               : null;
             const color = CATEGORY_COLORS[index % CATEGORY_COLORS.length];
-            const isChecking = role === 'CHECKING';
+            const isChecking = !isLoan && role === 'CHECKING';
 
             return (
               <div key={account.id} className={`card goal-account-card${isChecking ? ' is-checking' : ''}`}>
@@ -271,9 +301,13 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
                   <div>
                     <div className="goal-progress-title-row">
                       <h3 className="goal-account-name">{account.accountName}</h3>
-                      <span className="goal-role-badge">{ACCOUNT_ROLE_LABELS[role]}</span>
+                      <span className="goal-role-badge">
+                        {isLoan ? '대출 상환' : ACCOUNT_ROLE_LABELS[role]}
+                      </span>
                     </div>
-                    <span className="goal-account-balance">현재 {formatKRW(account.currentBalance)}원</span>
+                    <span className="goal-account-balance">
+                      {isLoan ? `남은 대출 ${formatKRW(currentDebt)}원` : `현재 ${formatKRW(account.currentBalance)}원`}
+                    </span>
                   </div>
                   <button
                     type="button"
@@ -302,7 +336,9 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
                     </div>
                     <div className="goal-progress-meta">
                       <span>
-                        {formatKRW(account.currentBalance)} / {formatKRW(goalAmount)}원
+                        {isLoan
+                          ? `남은 대출 ${formatKRW(currentDebt)}원 / 목표 잔액 ${formatKRW(goalAmount)}원`
+                          : `${formatKRW(account.currentBalance)} / ${formatKRW(goalAmount)}원`}
                       </span>
                       {account.goalDate && (
                         <span>목표일 {formatGoalDateLabel(account.goalDate)}</span>
@@ -312,12 +348,14 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
                 ) : (
                   <div className="goal-account-empty">
                     <span>
-                      {isChecking
+                      {isLoan
+                        ? '대출 상환 목표가 설정되지 않았습니다.'
+                        : isChecking
                         ? '생활 계좌는 목표 설정이 선택 사항입니다.'
                         : '목표가 설정되지 않았습니다.'}
                     </span>
                     <button type="button" className="goal-inline-link" onClick={() => openGoalModal(account.id)}>
-                      {isChecking ? '목표 설정' : '목표 추가'}
+                      {isLoan || isChecking ? '목표 설정' : '목표 추가'}
                     </button>
                   </div>
                 )}
@@ -327,7 +365,7 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
         </div>
       )}
 
-      {accounts.some((acc) => isGoalEligibleRole(normalizeAccountRole(acc.role))) && (
+      {assetAccounts.some((acc) => isGoalEligibleRole(normalizeAccountRole(acc.role))) && (
         <div className="card goal-savings-note" style={{ marginTop: '16px' }}>
           <div className="card-header-row">
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -336,8 +374,8 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
             </div>
           </div>
           <p className="goal-savings-note-text">
-            <strong>저축률</strong> = 저축 역할 계좌 순이체 ÷ 월 수입 ·{' '}
-            <strong>투자율</strong> = 투자 역할 계좌 순이체 ÷ 월 수입
+            <strong>저축률</strong> = 저축 역할 계좌의 월간 순유입(이체 유입−유출) ÷ 월 수입 ·{' '}
+            <strong>투자율</strong> = 투자 역할 계좌의 월간 순유입(이체 유입−유출) ÷ 월 수입
             {!metricsLoading && (
               <>
                 <br />
@@ -364,24 +402,29 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
             </button>
             <div className="modal-header">
               <h3>
-                {editingHasGoal ? '선택한 계좌 목표 수정' : '새로운 계좌 목표 등록'}
+                {editingHasGoal ? '목표 수정' : '새로운 목표 등록'}
               </h3>
             </div>
 
             <form onSubmit={handleSaveGoal} className="modal-form">
               <div className="form-group-grid" style={{ gridTemplateColumns: '1fr' }}>
                 <div className="form-item">
-                  <label className="form-label">계좌 명칭</label>
+                  <label className="form-label">{editingAccount.kind === 'LOAN' ? '대출 명칭' : '계좌 명칭'}</label>
                   <div className="modal-readonly-value">{editingAccount.accountName}</div>
-                  <p className="form-hint">계좌 이름은 계좌 관리에서 수정할 수 있습니다.</p>
+                  <p className="form-hint">이름은 자산 메뉴에서 수정할 수 있습니다.</p>
                 </div>
 
                 <div className="form-item">
-                  <label className="form-label">현재 잔고</label>
-                  <div className="modal-readonly-value">{formatKRW(editingAccount.currentBalance)}원</div>
-                  <p className="form-hint">거래 내역에 따라 자동 계산됩니다. 목표 달성률의 기준이 됩니다.</p>
+                  <label className="form-label">{editingAccount.kind === 'LOAN' ? '현재 남은 대출' : '현재 잔고'}</label>
+                  <div className="modal-readonly-value">
+                    {formatKRW(editingAccount.kind === 'LOAN'
+                      ? Math.abs(editingAccount.currentBalance)
+                      : editingAccount.currentBalance)}원
+                  </div>
+                  <p className="form-hint">거래 내역에 따라 자동 계산되며 목표 달성률의 기준이 됩니다.</p>
                 </div>
 
+                {editingAccount.kind !== 'LOAN' && (
                 <div className="form-item">
                   <label className="form-label">계좌 역할</label>
                   <select
@@ -396,16 +439,19 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
                     ))}
                   </select>
                   <p className="form-hint">
-                    저축·투자 역할은 각각 저축률·투자율 계산에 사용됩니다. 비상금 등은 저축 역할로 설정하세요.
+                    저축·투자 역할 계좌로 들어오고 나간 이체의 차액이 각각 저축률·투자율에 반영됩니다.
                   </p>
                 </div>
+                )}
 
                 <div className="form-item">
-                  <label className="form-label">목표 금액 (원)</label>
+                  <label className="form-label">
+                    {editingAccount.kind === 'LOAN' ? '목표 대출 잔액 (원)' : '목표 금액 (원)'}
+                  </label>
                   <input
                     type="number"
                     min="0"
-                    placeholder="목표 금액 입력"
+                    placeholder={editingAccount.kind === 'LOAN' ? '전액 상환은 0원' : '목표 금액 입력'}
                     value={formGoalAmount}
                     onChange={(e) => setFormGoalAmount(e.target.value)}
                     className="modal-input"

@@ -168,20 +168,11 @@ export interface CategoryResponse {
   name: string;
   type: TransactionType;
   isCustom: boolean;
-  includeInSavingsRate: boolean;
-  includeInInvestmentRate: boolean;
 }
 
 export interface CategoryRequest {
   name: string;
   type: TransactionType;
-  includeInSavingsRate?: boolean | null;
-  includeInInvestmentRate?: boolean | null;
-}
-
-export interface CategoryAllocationRequest {
-  includeInSavingsRate: boolean;
-  includeInInvestmentRate: boolean;
 }
 
 export interface BudgetRequest {
@@ -267,6 +258,7 @@ export interface MonthlyAllocationSummaryResponse {
 export interface GoalProgressResponse {
   accountId: number;
   accountName: string;
+  kind?: 'ASSET' | 'CREDIT_CARD' | 'LOAN' | null;
   role: AccountRole;
   currentBalance: number;
   goalAmount: number;

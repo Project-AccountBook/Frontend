@@ -57,6 +57,7 @@ interface Account {
   id: number;
   accountName: string;
   currentBalance: number;
+  kind?: 'ASSET' | 'CREDIT_CARD' | 'LOAN' | null;
 }
 
 interface Comment {
@@ -642,9 +643,10 @@ export const GroupBuyView: React.FC<{
   const fetchAccountsForCreate = async () => {
     try {
       const res = await fetchWithAuth('/api/v1/account');
-      setUserAccounts(res);
-      if (res && res.length > 0) {
-        setCreateForm(prev => ({ ...prev, accountId: String(res[0].id) }));
+      const eligibleAccounts = (res as Account[]).filter((account) => (account.kind ?? 'ASSET') !== 'LOAN');
+      setUserAccounts(eligibleAccounts);
+      if (eligibleAccounts.length > 0) {
+        setCreateForm(prev => ({ ...prev, accountId: String(eligibleAccounts[0].id) }));
       }
     } catch(e) { console.error(e); }
   };
@@ -731,9 +733,10 @@ export const GroupBuyView: React.FC<{
     }
     try {
       const res = await fetchWithAuth('/api/v1/account');
-      setUserAccounts(res);
-      if (res && res.length > 0) {
-        setSelectedAccountId(res[0].id);
+      const eligibleAccounts = (res as Account[]).filter((account) => (account.kind ?? 'ASSET') !== 'LOAN');
+      setUserAccounts(eligibleAccounts);
+      if (eligibleAccounts.length > 0) {
+        setSelectedAccountId(eligibleAccounts[0].id);
       }
     } catch (e) {
       console.error("Failed to fetch accounts", e);

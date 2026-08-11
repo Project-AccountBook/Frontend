@@ -432,21 +432,32 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const budgetPlanned = toNumber(dashboard?.budgetStatus.totalPlanned);
 
   const totalAsset = useMemo(() => {
-    if (dashboard?.totalAsset != null) {
-      return toNumber(dashboard.totalAsset);
-    }
     return accounts.reduce((acc, account) => acc + toNumber(account.currentBalance), 0);
-  }, [dashboard, accounts]);
+  }, [accounts]);
+
+  const totalDebt = useMemo(
+    () => accounts
+      .filter((account) => (account.kind ?? 'ASSET') !== 'ASSET')
+      .reduce((sum, account) => sum + Math.abs(toNumber(account.currentBalance)), 0),
+    [accounts]
+  );
 
   const goalProgressItems = useMemo(() => {
     if (dashboard?.goalProgress?.length) {
-      return mapGoalProgressFromApi(dashboard.goalProgress, CATEGORY_COLORS);
+      const goalEligibleIds = new Set(
+        accounts
+          .filter((account) => (account.kind ?? 'ASSET') !== 'CREDIT_CARD')
+          .map((account) => account.id)
+      );
+      return mapGoalProgressFromApi(dashboard.goalProgress, CATEGORY_COLORS)
+        .filter((item) => goalEligibleIds.has(item.accountId));
     }
     return mapGoalProgressFromAccounts(accounts, CATEGORY_COLORS);
   }, [dashboard, accounts]);
 
   const accountBreakdown = useMemo(() => {
     const items = accounts
+      .filter((account) => (account.kind ?? 'ASSET') === 'ASSET')
       .map((account) => ({
         id: account.id,
         name: account.accountName,
@@ -651,13 +662,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         <div className="card stat-card navy-theme">
           <div className="card-header-row">
-            <span className="card-title">현재 종합 자산</span>
+            <span className="card-title">현재 순자산</span>
             <div className="icon-wrapper">
               <Coins size={20} />
             </div>
           </div>
           <div className="stat-value">{formatKRW(totalAsset)}</div>
-          <div className="stat-label">계좌 잔액 합계</div>
+          <div className="stat-label">계좌 잔액 합계 · 총부채 {formatKRW(totalDebt)}원</div>
         </div>
       </div>
 
@@ -970,12 +981,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             <div className="goal-summary-strip">
               <div className="goal-summary-item">
-                <span className="goal-summary-label">순저축</span>
+                <span className="goal-summary-label">저축계좌 순유입</span>
                 <span className="goal-summary-value">{formatKRW(monthlyAllocation.savings.net)}원</span>
+                <span className="goal-summary-label">유입 {formatKRW(monthlyAllocation.savings.inflow)}원 · 유출 {formatKRW(monthlyAllocation.savings.outflow)}원</span>
               </div>
               <div className="goal-summary-item">
-                <span className="goal-summary-label">순투자</span>
+                <span className="goal-summary-label">투자계좌 순유입</span>
                 <span className="goal-summary-value">{formatKRW(monthlyAllocation.investment.net)}원</span>
+                <span className="goal-summary-label">유입 {formatKRW(monthlyAllocation.investment.inflow)}원 · 유출 {formatKRW(monthlyAllocation.investment.outflow)}원</span>
               </div>
               <div className="goal-summary-item">
                 <span className="goal-summary-label">월 수입</span>
@@ -985,11 +998,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             {goalProgressItems.length === 0 ? (
               <div className="goal-empty-state">
-                <p>목표가 설정된 계좌가 없습니다.</p>
-                <span className="goal-empty-hint">내역 및 자산 관리 &gt; 계좌 목표에서 설정할 수 있습니다.</span>
+                <p>설정된 자산·대출 목표가 없습니다.</p>
+                <span className="goal-empty-hint">내역 및 자산 관리 &gt; 목표 관리에서 설정할 수 있습니다.</span>
                 {onGoToGoalSettings && (
                   <button type="button" className="btn-goal-settings-link" onClick={onGoToGoalSettings}>
-                    계좌 목표 설정하기
+                    목표 설정하기
                   </button>
                 )}
               </div>
@@ -1001,7 +1014,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <div className="asset-progress-header">
                       <div className="goal-progress-title-row">
                         <span className="asset-progress-name">{goal.name}</span>
-                        <span className="goal-role-badge">{goal.roleLabel}</span>
+                        <span className="goal-role-badge">
+                          {goal.kind === 'LOAN' ? '대출 상환' : goal.roleLabel}
+                        </span>
                       </div>
                       <span className="asset-progress-val goal-progress-percent">
                         {goal.progressPercent}%
@@ -1011,14 +1026,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       <div
                         className="progress-bar-fill"
                         style={{
-                          width: `${Math.max(goal.progressPercent, goal.balance > 0 ? 4 : 0)}%`,
+                          width: `${Math.max(goal.progressPercent, goal.progressPercent > 0 ? 4 : 0)}%`,
                           backgroundColor: goal.color
                         }}
                       />
                     </div>
                     <div className="goal-progress-meta">
                       <span>
-                        {formatKRW(goal.balance)}원 / {formatKRW(goal.goalAmount)}원
+                        {goal.kind === 'LOAN'
+                          ? `남은 대출 ${formatKRW(Math.abs(goal.balance))}원 / 목표 잔액 ${formatKRW(goal.goalAmount)}원`
+                          : `${formatKRW(goal.balance)}원 / ${formatKRW(goal.goalAmount)}원`}
                       </span>
                       {goal.goalDate && (
                         <span>
@@ -1036,7 +1053,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
               {onGoToGoalSettings && (
                 <button type="button" className="btn-goal-settings-link subtle" onClick={onGoToGoalSettings}>
-                  계좌 목표 관리
+                  목표 관리
                 </button>
               )}
               </>
@@ -1051,15 +1068,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             <div className="asset-summary-total">
               <div className="asset-summary-row">
-                <span className="asset-summary-label">총 자산</span>
+                <span className="asset-summary-label">순자산</span>
                 <span className="asset-summary-value">{formatKRW(totalAsset)}원</span>
               </div>
-              <span className="asset-summary-sub">등록 계좌 {accounts.length}개 기준</span>
+              <div className="asset-summary-row">
+                <span className="asset-summary-label">총부채</span>
+                <span className="asset-summary-value">{formatKRW(totalDebt)}원</span>
+              </div>
+              <span className="asset-summary-sub">자산 구성은 자산계좌만 표시</span>
             </div>
 
-            {accounts.length === 0 ? (
+            {accountBreakdown.length === 0 ? (
               <div style={{ padding: '24px 0 8px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>
-                등록된 계좌가 없습니다. 자산 메뉴에서 계좌를 추가해 주세요.
+                등록된 자산계좌가 없습니다. 자산 메뉴에서 자산을 추가해 주세요.
               </div>
             ) : (
               <div className="asset-progress-list asset-breakdown-list">

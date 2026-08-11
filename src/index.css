@@ -1491,6 +1491,8 @@ a {
   font-size: 13px;
   font-weight: 700;
   transition: all var(--transition-fast);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .header-btn-primary:hover {
@@ -1511,6 +1513,7 @@ a {
   border: 1px solid var(--border);
   transition: all var(--transition-fast);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .header-btn-secondary:hover {
@@ -2074,6 +2077,25 @@ a {
   white-space: nowrap;
 }
 
+.account-kind-badge {
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #0369a1;
+  background: #e0f2fe;
+}
+
+.account-kind-badge.credit_card {
+  color: #b45309;
+  background: #fef3c7;
+}
+
+.account-kind-badge.loan {
+  color: #be123c;
+  background: #ffe4e6;
+}
+
 .goal-progress-percent {
   color: #059669;
 }
@@ -2179,6 +2201,8 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -3147,6 +3171,13 @@ a {
   align-items: center;
 }
 
+.account-card-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
 .icon-circle {
   width: 40px;
   height: 40px;
@@ -3156,6 +3187,16 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.icon-circle.credit_card {
+  color: #b45309;
+  background: #fef3c7;
+}
+
+.icon-circle.loan {
+  color: #be123c;
+  background: #ffe4e6;
 }
 
 .card-actions {
@@ -5146,6 +5187,52 @@ a {
 .form-label {
   font-size: 12px;
   font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.loan-status-radio-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.loan-status-radio {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.loan-status-radio.selected {
+  border-color: var(--primary);
+  background: rgba(79, 70, 229, 0.06);
+}
+
+.loan-status-radio input {
+  margin-top: 2px;
+  accent-color: var(--primary);
+}
+
+.loan-status-radio span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.loan-status-radio strong {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.loan-status-radio small {
+  font-size: 11px;
+  line-height: 1.4;
   color: var(--text-secondary);
 }
 

@@ -1142,7 +1142,7 @@ export const MyPageView: React.FC<MyPageViewProps> = ({ onOpenBoard }) => {
                   checked={profile.isSystemAlertEnabled}
                   onChange={(v) => void handleNotificationToggle('isSystemAlertEnabled', v)}
                   label="시스템 알림"
-                  description="회원가입 환영, 서비스 공지 등 시스템 안내 알림을 받습니다"
+                  description="고정 거래 실행 실패, 신고 처리 결과 등 중요한 서비스 안내를 받습니다"
                   disabled={savingNotifications}
                 />
                 </div>

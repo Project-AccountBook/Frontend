@@ -77,6 +77,7 @@ function resolveNotificationTab(
     const bareTab = url.replace(/^#\/?/, '').replace(/^\//, '');
 
     if (bareTab === 'goals' || bareTab === 'history/goals') return 'history';
+    if (bareTab === 'fixed' || bareTab === 'history/fixed') return 'history';
     if (KNOWN_APP_TABS.has(bareTab)) return bareTab;
     if (bareTab === 'budget-page') return 'budget';
     if (url.includes('budget-page') || /\/budget\/?$/.test(url)) return 'budget';
@@ -97,6 +98,9 @@ function resolveAssetSection(
     const url = redirectUrl.trim().replace(/^#\/?/, '').replace(/^\//, '');
     if (url === 'goals' || url === 'history/goals' || url.endsWith('/goals')) {
       return 'goals';
+    }
+    if (url === 'fixed' || url === 'history/fixed' || url.endsWith('/fixed')) {
+      return 'fixed';
     }
   }
 

@@ -1,4 +1,4 @@
-import type { AccountResponse } from '../api/accountApi';
+import type { AccountKind, AccountResponse } from '../api/accountApi';
 import type { GoalProgressResponse, MonthlyAllocationSummaryResponse } from '../api/types';
 
 export type AccountRole = 'CHECKING' | 'SAVINGS' | 'INVESTMENT';
@@ -6,6 +6,7 @@ export type AccountRole = 'CHECKING' | 'SAVINGS' | 'INVESTMENT';
 export interface GoalProgressItem {
   accountId: number;
   name: string;
+  kind: AccountKind;
   balance: number;
   goalAmount: number;
   progressPercent: number;
@@ -29,7 +30,7 @@ export interface MonthlyAllocationSummary {
 }
 
 export const ACCOUNT_ROLE_LABELS: Record<AccountRole, string> = {
-  CHECKING: '생활 · 입출금',
+  CHECKING: '생활/입출금',
   SAVINGS: '저축',
   INVESTMENT: '투자'
 };
@@ -79,6 +80,7 @@ export function mapGoalProgressFromApi(
     return {
       accountId: item.accountId,
       name: item.accountName,
+      kind: item.kind ?? 'ASSET',
       balance: Number(item.currentBalance),
       goalAmount: Number(item.goalAmount),
       progressPercent: Number(item.progressPercent),
@@ -107,23 +109,37 @@ export function mapGoalProgressFromAccounts(
   colors: string[]
 ): GoalProgressItem[] {
   const items: GoalProgressResponse[] = accounts
-    .filter((account) => account.goalAmount != null && account.goalAmount > 0)
-    .map((account) => ({
+    .filter((account) => (account.kind ?? 'ASSET') !== 'CREDIT_CARD')
+    .filter((account) => account.goalAmount != null
+      && ((account.kind ?? 'ASSET') === 'LOAN' || account.goalAmount > 0))
+    .map((account) => {
+      const kind = account.kind ?? 'ASSET';
+      const initialDebt = Math.max(0, Number(account.disbursedAmount) || 0);
+      const currentDebt = Math.abs(Number(account.currentBalance));
+      const targetDebt = Number(account.goalAmount);
+      const debtProgress = initialDebt > targetDebt
+        ? Math.min(100, Math.max(0, Math.round(
+            ((initialDebt - currentDebt) / (initialDebt - targetDebt)) * 100
+          )))
+        : currentDebt <= targetDebt ? 100 : 0;
+      return {
       accountId: account.id,
       accountName: account.accountName,
+      kind,
       role: normalizeAccountRole(account.role),
       currentBalance: Number(account.currentBalance) || 0,
       goalAmount: Number(account.goalAmount),
       progressPercent:
         account.progressPercent != null
           ? account.progressPercent
-          : Math.min(
+          : kind === 'LOAN' ? debtProgress : Math.min(
               100,
               Math.round((Number(account.currentBalance) / Number(account.goalAmount)) * 100)
             ),
       goalDate: account.goalDate ?? null,
       dDay: calcDDay(account.goalDate ?? null)
-    }));
+      };
+    });
 
   return mapGoalProgressFromApi(items, colors).sort(
     (a, b) => b.progressPercent - a.progressPercent
