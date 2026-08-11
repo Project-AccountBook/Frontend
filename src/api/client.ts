@@ -65,6 +65,11 @@ async function parseResponse<T>(res: Response): Promise<RequestResult<T>> {
   };
 }
 
+function getCsrfToken(): string | null {
+  const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 let reissuePromise: Promise<boolean> | null = null;
 let authExpiredHandler: (() => void) | null = null;
 
@@ -83,9 +88,15 @@ async function tryReissue(): Promise<boolean> {
 
   reissuePromise = (async () => {
     try {
+      const headers = new Headers();
+      headers.set('Content-Type', 'application/json');
+      const csrfToken = getCsrfToken();
+      if (csrfToken) {
+        headers.set('X-XSRF-TOKEN', csrfToken);
+      }
       const res = await fetch(resolveApiUrl('/api/v1/auth/reissue'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         credentials: 'include',
         ...FETCH_NO_REDIRECT,
       });
@@ -137,6 +148,11 @@ export async function publicRequest<T>(
   if (!headers.has('Content-Type') && init.body) {
     headers.set('Content-Type', 'application/json');
   }
+  
+  const csrfToken = getCsrfToken();
+  if (csrfToken && init.method && !['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(init.method.toUpperCase())) {
+    headers.set('X-XSRF-TOKEN', csrfToken);
+  }
 
   const res = await fetch(resolveApiUrl(url), { ...init, headers });
   return parseResponse<T>(res);
@@ -165,6 +181,11 @@ export async function authFetch(
   const accessToken = tokenStorage.getAccessToken();
   if (accessToken) {
     headers.set('Authorization', `Bearer ${accessToken}`);
+  }
+  
+  const csrfToken = getCsrfToken();
+  if (csrfToken && init.method && !['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(init.method.toUpperCase())) {
+    headers.set('X-XSRF-TOKEN', csrfToken);
   }
 
   return executeWithReissue(resolveApiUrl(url), init, headers);
