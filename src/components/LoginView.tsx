@@ -1,10 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { Mail, Lock, AlertCircle, Loader2, User, Calendar, MapPin, CheckCircle, ArrowLeft, Eye, EyeOff } from 'lucide-react';
-import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
 import { authApi, tokenStorage, userApi } from '../api';
 import { API_BASE_URL } from '../api/config';
-import { NATIVE_OAUTH_REDIRECT_URI } from '../lib/oauth';
+import { getOAuthRedirectUri, shouldUseSystemBrowserForOAuth } from '../lib/oauth';
 import { openAddressSearch } from '../utils/daumPostcode';
 import modiLogo from '../assets/modi-logo.png';
 
@@ -186,23 +185,16 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   // --- Login Submit ---
   const handleSocialLogin = (provider: 'kakao' | 'naver' | 'google') => {
     tokenStorage.setPendingRememberMe(rememberMe);
-    const redirectUri = Capacitor.isNativePlatform()
-      ? NATIVE_OAUTH_REDIRECT_URI
-      : `${window.location.origin}/oauth2/redirect`;
+    const redirectUri = getOAuthRedirectUri();
     const url = `${API_BASE_URL}/oauth2/authorization/${provider}?redirect_uri=${encodeURIComponent(redirectUri)}`;
 
-    if (Capacitor.isNativePlatform()) {
-      // 시스템 브라우저(SFSafariViewController / Custom Tabs)에서 OAuth 진행.
-      // 완료 후 커스텀 스킴 콜백은 App.tsx 의 appUrlOpen 리스너가 처리.
+    if (shouldUseSystemBrowserForOAuth()) {
       void Browser.open({ url });
-    } else {
-      window.location.href = url;
+      return;
     }
+
+    window.location.href = url;
   };
-
-  // Skip down to the button hrefs (we need to replace them too, but we will just rely on handleSocialLogin or fix them individually)
-  // Actually, wait, the buttons use <a> tags with hrefs directly! Let's check.
-
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -464,40 +456,31 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             </div>
 
             <div className="social-login-icons-row">
-              <a
-                href={`${API_BASE_URL}/oauth2/authorization/kakao`}
+              <button
+                type="button"
                 className="social-icon-btn kakao"
                 title="카카오 로그인"
-                onClick={(e) => {
-                  e.preventDefault();
-                  handleSocialLogin('kakao');
-                }}
+                onClick={() => handleSocialLogin('kakao')}
               >
                 <svg viewBox="0 0 24 24" width="22" height="22">
                   <path fill="#3C1E1E" d="M12 3c-4.97 0-9 3.185-9 7.115 0 2.553 1.706 4.8 4.29 5.99l-.865 3.167c-.078.29.088.59.366.666.084.024.17.025.25.004l3.727-2.47c.4.053.808.082 1.232.082 4.97 0 9-3.186 9-7.115C21 6.185 16.97 3 12 3z" />
                 </svg>
-              </a>
-              <a
-                href={`${API_BASE_URL}/oauth2/authorization/naver`}
+              </button>
+              <button
+                type="button"
                 className="social-icon-btn naver"
                 title="네이버 로그인"
-                onClick={(e) => {
-                  e.preventDefault();
-                  handleSocialLogin('naver');
-                }}
+                onClick={() => handleSocialLogin('naver')}
               >
                 <svg viewBox="0 0 24 24" width="18" height="18">
                   <path fill="#FFF" d="M16.2 3H21v18h-4.8l-8.4-12v12H3V3h4.8l8.4 12V3z" />
                 </svg>
-              </a>
-              <a
-                href={`${API_BASE_URL}/oauth2/authorization/google`}
+              </button>
+              <button
+                type="button"
                 className="social-icon-btn google"
                 title="구글 로그인"
-                onClick={(e) => {
-                  e.preventDefault();
-                  handleSocialLogin('google');
-                }}
+                onClick={() => handleSocialLogin('google')}
               >
                 <svg viewBox="0 0 24 24" width="20" height="20">
                   <path fill="#EA4335" d="M12 5.04c1.66 0 3.2.57 4.38 1.69l3.27-3.27C17.67 1.47 15.01 0 12 0 7.33 0 3.3 2.68 1.34 6.6l3.85 2.99C6.1 6.88 8.85 5.04 12 5.04z" />
@@ -505,7 +488,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                   <path fill="#FBBC05" d="M5.19 14.39C4.95 13.68 4.81 12.91 4.81 12s.14-1.68.38-2.39L1.34 6.6C.49 8.27 0 10.08 0 12s.49 3.73 1.34 5.4l3.85-3.01z" />
                   <path fill="#34A853" d="M12 24c3.24 0 5.97-1.07 7.96-2.91l-3.73-2.89c-1.04.7-2.36 1.11-4.23 1.11-3.15 0-5.9-1.84-6.81-4.55L1.34 17.75C3.3 21.68 7.33 24 12 24z" />
                 </svg>
-              </a>
+              </button>
             </div>
 
             <div className="login-footer-actions" style={{ marginTop: '28px' }}>

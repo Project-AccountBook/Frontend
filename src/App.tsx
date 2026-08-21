@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
+import { BottomTabBar, COMMUNITY_TAB_IDS } from './components/BottomTabBar';
+import { CommunityHubView } from './components/CommunityHubView';
 import { DashboardView } from './components/DashboardView';
 import { ComparisonView } from './components/ComparisonView';
 import { GroupBuyView } from './components/GroupBuyView';
@@ -33,6 +35,7 @@ const APP_TABS = new Set([
   'history',
   'budget',
   'analysis',
+  'community',
   'comparison',
   'locationComparison',
   'groupbuy',
@@ -334,6 +337,8 @@ function App() {
         return <AssetView initialSection={assetInitialSection} />;
       case 'budget':
         return <BudgetView onGoToCategorySettings={goToCategorySettings} />;
+      case 'community':
+        return <CommunityHubView onSelect={handleTabChange} />;
 
       case 'comparison':
         return <ComparisonView />;
@@ -360,6 +365,7 @@ function App() {
       case 'settings':
         return (
           <MyPageView
+            onLogout={handleLogout}
             onOpenBoard={(type, id) => {
               if (type === 'QNA') {
                 setQnaPostId(id);
@@ -455,30 +461,42 @@ function App() {
     );
   }
 
+  const isNative = Capacitor.isNativePlatform();
+
+  const handleBottomTabChange = (tab: string) => {
+    if (tab === 'community' && COMMUNITY_TAB_IDS.has(activeTab) && activeTab !== 'community') {
+      handleTabChange('community');
+      return;
+    }
+    handleTabChange(tab);
+  };
+
   return (
     <div className="app-layout">
-      {/* Sidebar Navigation */}
-      <Sidebar
-        activeTab={activeTab}
-        setActiveTab={handleTabChange}
-        onLogout={handleLogout}
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-      />
+      {!isNative && (
+        <Sidebar
+          activeTab={activeTab}
+          setActiveTab={handleTabChange}
+          onLogout={handleLogout}
+          open={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+        />
+      )}
 
-      {/* Main Container */}
       <div className="main-container">
-        {/* Top Header */}
         <Header
           unreadCount={unreadNotificationCount}
           onOpenNotifications={() => handleTabChange('notifications')}
-          onOpenDrawer={() => setDrawerOpen(true)}
+          onOpenDrawer={isNative ? undefined : () => setDrawerOpen(true)}
         />
 
-        {/* Dashboard Content */}
         <main className="dashboard-content">
           {renderContent()}
         </main>
+
+        {isNative && (
+          <BottomTabBar activeTab={activeTab} onChange={handleBottomTabChange} />
+        )}
       </div>
     </div>
   );

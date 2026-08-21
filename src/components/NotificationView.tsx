@@ -65,6 +65,7 @@ const KNOWN_APP_TABS = new Set([
   'groupbuyAdmin',
   'notifications',
   'settings',
+  'community',
   'admin'
 ]);
 

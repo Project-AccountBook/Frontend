@@ -24,6 +24,7 @@ import {
   MessageSquare,
   HelpCircle,
   Lightbulb,
+  LogOut,
 } from 'lucide-react';
 import {
   authApi,
@@ -70,9 +71,10 @@ type MyPageTab =
 
 interface MyPageViewProps {
   onOpenBoard?: (type: 'QNA' | 'KNOWHOW', id: number) => void;
+  onLogout?: () => void;
 }
 
-export const MyPageView: React.FC<MyPageViewProps> = ({ onOpenBoard }) => {
+export const MyPageView: React.FC<MyPageViewProps> = ({ onOpenBoard, onLogout }) => {
   const [activeTab, setActiveTab] = useState<MyPageTab>('profile');
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -710,8 +712,16 @@ export const MyPageView: React.FC<MyPageViewProps> = ({ onOpenBoard }) => {
     <div className="mypage-wrapper fade-in">
       {/* Page header */}
       <div className="mypage-header">
-        <h1 className="mypage-page-title">설정 및 프로필</h1>
-        <p className="mypage-page-subtitle">계정 정보와 알림 설정을 관리합니다</p>
+        <div className="mypage-header-copy">
+          <h1 className="mypage-page-title">마이</h1>
+          <p className="mypage-page-subtitle">계정 정보와 알림 설정을 관리합니다</p>
+        </div>
+        {onLogout && (
+          <button type="button" className="mypage-header-logout" onClick={onLogout}>
+            <LogOut size={15} />
+            로그아웃
+          </button>
+        )}
       </div>
 
       <div className="mypage-layout">

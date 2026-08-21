@@ -16,14 +16,16 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="header">
       <div className="header-left">
-        <button
-          type="button"
-          className="header-menu-btn"
-          aria-label="메뉴 열기"
-          onClick={onOpenDrawer}
-        >
-          <Menu size={22} strokeWidth={2.25} />
-        </button>
+        {onOpenDrawer && (
+          <button
+            type="button"
+            className="header-menu-btn"
+            aria-label="메뉴 열기"
+            onClick={onOpenDrawer}
+          >
+            <Menu size={22} strokeWidth={2.25} />
+          </button>
+        )}
         <div className="header-status-badge">
           <span className="pulsing-dot"></span>
           <span>가계부 접속중</span>
