@@ -5,6 +5,7 @@ import { authApi, tokenStorage, userApi } from '../api';
 import { API_BASE_URL } from '../api/config';
 import { getOAuthRedirectUri, shouldUseSystemBrowserForOAuth } from '../lib/oauth';
 import { openAddressSearch } from '../utils/daumPostcode';
+import { useBackHandler } from '../lib/nativeBack';
 import modiLogo from '../assets/modi-logo.png';
 
 interface LoginViewProps {
@@ -102,6 +103,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     resetState();
     setMode(newMode);
   };
+
+  useBackHandler(true, () => {
+    if (mode !== 'login') {
+      handleModeChange('login');
+      return true;
+    }
+    return false;
+  });
 
   // --- Email Sending ---
   const sendVerificationCode = async (type: 'SIGNUP' | 'RESET') => {

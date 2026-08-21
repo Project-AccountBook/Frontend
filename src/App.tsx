@@ -23,6 +23,7 @@ import { authApi, notificationApi, setAuthExpiredHandler, tokenStorage, userApi 
 import { useNotificationSync } from './hooks/useNotificationSync';
 import { clearMyUserIdCache } from './lib/boardApi';
 import { NATIVE_OAUTH_SCHEME } from './lib/oauth';
+import { useBackHandler } from './lib/nativeBack';
 import { Construction } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
@@ -214,6 +215,28 @@ function App() {
     setGroupBuyFocusId(options?.groupPurchaseId ?? null);
     setDrawerOpen(false);
   };
+
+  useBackHandler(isLoggedIn && !needsSocialProfileSetup, () => {
+    if (knowhowMode !== 'list' || knowhowPostId !== null) {
+      setKnowhowMode('list');
+      setKnowhowPostId(null);
+      return true;
+    }
+    if (qnaMode !== 'list' || qnaPostId !== null) {
+      setQnaMode('list');
+      setQnaPostId(null);
+      return true;
+    }
+    if (COMMUNITY_TAB_IDS.has(activeTab) && activeTab !== 'community') {
+      handleTabChange('community');
+      return true;
+    }
+    if (activeTab === 'notifications') {
+      handleTabChange('dashboard');
+      return true;
+    }
+    return false;
+  });
 
   const goToCategorySettings = () => {
     setKnowhowMode('list');

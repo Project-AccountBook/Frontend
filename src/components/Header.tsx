@@ -26,10 +26,6 @@ export const Header: React.FC<HeaderProps> = ({
             <Menu size={22} strokeWidth={2.25} />
           </button>
         )}
-        <div className="header-status-badge">
-          <span className="pulsing-dot"></span>
-          <span>가계부 접속중</span>
-        </div>
       </div>
 
       <div className="header-brand" aria-hidden="false">

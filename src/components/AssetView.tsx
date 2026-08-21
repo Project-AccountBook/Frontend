@@ -55,6 +55,7 @@ import {
   normalizeAccountRole,
   type AccountRole
 } from '../lib/accountGoalStorage';
+import { useBackHandler } from '../lib/nativeBack';
 import {
   getFixedTransactions,
   createFixedTransaction,
@@ -496,6 +497,11 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
     setShowModal(false);
     resetFormFields();
   };
+
+  useBackHandler(showModal, () => {
+    handleCloseModal();
+    return true;
+  });
 
   const handleToggleFixedActive = async (id: number) => {
     try {

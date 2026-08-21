@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   ShoppingBag, 
   MapPin, 
@@ -20,6 +20,7 @@ import {
   type InterestCategoryResponse,
 } from '../api';
 import { authFetch } from '../api/client';
+import { useBackHandler } from '../lib/nativeBack';
 
 const formatKRW = (value: number) => {
   return new Intl.NumberFormat('ko-KR').format(value);
@@ -143,6 +144,53 @@ export const GroupBuyView: React.FC<{
   });
 
   const [isUploading, setIsUploading] = useState(false);
+
+  const closeTopOverlay = useCallback((): boolean => {
+    if (showReportModal) {
+      setShowReportModal(false);
+      return true;
+    }
+    if (showLeaveConfirmation) {
+      setShowLeaveConfirmation(false);
+      return true;
+    }
+    if (showConfirmation) {
+      setShowConfirmation(false);
+      return true;
+    }
+    if (showRequestModal) {
+      setShowRequestModal(false);
+      return true;
+    }
+    if (isCreateModalOpen) {
+      setIsCreateModalOpen(false);
+      return true;
+    }
+    if (selectedItem) {
+      setSelectedItem(null);
+      return true;
+    }
+    return false;
+  }, [
+    showReportModal,
+    showLeaveConfirmation,
+    showConfirmation,
+    showRequestModal,
+    isCreateModalOpen,
+    selectedItem,
+  ]);
+
+  useBackHandler(
+    Boolean(
+      selectedItem
+      || showRequestModal
+      || showConfirmation
+      || showLeaveConfirmation
+      || isCreateModalOpen
+      || showReportModal,
+    ),
+    closeTopOverlay,
+  );
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

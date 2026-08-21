@@ -2,8 +2,19 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.jointliving.app',
-  appName: 'JointLiving',
+  appName: 'MODI',
   webDir: 'dist',
+  plugins: {
+    Keyboard: {
+      resize: 'body',
+      resizeOnFullScreen: true,
+    },
+    StatusBar: {
+      style: 'LIGHT',
+      backgroundColor: '#ffffff',
+      overlaysWebView: true,
+    },
+  },
   server: {
     androidScheme: 'https',
     // 개발 중엔 아래 주석 풀어서 dev 서버 붙이기

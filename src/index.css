@@ -1113,19 +1113,6 @@ a {
   z-index: 1;
 }
 
-.header-status-badge {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--green-bg);
-  border: 1px solid var(--green-border);
-  color: var(--green);
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
 .header-brand {
   display: none;
   position: absolute;
@@ -1189,9 +1176,6 @@ a {
 }
 .is-native .header-right {
   margin-right: 0;
-}
-.is-native .header-status-badge {
-  display: none;
 }
 
 /* Native app: 하단 탭바 */
@@ -3415,11 +3399,10 @@ a {
 /* Login View Styles */
 .login-wrapper {
   height: 100%;
-  min-height: 100vh;
+  min-height: 100%;
   width: 100%;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
   background: radial-gradient(circle at 0% 0%, #eff6ff 0%, #f8fafc 50%, #f1f5f9 100%);
   padding: 20px;
   overflow-y: auto;
@@ -3428,6 +3411,7 @@ a {
 .login-card-container {
   width: 100%;
   max-width: 440px;
+  margin: auto;
   background: #ffffff;
   border-radius: 24px;
   border: 1px solid var(--border);
@@ -3435,6 +3419,39 @@ a {
   padding: 48px 40px;
   display: flex;
   flex-direction: column;
+}
+
+.is-native .login-wrapper {
+  background: #ffffff;
+  padding: calc(64px + env(safe-area-inset-top)) 44px calc(48px + env(safe-area-inset-bottom));
+}
+
+.is-native .login-card-container {
+  width: 100%;
+  max-width: 320px;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+}
+
+.is-native .login-logo {
+  height: 40px;
+  margin-bottom: 10px;
+}
+
+.is-native .login-header {
+  margin-bottom: 24px;
+}
+
+.is-native .login-form {
+  gap: 14px;
+}
+
+.is-native .login-subtitle {
+  font-size: 13px;
+  padding: 0 8px;
 }
 
 .login-header {
@@ -6675,10 +6692,6 @@ a {
     margin-right: 0;
   }
 
-  .header-status-badge {
-    display: none;
-  }
-
   .dashboard-content {
     padding: 12px 14px 24px;
   }
@@ -7024,8 +7037,6 @@ a {
   /* Login */
   .login-wrapper {
     padding: 12px;
-    align-items: flex-start;
-    padding-top: 32px;
   }
 
   .login-card-container {
