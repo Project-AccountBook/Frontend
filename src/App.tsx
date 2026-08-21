@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar';
-import { Header } from './components/Header';
+import { Header, resolveAppHeaderTitle } from './components/Header';
 import { BottomTabBar, COMMUNITY_TAB_IDS } from './components/BottomTabBar';
 import { CommunityHubView } from './components/CommunityHubView';
 import { DashboardView } from './components/DashboardView';
@@ -485,6 +485,7 @@ function App() {
   }
 
   const isNative = Capacitor.isNativePlatform();
+  const appHeader = isNative ? resolveAppHeaderTitle(activeTab) : null;
 
   const handleBottomTabChange = (tab: string) => {
     if (tab === 'community' && COMMUNITY_TAB_IDS.has(activeTab) && activeTab !== 'community') {
@@ -511,6 +512,11 @@ function App() {
           unreadCount={unreadNotificationCount}
           onOpenNotifications={() => handleTabChange('notifications')}
           onOpenDrawer={isNative ? undefined : () => setDrawerOpen(true)}
+          title={appHeader?.label ?? null}
+          TitleIcon={appHeader?.icon}
+          iconBg={appHeader?.iconBg}
+          iconColor={appHeader?.iconColor}
+          hideNotificationButton={isNative && activeTab === 'notifications'}
         />
 
         <main className="dashboard-content">

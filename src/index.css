@@ -1131,6 +1131,33 @@ a {
   object-fit: contain;
 }
 
+.header-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.header-title-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+}
+
+.header-title {
+  display: block;
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.35px;
+  color: var(--navy);
+  white-space: nowrap;
+}
+
 .header-right {
   display: flex;
   align-items: center;
@@ -1163,7 +1190,7 @@ a {
 
 /* Native app: 상단 안전영역(노치) 아래로 헤더 내리기 + 햄버거 메뉴 노출 */
 .is-native .header {
-  padding: 0 16px;
+  padding: 0 16px 0 22px;
   padding-top: env(safe-area-inset-top);
   height: calc(70px + env(safe-area-inset-top));
 }
@@ -1173,6 +1200,9 @@ a {
 .is-native .header-brand {
   display: flex;
   top: calc(env(safe-area-inset-top) + 35px);
+}
+.is-native .header-title {
+  font-size: 20px;
 }
 .is-native .header-right {
   margin-right: 0;
@@ -1306,8 +1336,24 @@ a {
   margin-right: auto;
 }
 .is-native .dashboard-view-header h1 {
-  text-align: left;
-  font-size: 20px;
+  display: none;
+}
+.is-native .community-hub .dashboard-view-header,
+.is-native .asset-management-wrapper > .dashboard-view-header {
+  display: none;
+}
+.is-native .notif-app-head-left {
+  display: none;
+}
+.is-native .notif-app-head {
+  justify-content: flex-end;
+}
+.is-native .mypage-page-title,
+.is-native .mypage-header-copy {
+  display: none;
+}
+.is-native .mypage-header {
+  justify-content: flex-end;
 }
 .is-native .dashboard-view-header p,
 .is-native .community-hub-desc,
