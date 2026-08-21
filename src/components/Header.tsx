@@ -26,7 +26,7 @@ export function resolveAppHeaderTitle(activeTab: string): AppHeaderMeta | null {
     case 'dashboard':
       return null;
     case 'history':
-      return { label: '내역', icon: Wallet, iconBg: 'var(--primary-light)', iconColor: 'var(--primary)' };
+      return { label: '내역 및 자산 관리', icon: Wallet, iconBg: 'var(--primary-light)', iconColor: 'var(--primary)' };
     case 'budget':
       return { label: '예산', icon: PiggyBank, iconBg: 'var(--blue-bg)', iconColor: 'var(--blue)' };
     case 'community':
@@ -90,7 +90,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <TitleIcon size={18} strokeWidth={2.2} />
               </span>
             )}
-            <h1 className="header-title">{title}</h1>
+            <h1 className={`header-title${title.length > 6 ? ' is-long' : ''}`}>{title}</h1>
           </div>
         ) : null}
       </div>

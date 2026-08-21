@@ -1204,8 +1204,291 @@ a {
 .is-native .header-title {
   font-size: 20px;
 }
+.is-native .header-title.is-long {
+  font-size: 17px;
+  letter-spacing: -0.5px;
+}
 .is-native .header-right {
   margin-right: 0;
+}
+
+/* Native 내역 탭: 5개 섹션을 한 줄 세그먼트 컨트롤로 */
+.is-native .asset-tabs-container {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 3px;
+  overflow: visible;
+  padding: 4px;
+  background: #f1f5f9;
+  border: none;
+  border-radius: 16px;
+}
+.is-native .asset-tab-btn {
+  flex: 1 1 0;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 2px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: 12px;
+  box-shadow: none;
+}
+.is-native .asset-tab-btn:hover {
+  background: transparent;
+  color: var(--text-primary);
+  border-radius: 12px;
+}
+.is-native .asset-tab-btn.active {
+  background: #ffffff;
+  color: var(--primary);
+  font-weight: 700;
+  border: none;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+.is-native .asset-tab-btn.active svg {
+  color: var(--primary);
+}
+
+/* Native 내역: 달력·거래 리스트를 앱 카드형으로 */
+.is-native .asset-management-wrapper {
+  gap: 12px;
+}
+.is-native .asset-panel {
+  padding: 12px;
+  min-height: 0;
+  border-radius: 14px;
+  box-shadow: none;
+}
+.is-native .tx-period-summary {
+  padding: 12px;
+  gap: 8px;
+}
+.is-native .tx-period-summary-item {
+  padding: 10px 12px;
+  gap: 4px;
+}
+.is-native .tx-period-summary-value {
+  font-size: 15px;
+  white-space: nowrap;
+}
+.is-native .filters-wrapper {
+  padding: 12px;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.is-native .filter-row {
+  grid-template-columns: 1fr 1fr;
+}
+.is-native .tx-card-list {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-app);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  padding: 2px 10px 6px;
+}
+.is-native .tx-app-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 2px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+.is-native .tx-app-row:last-child {
+  border-bottom: none;
+}
+.is-native .tx-app-row-top {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.is-native .tx-app-row-date {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.is-native .tx-app-row-desc {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.is-native .tx-app-row-amt {
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  white-space: nowrap;
+}
+.is-native .tx-app-row-bottom {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+.is-native .tx-app-row .type-badge {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.is-native .tx-app-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 46%;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  writing-mode: horizontal-tb;
+  word-break: keep-all;
+}
+.is-native .tx-app-row .btn-action-icon {
+  flex-shrink: 0;
+}
+.is-native .tx-app-row.is-inactive {
+  opacity: 0.55;
+}
+.is-native .tx-app-row-chips {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.is-native .tx-app-row-chips::-webkit-scrollbar {
+  display: none;
+}
+.is-native .tx-app-row-chips .tx-app-chip,
+.is-native .tx-app-row-chips .type-badge,
+.is-native .tx-app-row-chips .tx-app-meta {
+  max-width: none;
+  flex: 0 0 auto;
+}
+.is-native .tx-app-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.is-native .tx-app-meta svg {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.is-native .tx-app-row-fail {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.is-native .tx-app-fail-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--red);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.is-native .section-action-bar:has(.fixed-intro-card) {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 12px;
+  background: var(--blue-bg);
+  border: 1px solid var(--blue-border);
+  border-radius: 14px;
+}
+.is-native .section-action-bar:has(.fixed-intro-card) .btn-section-add {
+  align-self: stretch;
+  width: 100%;
+  justify-content: center;
+  padding: 11px 16px;
+}
+.is-native .fixed-intro-card {
+  display: flex;
+  padding: 0;
+  background: transparent;
+  border: none;
+  font-size: 12px;
+  line-height: 1.45;
+  font-weight: 600;
+}
+.is-native .fixed-intro-card .intro-icon {
+  width: 16px;
+  height: 16px;
+}
+.is-native .toggle-status-btn {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  gap: 6px;
+}
+.is-native .goal-settings-summary-grid,
+.is-native .goal-settings-summary-grid.four-cols {
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.is-native .goal-settings-stat-card {
+  padding: 12px;
+}
+
+.is-native .cal-account-filter-bar {
+  align-items: center;
+  padding: 8px 10px;
+  gap: 8px;
+}
+.is-native .cal-filter-label {
+  padding-top: 0;
+}
+.is-native .cal-account-chips {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  min-width: 0;
+}
+.is-native .cal-account-chips::-webkit-scrollbar {
+  display: none;
+}
+.is-native .cal-account-chip-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 /* Native app: 하단 탭바 */
