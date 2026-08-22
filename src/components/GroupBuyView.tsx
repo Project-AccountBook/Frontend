@@ -39,6 +39,7 @@ interface GroupBuyItem {
   title: string;
   progress: number;
   currentParticipants: number;
+  minParticipants: number;
   targetParticipants: number;
   price: number;
   views: number;
@@ -331,6 +332,7 @@ export const GroupBuyView: React.FC<{
       title: bp.title,
       progress: Math.round(bp.achievementRate),
       currentParticipants: bp.currentParticipants,
+      minParticipants: bp.minParticipants,
       targetParticipants: bp.maxParticipants,
       price: bp.price,
       views: bp.viewCount,
@@ -698,6 +700,33 @@ export const GroupBuyView: React.FC<{
     }
   };
 
+  // Early Close Group Purchase
+  const handleEarlyCloseClick = async () => {
+    if (!selectedItem) return;
+    const confirmClose = window.confirm("정말 이 공동구매를 조기 마감하시겠습니까?\\n즉시 성공 처리되며 참여자들의 결제가 진행됩니다.");
+    if (!confirmClose) return;
+
+    try {
+      const res = await fetchWithAuth(`/api/v1/group-purchases/${selectedItem.id}/early-close`, {
+        method: 'POST'
+      });
+      if (res.success) {
+        triggerToast('조기 마감이 완료되어 공동구매가 성공 처리되었습니다!');
+        fetchBudget(); // If creator was also participating, budget changes
+        fetchGroupPurchases();
+        
+        // Update selected item in modal
+        if (res.data) {
+          const updated = mapBackendItemToFrontend(res.data, categories);
+          setSelectedItem(updated);
+        }
+      }
+    } catch (err: any) {
+      console.error("Failed to early close group purchase:", err);
+      alert(err.message || '조기 마감 처리에 실패했습니다.');
+    }
+  };
+
   // Report Submit Handler
   const handleReportSubmit = async () => {
     if (!selectedItem) return;
@@ -1038,9 +1067,11 @@ export const GroupBuyView: React.FC<{
 
                   <p className="detail-content-text">{selectedItem.description}</p>
 
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', background: '#f8fafc', padding: '12px', borderRadius: '8px' }}>
-                    <strong>수령 장소/시간 안내:</strong> 개설자가 설정한 조율 시간 및 아파트 단지 입구 근처 놀이터에서 직접 인도가 원칙입니다.
-                  </div>
+                  {selectedItem.pickupLocation && (
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', background: '#f8fafc', padding: '12px', borderRadius: '8px' }}>
+                      <strong>수령 장소/시간 안내:</strong> {selectedItem.pickupLocation}
+                    </div>
+                  )}
                 </div>
 
                 {/* Right Col: Progress, Pricing & Q&A comments */}
@@ -1051,9 +1082,6 @@ export const GroupBuyView: React.FC<{
                     <div className="detail-price-main">
                       {formatKRW(selectedItem.price)}<span>원</span>
                     </div>
-                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', marginTop: '6px' }}>
-                      * 시중가 대비 약 25%~30% 할인된 특가입니다.
-                    </span>
                   </div>
 
                   {/* Progress bar info */}
@@ -1111,7 +1139,32 @@ export const GroupBuyView: React.FC<{
                   </div>
 
                   {/* Participate CTA with integrated Budget Link check */}
-                  {participatedItems.includes(selectedItem.id) ? (
+                  {currentUserId === selectedItem.creatorId ? (
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button className="detail-btn-participate completed" disabled style={{ flex: 1, background: '#f1f5f9', color: '#64748b', border: 'none' }}>
+                        <span>내가 개설한 공동구매</span>
+                      </button>
+                      {selectedItem.statusType === 'blue' || selectedItem.statusType === 'red' ? (
+                        <button 
+                          onClick={handleEarlyCloseClick}
+                          disabled={selectedItem.currentParticipants < selectedItem.minParticipants}
+                          title={selectedItem.currentParticipants < selectedItem.minParticipants ? "최소 인원이 충족되어야 조기 마감이 가능합니다." : ""}
+                          style={{ 
+                            background: selectedItem.currentParticipants >= selectedItem.minParticipants ? 'var(--blue)' : '#cbd5e1', 
+                            color: 'white', 
+                            border: 'none', 
+                            borderRadius: '12px', 
+                            padding: '0 20px', 
+                            fontWeight: '700',
+                            fontSize: '14px',
+                            cursor: selectedItem.currentParticipants >= selectedItem.minParticipants ? 'pointer' : 'not-allowed'
+                          }}
+                        >
+                          조기 마감하기
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : participatedItems.includes(selectedItem.id) ? (
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <button className="detail-btn-participate completed" disabled style={{ flex: 1 }}>
                         <span>신청 완료한 공동구매</span>
