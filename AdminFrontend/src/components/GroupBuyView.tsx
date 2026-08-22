@@ -51,6 +51,7 @@ interface GroupBuyItem {
   deadline: string;
   imageColor: string;
   imageUrl?: string;
+  pickupLocation?: string;
 }
 
 interface Account {
