@@ -52,6 +52,7 @@ interface GroupBuyItem {
   deadline: string;
   imageColor: string;
   imageUrl?: string;
+  pickupLocation?: string;
 }
 
 interface Account {
@@ -66,6 +67,8 @@ interface Comment {
   sender: string;
   text: string;
   date: string;
+  isSecret?: boolean;
+  authorRole?: string;
 }
 
 
@@ -139,6 +142,7 @@ export const GroupBuyView: React.FC<{
     maxParticipants: '10',
     deadline: '',
     pickupLocation: '',
+    customPickupLocation: '',
     imageUrl: '',
     accountId: ''
   });
@@ -340,11 +344,12 @@ export const GroupBuyView: React.FC<{
       creatorId: bp.creatorId,
       creator: bp.creatorNickname || '이웃',
       creatorTemp: '36.5℃',
-      distance: '0.8km',
+      distance: '단지 내',
       description: bp.content,
       deadline: deadlineStr,
       imageColor: imageColor,
-      imageUrl: bp.imageUrl
+      imageUrl: bp.imageUrl,
+      pickupLocation: bp.pickupLocation
     };
   };
 
@@ -450,9 +455,11 @@ export const GroupBuyView: React.FC<{
           
           return {
             id: comm.id,
-            sender: comm.userNickname || '이웃',
+            sender: comm.authorNickname || comm.userNickname || '이웃',
             text: comm.content,
-            date: dateStr
+            date: dateStr,
+            isSecret: comm.isSecret,
+            authorRole: comm.authorRole
           };
         });
         setComments(prev => ({ ...prev, [postId]: mappedComments }));
@@ -551,7 +558,9 @@ export const GroupBuyView: React.FC<{
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!createForm.title || !createForm.categoryId || !createForm.content || !createForm.price || !createForm.deadline || !createForm.pickupLocation) {
+    const finalPickupLocation = createForm.pickupLocation === '기타 (직접 입력)' ? createForm.customPickupLocation : createForm.pickupLocation;
+    
+    if (!createForm.title || !createForm.categoryId || !createForm.content || !createForm.price || !createForm.deadline || !finalPickupLocation) {
       alert('필수 입력 항목을 모두 채워주세요.');
       return;
     }
@@ -568,7 +577,7 @@ export const GroupBuyView: React.FC<{
         minParticipants: Number(createForm.minParticipants),
         maxParticipants: Number(createForm.maxParticipants),
         deadline: formattedDeadline,
-        pickupLocation: createForm.pickupLocation,
+        pickupLocation: finalPickupLocation,
         accountId: Number(createForm.accountId),
         imageUrl: createForm.imageUrl
       };
@@ -583,7 +592,7 @@ export const GroupBuyView: React.FC<{
         triggerToast('공동구매 글이 성공적으로 등록되었습니다!');
         fetchGroupPurchases(); // refresh list
         setCreateForm({
-          title: '', categoryId: '', content: '', price: '', minParticipants: '1', maxParticipants: '10', deadline: '', pickupLocation: '', imageUrl: '',
+          title: '', categoryId: '', content: '', price: '', minParticipants: '1', maxParticipants: '10', deadline: '', pickupLocation: '', customPickupLocation: '', imageUrl: '',
     accountId: ''
         });
       }
@@ -1576,7 +1585,30 @@ export const GroupBuyView: React.FC<{
 
                 <div>
                   <label style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>수령 장소 <span style={{color:'red'}}>*</span></label>
-                  <input type="text" placeholder="예: 서교동 123-45 (CU 편의점 앞)" value={createForm.pickupLocation} onChange={e => setCreateForm({...createForm, pickupLocation: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }} required />
+                  <select 
+                    value={createForm.pickupLocation} 
+                    onChange={e => setCreateForm({...createForm, pickupLocation: e.target.value})} 
+                    style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: 'white' }} 
+                    required
+                  >
+                    <option value="" disabled>수령 장소를 선택해주세요</option>
+                    <option value="101동 놀이터 앞">101동 놀이터 앞</option>
+                    <option value="105동 분리수거장">105동 분리수거장</option>
+                    <option value="정문 관리사무소">정문 관리사무소</option>
+                    <option value="후문 상가 앞">후문 상가 앞</option>
+                    <option value="커뮤니티 센터">커뮤니티 센터</option>
+                    <option value="기타 (직접 입력)">기타 (직접 입력)</option>
+                  </select>
+                  {createForm.pickupLocation === '기타 (직접 입력)' && (
+                    <input 
+                      type="text" 
+                      placeholder="예: OO빌라 1층 주차장" 
+                      value={createForm.customPickupLocation} 
+                      onChange={e => setCreateForm({...createForm, customPickupLocation: e.target.value})} 
+                      style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '8px' }} 
+                      required 
+                    />
+                  )}
                 </div>
               </div>
 
