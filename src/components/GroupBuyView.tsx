@@ -12,7 +12,8 @@ import {
   Bell,
   BellOff,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Lock
 } from 'lucide-react';
 import {
   interestCategoryApi,
@@ -178,6 +179,7 @@ export const GroupBuyView: React.FC<{
   // Comment Board States
   const [comments, setComments] = useState<Record<number, Comment[]>>({});
   const [newCommentText, setNewCommentText] = useState('');
+  const [newCommentSecret, setNewCommentSecret] = useState(false);
 
   const activeCategoryName = activeCategoryId
     ? categories.find((c) => c.id === activeCategoryId)?.name ?? null
@@ -307,10 +309,14 @@ export const GroupBuyView: React.FC<{
       const deadlineDate = new Date(bp.deadline);
       const diffTime = deadlineDate.getTime() - new Date().getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      if (diffDays <= 0) {
+      
+      if (diffTime < 0) {
+        statusText = '기한 만료';
+        statusType = 'grey';
+      } else if (diffDays <= 1) {
         statusText = '마감임박';
         statusType = 'red';
-      } else if (diffDays <= 2) {
+      } else if (diffDays <= 3) {
         statusText = `마감임박 (D-${diffDays})`;
         statusType = 'red';
       } else {
@@ -611,7 +617,8 @@ export const GroupBuyView: React.FC<{
         method: 'POST',
         body: JSON.stringify({
           referenceType: 'GROUPPURCHASE',
-          content: newCommentText
+          content: newCommentText,
+          isSecret: newCommentSecret
         })
       });
       if (res.success) {
@@ -695,7 +702,7 @@ export const GroupBuyView: React.FC<{
         method: 'POST'
       });
       if (res.success) {
-        triggerToast('신청 취소 완료! 환불 내역이 기입되었습니다.');
+        triggerToast('신청 취소 완료!');
         fetchBudget();
         fetchUserWishedAndJoinedIds();
         fetchGroupPurchases();
@@ -1120,10 +1127,21 @@ export const GroupBuyView: React.FC<{
                       {(comments[selectedItem.id] || []).map((comm) => (
                         <div key={comm.id} className="comment-item">
                           <div className="comment-meta">
-                            <span>{comm.sender}</span>
+                            <span>
+                              {comm.sender}
+                              {comm.authorRole === 'CREATOR' && (
+                                <span style={{ marginLeft: '6px', fontSize: '10px', backgroundColor: '#eef2ff', color: '#4f46e5', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>방장</span>
+                              )}
+                              {comm.authorRole === 'PARTICIPANT' && (
+                                <span style={{ marginLeft: '6px', fontSize: '10px', backgroundColor: '#f0fdf4', color: '#16a34a', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>참여자</span>
+                              )}
+                            </span>
                             <span className="date">{comm.date}</span>
                           </div>
-                          <div className="comment-text">{comm.text}</div>
+                          <div className="comment-text">
+                            {comm.isSecret && <Lock size={12} style={{ display: 'inline', marginRight: '4px', color: 'var(--text-secondary)' }} />}
+                            {comm.text}
+                          </div>
                         </div>
                       ))}
                       {(comments[selectedItem.id] || []).length === 0 && (
@@ -1139,8 +1157,20 @@ export const GroupBuyView: React.FC<{
                         className="comment-input"
                         value={newCommentText}
                         onChange={(e) => setNewCommentText(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
+                        onKeyDown={(e) => {
+                          if (e.nativeEvent.isComposing) return;
+                          if (e.key === 'Enter') handleAddComment();
+                        }}
                       />
+                      <label style={{ display: 'flex', alignItems: 'center', fontSize: '12px', color: 'var(--text-secondary)', marginLeft: '10px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={newCommentSecret} 
+                          onChange={(e) => setNewCommentSecret(e.target.checked)} 
+                          style={{ marginRight: '4px' }}
+                        />
+                        비밀
+                      </label>
                       <button className="comment-btn" onClick={handleAddComment}>
                         <Send size={14} />
                       </button>
@@ -1155,17 +1185,15 @@ export const GroupBuyView: React.FC<{
                       </button>
                       {selectedItem.statusType === 'blue' || selectedItem.statusType === 'red' ? (
                         <button 
+                          className="detail-btn-participate"
                           onClick={handleEarlyCloseClick}
                           disabled={selectedItem.currentParticipants < selectedItem.minParticipants}
                           title={selectedItem.currentParticipants < selectedItem.minParticipants ? "최소 인원이 충족되어야 조기 마감이 가능합니다." : ""}
                           style={{ 
+                            flex: 'none',
+                            width: 'auto',
                             background: selectedItem.currentParticipants >= selectedItem.minParticipants ? 'var(--blue)' : '#cbd5e1', 
-                            color: 'white', 
-                            border: 'none', 
-                            borderRadius: '12px', 
                             padding: '0 20px', 
-                            fontWeight: '700',
-                            fontSize: '14px',
                             cursor: selectedItem.currentParticipants >= selectedItem.minParticipants ? 'pointer' : 'not-allowed'
                           }}
                         >
@@ -1263,7 +1291,8 @@ export const GroupBuyView: React.FC<{
               </div>
 
               <p style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-                신청과 동시에 가계부 예산에서 즉시 차감(지출 기입)됩니다. 신청 취소 또는 모집 무산 시 자동으로 환불 처리됩니다.
+                신청 시에는 예약만 되며, <b>공동구매 확정(성공) 시</b> 지정된 계좌에서 즉시 차감(지출 기입)됩니다.<br/>
+                확정 전 신청 취소 시에는 결제되지 않으며, 무산 시에도 자동으로 취소됩니다.
               </p>
 
               <div className="form-actions" style={{ justifyContent: 'center' }}>

@@ -1194,7 +1194,15 @@ export const GroupBuyView: React.FC<{
                       {(comments[selectedItem.id] || []).map((comm) => (
                         <div key={comm.id} className="comment-item">
                           <div className="comment-meta">
-                            <span>{comm.sender}</span>
+                            <span>
+                              {comm.sender}
+                              {comm.authorRole === 'CREATOR' && (
+                                <span style={{ marginLeft: '6px', fontSize: '10px', backgroundColor: '#eef2ff', color: '#4f46e5', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>방장</span>
+                              )}
+                              {comm.authorRole === 'PARTICIPANT' && (
+                                <span style={{ marginLeft: '6px', fontSize: '10px', backgroundColor: '#f0fdf4', color: '#16a34a', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>참여자</span>
+                              )}
+                            </span>
                             <span className="date">{comm.date}</span>
                           </div>
                           <div className="comment-text">{comm.text}</div>
@@ -1213,7 +1221,10 @@ export const GroupBuyView: React.FC<{
                         className="comment-input"
                         value={newCommentText}
                         onChange={(e) => setNewCommentText(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
+                        onKeyDown={(e) => {
+                          if (e.nativeEvent.isComposing) return;
+                          if (e.key === 'Enter') handleAddComment();
+                        }}
                       />
                       <button className="comment-btn" onClick={handleAddComment}>
                         <Send size={14} />
