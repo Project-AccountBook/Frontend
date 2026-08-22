@@ -66,6 +66,8 @@ interface Comment {
   sender: string;
   text: string;
   date: string;
+  authorRole?: string;
+  isSecret?: boolean;
 }
 
 const MOCK_ITEMS: GroupBuyItem[] = [
