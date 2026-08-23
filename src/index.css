@@ -1212,6 +1212,82 @@ a {
   margin-right: 0;
 }
 
+.header-logout-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.header-logout-btn:hover {
+  background: var(--bg-app);
+  color: var(--text-primary);
+}
+
+/* Native app: 마이페이지 */
+.is-native .mypage-page.mypage-wrapper {
+  gap: 12px;
+}
+.is-native .mypage-page .mypage-layout {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+.is-native .mypage-page .mypage-sidenav {
+  display: none;
+}
+.is-native .mypage-page .mypage-mobile-nav {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  gap: 6px;
+  padding: 4px;
+  background: #eef2f7;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  grid-template-columns: unset;
+}
+.is-native .mypage-page .mypage-mobile-tab {
+  flex-direction: row;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.is-native .mypage-page .mypage-panel {
+  padding: 18px 16px;
+  min-height: 0;
+}
+.is-native .mypage-page .mypage-section-head {
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+}
+.is-native .mypage-page .mypage-form-password {
+  gap: 14px;
+}
+.is-native .mypage-page .mypage-action-row--tight {
+  margin-top: 4px;
+}
+.is-native .mypage-page .mypage-btn-save,
+.is-native .mypage-page .mypage-btn-cancel {
+  padding: 9px 16px;
+  font-size: 12px;
+}
+
 /* Native 내역 탭: 5개 섹션을 한 줄 세그먼트 컨트롤로 */
 .is-native .asset-tabs-container {
   display: flex;
@@ -2032,11 +2108,22 @@ a {
 }
 .is-native .dashboard-page .dashboard-view-header {
   justify-content: center;
+  margin-bottom: 14px;
 }
 .is-native .dashboard-page .dashboard-view-header > * {
   justify-content: center;
   margin-left: auto;
   margin-right: auto;
+}
+.is-native .dashboard-page .dashboard-view-header .month-year-navigator {
+  padding: 6px 11px;
+  gap: 7px;
+  font-size: 13px;
+}
+.is-native .dashboard-page .dashboard-view-header .month-year-navigator-label--compact {
+  font-size: 13px;
+  min-width: 86px;
+  padding: 2px 9px;
 }
 .is-native .dashboard-view-header h1 {
   display: none;
@@ -2385,13 +2472,6 @@ a {
   display: none;
 }
 .is-native .notif-app-head {
-  justify-content: flex-end;
-}
-.is-native .mypage-page-title,
-.is-native .mypage-header-copy {
-  display: none;
-}
-.is-native .mypage-header {
   justify-content: flex-end;
 }
 .is-native .dashboard-view-header p,
@@ -5946,6 +6026,12 @@ a {
   border-top: 1px solid var(--border);
 }
 
+.mypage-action-row--tight {
+  margin-top: 8px;
+  padding-top: 0;
+  border-top: none;
+}
+
 .mypage-form-password {
   display: flex;
   flex-direction: column;
@@ -5955,46 +6041,6 @@ a {
 
 .mypage-form-password .mypage-field.span-full {
   width: 100%;
-}
-
-.mypage-pw-verify-row {
-  display: flex;
-  gap: 8px;
-  align-items: stretch;
-}
-
-.mypage-pw-verify-row .mypage-pw-wrapper {
-  flex: 1;
-  min-width: 0;
-}
-
-.mypage-btn-verify-pw {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 44px;
-  padding: 0 16px;
-  border: none;
-  border-radius: 10px;
-  background: var(--navy);
-  color: white;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all var(--transition-fast);
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
-}
-
-.mypage-btn-verify-pw:hover:not(:disabled) {
-  background: var(--navy-light);
-  transform: translateY(-1px);
-}
-
-.mypage-btn-verify-pw:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 .mypage-btn-edit {

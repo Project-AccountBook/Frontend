@@ -517,6 +517,7 @@ function App() {
           iconBg={appHeader?.iconBg}
           iconColor={appHeader?.iconColor}
           hideNotificationButton={isNative && activeTab === 'notifications'}
+          onLogout={isNative && activeTab === 'settings' ? handleLogout : undefined}
         />
 
         <main className="dashboard-content">

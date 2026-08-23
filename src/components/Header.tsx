@@ -10,6 +10,7 @@ import {
   User,
   Users,
   Wallet,
+  LogOut,
   type LucideIcon,
 } from 'lucide-react';
 import modiLogo from '../assets/modi-logo.png';
@@ -43,7 +44,7 @@ export function resolveAppHeaderTitle(activeTab: string): AppHeaderMeta | null {
     case 'notifications':
       return { label: '알림', icon: Bell, iconBg: 'var(--blue-bg)', iconColor: 'var(--blue)' };
     case 'settings':
-      return { label: '마이', icon: User, iconBg: 'var(--blue-bg)', iconColor: 'var(--blue)' };
+      return { label: '마이페이지', icon: User, iconBg: 'var(--blue-bg)', iconColor: 'var(--blue)' };
     default:
       return null;
   }
@@ -58,6 +59,7 @@ interface HeaderProps {
   iconBg?: string;
   iconColor?: string;
   hideNotificationButton?: boolean;
+  onLogout?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -69,6 +71,7 @@ export const Header: React.FC<HeaderProps> = ({
   iconBg = 'var(--blue-bg)',
   iconColor = 'var(--blue)',
   hideNotificationButton = false,
+  onLogout,
 }) => {
   return (
     <header className="header">
@@ -102,6 +105,12 @@ export const Header: React.FC<HeaderProps> = ({
       )}
 
       <div className="header-right">
+        {onLogout && (
+          <button type="button" className="header-logout-btn" onClick={onLogout}>
+            <LogOut size={16} />
+            <span>로그아웃</span>
+          </button>
+        )}
         {!hideNotificationButton && (
           <button
             className="header-icon-btn"
