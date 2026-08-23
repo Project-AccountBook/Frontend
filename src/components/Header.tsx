@@ -28,7 +28,7 @@ export function resolveAppHeaderTitle(activeTab: string): AppHeaderMeta | null {
     case 'history':
       return { label: '내역 및 자산 관리', icon: Wallet, iconBg: 'var(--primary-light)', iconColor: 'var(--primary)' };
     case 'budget':
-      return { label: '예산', icon: PiggyBank, iconBg: 'var(--blue-bg)', iconColor: 'var(--blue)' };
+      return { label: '예산 관리', icon: PiggyBank, iconBg: 'var(--blue-bg)', iconColor: 'var(--blue)' };
     case 'community':
       return { label: '커뮤니티', icon: Users, iconBg: 'var(--blue-bg)', iconColor: 'var(--blue)' };
     case 'qa':

@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Mail, Lock, AlertCircle, Loader2, User, Calendar, MapPin, CheckCircle, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { Browser } from '@capacitor/browser';
 import { authApi, tokenStorage, userApi } from '../api';
-import { API_BASE_URL } from '../api/config';
+import { getOAuthAuthorizationBaseUrl } from '../api/config';
 import { getOAuthRedirectUri, shouldUseSystemBrowserForOAuth } from '../lib/oauth';
 import { openAddressSearch } from '../utils/daumPostcode';
 import { useBackHandler } from '../lib/nativeBack';
@@ -195,7 +195,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   const handleSocialLogin = (provider: 'kakao' | 'naver' | 'google') => {
     tokenStorage.setPendingRememberMe(rememberMe);
     const redirectUri = getOAuthRedirectUri();
-    const url = `${API_BASE_URL}/oauth2/authorization/${provider}?redirect_uri=${encodeURIComponent(redirectUri)}`;
+    const url = `${getOAuthAuthorizationBaseUrl()}/oauth2/authorization/${provider}?redirect_uri=${encodeURIComponent(redirectUri)}`;
 
     if (shouldUseSystemBrowserForOAuth()) {
       void Browser.open({ url });
