@@ -13,7 +13,10 @@ import {
   Hash,
   TrendingUp,
   User,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import type { BoardHotResponse, BoardResponse } from '../lib/boardApi';
 import {
   authorColorForUser,
@@ -47,6 +50,13 @@ const SORT_TABS = [
   { id: 'views', label: '조회순', icon: TrendingUp }
 ];
 
+type ViewMode = 'card' | 'list';
+
+const VIEW_TABS: { id: ViewMode; icon: typeof LayoutGrid; title: string }[] = [
+  { id: 'list', icon: List, title: '목록 보기' },
+  { id: 'card', icon: LayoutGrid, title: '카드 보기' },
+];
+
 interface QnaListViewProps {
   onSelectPost: (id: number) => void;
   onWrite: () => void;
@@ -65,6 +75,8 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite,
   const [hotPosts, setHotPosts] = useState<BoardHotResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const isNative = Capacitor.isNativePlatform();
 
   useEffect(() => {
     listHotBoards('QNA', 7, 3).then(setHotPosts).catch(() => setHotPosts([]));
@@ -144,33 +156,43 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite,
   };
 
   return (
-    <div className="fade-in">
-      <div className="dashboard-view-header">
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <h1
-            style={{
-              fontSize: '22px',
-              fontWeight: '800',
-              color: 'var(--text-primary)',
-              letterSpacing: '-0.5px'
-            }}
-          >
-            Q&A 게시판
-          </h1>
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-            살림·재테크 궁금증을 다른 엄마들과 함께 해결해요
-          </p>
+    <div className="qna-page fade-in">
+      <div className="dashboard-view-header qna-page-head">
+        <div className="qna-page-head-copy">
+          <h1>Q&A 게시판</h1>
+          <p>살림·재테크 궁금증을 다른 엄마들과 함께 해결해요</p>
+        </div>
+      </div>
+
+      <div className="qna-page-toolbar">
+        <div className="view-mode-toggle qna-view-toggle">
+          {VIEW_TABS.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                className={`view-toggle-btn ${viewMode === tab.id ? 'active' : ''}`}
+                title={tab.title}
+                aria-label={tab.title}
+                aria-pressed={viewMode === tab.id}
+                onClick={() => setViewMode(tab.id)}
+              >
+                <Icon size={16} />
+              </button>
+            );
+          })}
         </div>
 
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }}>
-          <button onClick={onViewMyPosts} className="header-btn-secondary">
+        <div className="qna-page-toolbar-actions">
+          <button type="button" onClick={onViewMyPosts} className="header-btn-secondary">
             <User size={16} />
             <span>내 글</span>
           </button>
           <button
+            type="button"
             onClick={onWrite}
-            className="header-btn-primary"
-            style={{ background: 'var(--purple)' }}
+            className="header-btn-primary qna-write-btn"
           >
             <PenSquare size={16} />
             <span>질문하기</span>
@@ -256,27 +278,19 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite,
         </div>
       )}
 
-      <div className="card" style={{ marginBottom: '24px', padding: '20px 24px' }}>
-        <form
-          onSubmit={handleSearchSubmit}
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: '16px',
-            flexWrap: 'wrap'
-          }}
-        >
-          <div className="sub-tabs-container" style={{ marginBottom: 0 }}>
+      <div className="card qna-filter">
+        <div className="qna-filter-top">
+          <div className="qna-filter-seg" role="tablist" aria-label="정렬">
             {SORT_TABS.map((tab) => {
               const Icon = tab.icon;
               return (
                 <button
                   key={tab.id}
                   type="button"
+                  role="tab"
+                  aria-selected={activeSort === tab.id}
+                  className={activeSort === tab.id ? 'active' : ''}
                   onClick={() => setActiveSort(tab.id)}
-                  className={`sub-tab-btn ${activeSort === tab.id ? 'active' : ''}`}
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
                 >
                   <Icon size={13} />
                   {tab.label}
@@ -284,24 +298,17 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite,
               );
             })}
           </div>
+          <span className="qna-filter-count">
+            전체 <strong>{totalElements}</strong>개
+          </span>
+        </div>
 
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              background: '#f8fafc',
-              border: '1px solid var(--border)',
-              padding: '8px 14px',
-              borderRadius: '10px',
-              minWidth: '200px',
-              flex: '0 1 220px'
-            }}
-          >
-            <Hash size={14} color="var(--text-secondary)" />
+        <form className="qna-filter-fields" onSubmit={handleSearchSubmit}>
+          <label className="qna-filter-field">
+            <Hash size={14} />
             <input
               type="text"
-              placeholder="태그로 필터 (Enter)"
+              placeholder="태그 필터"
               value={tagFilter}
               onChange={(e) => setTagFilter(e.target.value)}
               onKeyDown={(e) => {
@@ -310,52 +317,17 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite,
                   setPage(0);
                 }
               }}
-              style={{
-                border: 'none',
-                background: 'transparent',
-                outline: 'none',
-                fontSize: '13px',
-                width: '100%',
-                fontFamily: 'inherit',
-                color: 'var(--text-primary)'
-              }}
             />
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              background: '#f8fafc',
-              border: '1px solid var(--border)',
-              padding: '8px 14px',
-              borderRadius: '10px',
-              minWidth: '220px',
-              flex: '0 1 280px'
-            }}
-          >
-            <Search size={16} color="var(--text-secondary)" />
+          </label>
+          <label className="qna-filter-field">
+            <Search size={16} />
             <input
-              type="text"
-              placeholder="질문 제목·내용 검색 (Enter)"
+              type="search"
+              placeholder="제목·내용 검색"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              style={{
-                border: 'none',
-                background: 'transparent',
-                outline: 'none',
-                fontSize: '13px',
-                width: '100%',
-                fontFamily: 'inherit',
-                color: 'var(--text-primary)'
-              }}
             />
-          </div>
-
-          <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500' }}>
-            전체 <strong style={{ color: 'var(--text-primary)' }}>{totalElements}</strong>개
-          </span>
+          </label>
         </form>
       </div>
 
@@ -384,14 +356,98 @@ export const QnaListView: React.FC<QnaListViewProps> = ({ onSelectPost, onWrite,
         <div className="card" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
           등록된 질문이 없습니다.
         </div>
+      ) : viewMode === 'list' ? (
+        <div className="qna-list-board">
+          {sorted.map((post) => (
+            <button
+              key={post.id}
+              type="button"
+              className="qna-list-row"
+              onClick={() => onSelectPost(post.id)}
+            >
+              {post.thumbnail && (
+                <span
+                  className="qna-list-thumb"
+                  style={{ backgroundImage: `url(${post.thumbnail})` }}
+                  aria-hidden="true"
+                />
+              )}
+              <span className="qna-list-body">
+                <span className="qna-list-row-top">
+                  <span className="qna-list-badges">
+                    {post.resolved && (
+                      <span className="qna-list-badge qna-list-badge--resolved">
+                        <CheckCircle2 size={10} />
+                        해결
+                      </span>
+                    )}
+                    {post.urgent && <span className="qna-list-badge qna-list-badge--urgent">급해요</span>}
+                  </span>
+                  <span className="qna-list-time">{formatRelativeKo(post.createdAt)}</span>
+                </span>
+                <span className="qna-list-title">{post.title}</span>
+                <span className="qna-list-preview">{stripMediaForPreview(post.content)}</span>
+                <span className="qna-list-meta">
+                  <span>{post.authorNickname}</span>
+                  <span>
+                    <Eye size={12} />
+                    {post.views.toLocaleString()}
+                  </span>
+                  <span>
+                    <ThumbsUp size={12} />
+                    {post.likeCount}
+                  </span>
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : isNative ? (
+        <div className="board-card-grid qna-card-grid">
+          {sorted.map((post) => (
+            <button
+              key={post.id}
+              type="button"
+              className="card qna-card-compact"
+              onClick={() => onSelectPost(post.id)}
+            >
+              {post.thumbnail ? (
+                <div
+                  className="qna-card-compact-thumb"
+                  style={{ backgroundImage: `url(${post.thumbnail})` }}
+                />
+              ) : (
+                <div className="qna-card-compact-placeholder">Q</div>
+              )}
+              <div className="qna-card-compact-body">
+                {(post.resolved || post.urgent) && (
+                  <div className="qna-card-compact-badges">
+                    {post.resolved && (
+                      <span className="qna-list-badge qna-list-badge--resolved">
+                        <CheckCircle2 size={10} />
+                        해결
+                      </span>
+                    )}
+                    {post.urgent && <span className="qna-list-badge qna-list-badge--urgent">급해요</span>}
+                  </div>
+                )}
+                <p className="qna-card-compact-title">{post.title}</p>
+                <div className="qna-card-compact-meta">
+                  <span>
+                    <Eye size={12} />
+                    {post.views.toLocaleString()}
+                  </span>
+                  <span>
+                    <ThumbsUp size={12} />
+                    {post.likeCount}
+                  </span>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
       ) : (
-        <div
-          className="board-card-grid"
-          style={{
-            display: 'grid',
-            gap: '20px'
-          }}
-        >
+        <div className="board-card-grid" style={{ display: 'grid', gap: '20px' }}>
           {sorted.map((post) => (
             <button
               key={post.id}

@@ -12,7 +12,10 @@ import {
   Flame,
   Hash,
   User,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import type { BoardHotResponse, BoardResponse } from '../lib/boardApi';
 import {
   authorColorForUser,
@@ -41,7 +44,14 @@ const PAGE_SIZE = 8;
 
 const SORT_TABS = [
   { id: 'latest', label: '최신순', icon: Clock },
-  { id: 'views', label: '조회순', icon: TrendingUp }
+  { id: 'views', label: '조회순', icon: TrendingUp },
+];
+
+type ViewMode = 'card' | 'list';
+
+const VIEW_TABS: { id: ViewMode; icon: typeof LayoutGrid; title: string }[] = [
+  { id: 'list', icon: List, title: '목록 보기' },
+  { id: 'card', icon: LayoutGrid, title: '카드 보기' },
 ];
 
 interface KnowhowListViewProps {
@@ -50,7 +60,11 @@ interface KnowhowListViewProps {
   onViewMyPosts: () => void;
 }
 
-export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, onWrite, onViewMyPosts }) => {
+export const KnowhowListView: React.FC<KnowhowListViewProps> = ({
+  onSelectPost,
+  onWrite,
+  onViewMyPosts,
+}) => {
   const [activeSort, setActiveSort] = useState('latest');
   const [search, setSearch] = useState('');
   const [submittedSearch, setSubmittedSearch] = useState('');
@@ -62,6 +76,8 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
   const [hotPosts, setHotPosts] = useState<BoardHotResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const isNative = Capacitor.isNativePlatform();
 
   useEffect(() => {
     listHotBoards('KNOWHOW', 7, 3).then(setHotPosts).catch(() => setHotPosts([]));
@@ -88,6 +104,7 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
               views: 0,
               likeCount: 0,
               tags: b.tags ?? [],
+              thumbnail: extractFirstImageUrl(b.content),
             }))
           );
           setTotalPages(data.totalPages);
@@ -136,33 +153,43 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
   };
 
   return (
-    <div className="fade-in">
-      <div className="dashboard-view-header">
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <h1
-            style={{
-              fontSize: '22px',
-              fontWeight: '800',
-              color: 'var(--text-primary)',
-              letterSpacing: '-0.5px'
-            }}
-          >
-            노하우 공유
-          </h1>
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-            엄마들의 살림·재테크·육아 노하우를 나눠보세요
-          </p>
+    <div className="knowhow-page fade-in">
+      <div className="dashboard-view-header knowhow-page-head">
+        <div className="knowhow-page-head-copy">
+          <h1>노하우 공유</h1>
+          <p>엄마들의 살림·재테크·육아 노하우를 나눠보세요</p>
+        </div>
+      </div>
+
+      <div className="qna-page-toolbar">
+        <div className="view-mode-toggle qna-view-toggle">
+          {VIEW_TABS.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                className={`view-toggle-btn ${viewMode === tab.id ? 'active' : ''}`}
+                title={tab.title}
+                aria-label={tab.title}
+                aria-pressed={viewMode === tab.id}
+                onClick={() => setViewMode(tab.id)}
+              >
+                <Icon size={16} />
+              </button>
+            );
+          })}
         </div>
 
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }}>
-          <button onClick={onViewMyPosts} className="header-btn-secondary">
+        <div className="qna-page-toolbar-actions knowhow-page-toolbar-actions">
+          <button type="button" onClick={onViewMyPosts} className="header-btn-secondary">
             <User size={16} />
             <span>내 글</span>
           </button>
           <button
+            type="button"
             onClick={onWrite}
-            className="header-btn-primary"
-            style={{ background: 'var(--blue)' }}
+            className="header-btn-primary knowhow-write-btn"
           >
             <PenSquare size={16} />
             <span>글쓰기</span>
@@ -179,16 +206,11 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
             </div>
             <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>최근 7일</span>
           </div>
-          <div
-            className="hot-post-grid"
-            style={{
-              display: 'grid',
-              gap: '12px'
-            }}
-          >
+          <div className="hot-post-grid" style={{ display: 'grid', gap: '12px' }}>
             {hotPosts.map((post, idx) => (
               <button
                 key={post.id}
+                type="button"
                 onClick={() => onSelectPost(post.id)}
                 style={{
                   display: 'flex',
@@ -198,7 +220,7 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
                   borderRadius: '10px',
                   border: '1px solid var(--border)',
                   background: '#fafbfc',
-                  textAlign: 'left'
+                  textAlign: 'left',
                 }}
               >
                 <div
@@ -212,7 +234,7 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontSize: '12px',
-                    fontWeight: '800'
+                    fontWeight: '800',
                   }}
                 >
                   {idx + 1}
@@ -226,12 +248,19 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
-                      marginBottom: '4px'
+                      marginBottom: '4px',
                     }}
                   >
                     {post.title}
                   </div>
-                  <div style={{ display: 'flex', gap: '10px', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: '10px',
+                      fontSize: '11px',
+                      color: 'var(--text-secondary)',
+                    }}
+                  >
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                       <Heart size={11} />
                       {post.likeCount}
@@ -248,27 +277,19 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
         </div>
       )}
 
-      <div className="card" style={{ marginBottom: '24px', padding: '20px 24px' }}>
-        <form
-          onSubmit={handleSearchSubmit}
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: '16px',
-            flexWrap: 'wrap'
-          }}
-        >
-          <div className="sub-tabs-container" style={{ marginBottom: 0 }}>
+      <div className="card qna-filter">
+        <div className="qna-filter-top">
+          <div className="qna-filter-seg" role="tablist" aria-label="정렬">
             {SORT_TABS.map((tab) => {
               const Icon = tab.icon;
               return (
                 <button
                   key={tab.id}
                   type="button"
+                  role="tab"
+                  aria-selected={activeSort === tab.id}
+                  className={activeSort === tab.id ? 'active' : ''}
                   onClick={() => setActiveSort(tab.id)}
-                  className={`sub-tab-btn ${activeSort === tab.id ? 'active' : ''}`}
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
                 >
                   <Icon size={13} />
                   {tab.label}
@@ -276,24 +297,17 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
               );
             })}
           </div>
+          <span className="qna-filter-count">
+            전체 <strong>{totalElements}</strong>개
+          </span>
+        </div>
 
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              background: '#f8fafc',
-              border: '1px solid var(--border)',
-              padding: '8px 14px',
-              borderRadius: '10px',
-              minWidth: '200px',
-              flex: '0 1 220px'
-            }}
-          >
-            <Hash size={14} color="var(--text-secondary)" />
+        <form className="qna-filter-fields" onSubmit={handleSearchSubmit}>
+          <label className="qna-filter-field">
+            <Hash size={14} />
             <input
               type="text"
-              placeholder="태그로 필터 (Enter)"
+              placeholder="태그 필터"
               value={tagFilter}
               onChange={(e) => setTagFilter(e.target.value)}
               onKeyDown={(e) => {
@@ -302,52 +316,17 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
                   setPage(0);
                 }
               }}
-              style={{
-                border: 'none',
-                background: 'transparent',
-                outline: 'none',
-                fontSize: '13px',
-                width: '100%',
-                fontFamily: 'inherit',
-                color: 'var(--text-primary)'
-              }}
             />
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              background: '#f8fafc',
-              border: '1px solid var(--border)',
-              padding: '8px 14px',
-              borderRadius: '10px',
-              minWidth: '220px',
-              flex: '0 1 280px'
-            }}
-          >
-            <Search size={16} color="var(--text-secondary)" />
+          </label>
+          <label className="qna-filter-field">
+            <Search size={16} />
             <input
-              type="text"
-              placeholder="제목·내용 검색 (Enter)"
+              type="search"
+              placeholder="제목·내용 검색"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              style={{
-                border: 'none',
-                background: 'transparent',
-                outline: 'none',
-                fontSize: '13px',
-                width: '100%',
-                fontFamily: 'inherit',
-                color: 'var(--text-primary)'
-              }}
             />
-          </div>
-
-          <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500' }}>
-            전체 <strong style={{ color: 'var(--text-primary)' }}>{totalElements}</strong>개
-          </span>
+          </label>
         </form>
       </div>
 
@@ -360,7 +339,7 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
             border: '1px solid var(--red-border)',
             background: 'var(--red-bg)',
             color: 'var(--red)',
-            fontSize: '13px'
+            fontSize: '13px',
           }}
         >
           <AlertCircle size={14} style={{ verticalAlign: 'middle', marginRight: 8 }} />
@@ -376,17 +355,84 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
         <div className="card" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
           등록된 글이 없습니다.
         </div>
-      ) : (
-        <div
-          className="board-card-grid"
-          style={{
-            display: 'grid',
-            gap: '20px'
-          }}
-        >
+      ) : viewMode === 'list' ? (
+        <div className="qna-list-board">
           {sorted.map((post) => (
             <button
               key={post.id}
+              type="button"
+              className="qna-list-row"
+              onClick={() => onSelectPost(post.id)}
+            >
+              {post.thumbnail && (
+                <span
+                  className="qna-list-thumb"
+                  style={{ backgroundImage: `url(${post.thumbnail})` }}
+                  aria-hidden="true"
+                />
+              )}
+              <span className="qna-list-body">
+                <span className="qna-list-row-top">
+                  <span className="qna-list-time" style={{ marginLeft: 'auto' }}>
+                    {formatRelativeKo(post.createdAt)}
+                  </span>
+                </span>
+                <span className="qna-list-title">{post.title}</span>
+                <span className="qna-list-preview">{stripMediaForPreview(post.content)}</span>
+                <span className="qna-list-meta">
+                  <span>{post.authorNickname}</span>
+                  <span>
+                    <Eye size={12} />
+                    {post.views.toLocaleString()}
+                  </span>
+                  <span>
+                    <Heart size={12} />
+                    {post.likeCount}
+                  </span>
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : isNative ? (
+        <div className="board-card-grid qna-card-grid">
+          {sorted.map((post) => (
+            <button
+              key={post.id}
+              type="button"
+              className="card qna-card-compact"
+              onClick={() => onSelectPost(post.id)}
+            >
+              {post.thumbnail ? (
+                <div
+                  className="qna-card-compact-thumb"
+                  style={{ backgroundImage: `url(${post.thumbnail})` }}
+                />
+              ) : (
+                <div className="qna-card-compact-placeholder">N</div>
+              )}
+              <div className="qna-card-compact-body">
+                <p className="qna-card-compact-title">{post.title}</p>
+                <div className="qna-card-compact-meta">
+                  <span>
+                    <Eye size={12} />
+                    {post.views.toLocaleString()}
+                  </span>
+                  <span>
+                    <Heart size={12} />
+                    {post.likeCount}
+                  </span>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="board-card-grid" style={{ display: 'grid', gap: '20px' }}>
+          {sorted.map((post) => (
+            <button
+              key={post.id}
+              type="button"
               onClick={() => onSelectPost(post.id)}
               className="card"
               style={{
@@ -395,7 +441,7 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
                 padding: 0,
                 overflow: 'hidden',
                 textAlign: 'left',
-                cursor: 'pointer'
+                cursor: 'pointer',
               }}
             >
               {post.thumbnail && (
@@ -405,7 +451,7 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
                     height: '180px',
                     backgroundImage: `url(${post.thumbnail})`,
                     backgroundSize: 'cover',
-                    backgroundPosition: 'center'
+                    backgroundPosition: 'center',
                   }}
                 />
               )}
@@ -425,7 +471,7 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
                     display: '-webkit-box',
                     WebkitLineClamp: 2,
                     WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden'
+                    overflow: 'hidden',
                   }}
                 >
                   {post.title}
@@ -439,7 +485,7 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
                     display: '-webkit-box',
                     WebkitLineClamp: 2,
                     WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden'
+                    overflow: 'hidden',
                   }}
                 >
                   {stripMediaForPreview(post.content)}
@@ -456,7 +502,7 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
                           color: 'var(--blue)',
                           background: 'var(--blue-bg)',
                           padding: '2px 8px',
-                          borderRadius: '10px'
+                          borderRadius: '10px',
                         }}
                       >
                         #{t}
@@ -471,7 +517,7 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     paddingTop: '12px',
-                    borderTop: '1px solid var(--border)'
+                    borderTop: '1px solid var(--border)',
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -486,7 +532,7 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
                         alignItems: 'center',
                         justifyContent: 'center',
                         fontSize: '12px',
-                        fontWeight: '700'
+                        fontWeight: '700',
                       }}
                     >
                       {authorInitialForUser(post.authorId)}
@@ -495,7 +541,7 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
                       style={{
                         fontSize: '12px',
                         fontWeight: '600',
-                        color: 'var(--text-primary)'
+                        color: 'var(--text-primary)',
                       }}
                     >
                       {post.authorNickname}
@@ -508,7 +554,7 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
                       gap: '14px',
                       fontSize: '12px',
                       color: 'var(--text-secondary)',
-                      fontWeight: '500'
+                      fontWeight: '500',
                     }}
                   >
                     <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -533,10 +579,11 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
           justifyContent: 'center',
           alignItems: 'center',
           gap: '6px',
-          marginTop: '32px'
+          marginTop: '32px',
         }}
       >
         <button
+          type="button"
           onClick={() => setPage(Math.max(0, page - 1))}
           disabled={page === 0}
           style={{
@@ -548,8 +595,9 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
             alignItems: 'center',
             justifyContent: 'center',
             background: 'white',
-            opacity: page === 0 ? 0.4 : 1
+            opacity: page === 0 ? 0.4 : 1,
           }}
+          aria-label="이전 페이지"
         >
           <ChevronLeft size={16} />
         </button>
@@ -557,6 +605,7 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
           {page + 1} / {totalPages}
         </span>
         <button
+          type="button"
           onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
           disabled={page + 1 >= totalPages}
           style={{
@@ -568,8 +617,9 @@ export const KnowhowListView: React.FC<KnowhowListViewProps> = ({ onSelectPost, 
             alignItems: 'center',
             justifyContent: 'center',
             background: 'white',
-            opacity: page + 1 >= totalPages ? 0.4 : 1
+            opacity: page + 1 >= totalPages ? 0.4 : 1,
           }}
+          aria-label="다음 페이지"
         >
           <ChevronRight size={16} />
         </button>

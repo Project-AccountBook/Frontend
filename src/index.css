@@ -1585,6 +1585,407 @@ a {
   flex-shrink: 0;
 }
 
+.is-native .community-hub-app {
+  padding-top: 2px;
+}
+.is-native .community-hub-hero {
+  margin-bottom: 14px;
+  padding: 18px 16px;
+  border-radius: 14px;
+  border: none;
+  background: var(--navy);
+  box-shadow: var(--shadow-sm);
+}
+.is-native .community-hub-hero-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.3px;
+  line-height: 1.35;
+}
+.is-native .community-hub-hero-desc {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.72);
+}
+.is-native .community-hub-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.is-native .community-hub-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 118px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.is-native .community-hub-tile-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  flex-shrink: 0;
+  background: var(--blue-bg);
+  color: var(--blue);
+}
+.is-native .community-hub-tile-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding-right: 12px;
+}
+.is-native .community-hub-tile-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.2px;
+  line-height: 1.25;
+}
+.is-native .community-hub-tile-hint {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+.is-native .community-hub-tile-chevron {
+  position: absolute;
+  right: 12px;
+  bottom: 14px;
+  color: var(--text-muted);
+}
+
+/* Q&A · 노하우 게시판 */
+.qna-page-head-copy h1,
+.knowhow-page-head-copy h1 {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.5px;
+  margin: 0;
+}
+.qna-page-head-copy p,
+.knowhow-page-head-copy p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 2px 0 0;
+}
+.qna-page-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.qna-page-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.qna-view-toggle .view-toggle-btn {
+  padding: 7px 11px;
+}
+.qna-write-btn {
+  background: var(--purple) !important;
+}
+.knowhow-write-btn {
+  background: var(--blue) !important;
+}
+.qna-filter {
+  margin-bottom: 16px !important;
+  padding: 14px !important;
+}
+.qna-filter-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.qna-filter-seg {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 11px;
+  background: #eef2f7;
+}
+.qna-filter-seg button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.qna-filter-seg button.active {
+  background: #ffffff;
+  color: var(--navy);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.1);
+}
+.qna-filter-count {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.qna-filter-count strong {
+  color: var(--text-primary);
+}
+.qna-filter-fields {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.qna-filter-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #f8fafc;
+}
+.qna-filter-field svg {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.qna-filter-field input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text-primary);
+}
+.qna-list-board {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.qna-list-row {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.qna-list-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  background-size: cover;
+  background-position: center;
+  flex-shrink: 0;
+}
+.qna-list-body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+}
+.qna-list-row-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.qna-list-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.qna-list-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.qna-list-badge--resolved {
+  background: #dcfce7;
+  color: #16a34a;
+}
+.qna-list-badge--urgent {
+  background: var(--red-bg);
+  color: var(--red);
+  border: 1px solid var(--red-border);
+}
+.qna-list-time {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.qna-list-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.qna-list-preview {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.qna-list-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.qna-list-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.qna-list-meta span:first-child {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qna-card-grid {
+  display: grid;
+  gap: 10px;
+}
+.is-native .qna-page .qna-card-grid,
+.is-native .knowhow-page .qna-card-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.qna-card-compact {
+  display: flex;
+  flex-direction: column;
+  padding: 0 !important;
+  overflow: hidden;
+  text-align: left;
+  cursor: pointer;
+}
+.qna-card-compact-thumb {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background-size: cover;
+  background-position: center;
+}
+.qna-card-compact-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #f1f5f9;
+  color: var(--text-muted);
+  font-size: 22px;
+  font-weight: 800;
+}
+.qna-card-compact-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+}
+.qna-card-compact-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.qna-card-compact-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.qna-card-compact-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.qna-card-compact-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.is-native .qna-page-head,
+.is-native .knowhow-page-head {
+  display: none;
+}
+.is-native .qna-page-toolbar,
+.is-native .knowhow-page .qna-page-toolbar {
+  margin-bottom: 12px;
+}
+.is-native .qna-page-toolbar-actions .header-btn-secondary,
+.is-native .qna-page-toolbar-actions .qna-write-btn,
+.is-native .knowhow-page-toolbar-actions .header-btn-secondary,
+.is-native .knowhow-page-toolbar-actions .knowhow-write-btn {
+  padding: 8px 12px !important;
+  font-size: 12px !important;
+}
+.is-native .qna-filter-field {
+  padding: 9px 10px;
+}
+.is-native .qna-filter-field input {
+  font-size: 12px;
+}
+.is-native .qna-filter-field input::placeholder {
+  font-size: 12px;
+}
+
 /* Native app: 콘텐츠 하단 안전영역(홈 인디케이터) + 탭바 높이 */
 .is-native .dashboard-content {
   padding-bottom: calc(16px + env(safe-area-inset-bottom));
