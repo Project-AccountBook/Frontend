@@ -1609,7 +1609,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                                 {getTxTypeLabel(tx.type, tx.fixedTransactionGenerated)}
                               </span>
                               <div className="cal-detail-info">
-                                <span className="cal-detail-desc">{tx.description || '—'}</span>
+                                <span className="cal-detail-desc">{tx.description ? tx.description.replace(/ \(공구 ID: \d+\)/, '') : '—'}</span>
                                 <span className="cal-detail-meta">
                                   {tx.type === 'TRANSFER' && formatTransferRoute(tx) ? (
                                     <span className="transfer-target-desc">{formatTransferRoute(tx)}</span>
@@ -1712,7 +1712,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                           </td>
                           <td>
                             <div className="tx-description-cell">
-                              <span>{tx.description || '—'}</span>
+                              <span>{tx.description ? tx.description.replace(/ \(공구 ID: \d+\)/, '') : '—'}</span>
                             </div>
                           </td>
                           <td className={`font-bold ${tx.type === 'INCOME' ? 'color-income' : tx.type === 'EXPENSE' ? 'color-expense' : 'color-transfer'}`}>

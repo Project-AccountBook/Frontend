@@ -18,6 +18,7 @@ import {
   TrendingUp,
   User,
   Plus,
+  Lock,
 } from 'lucide-react';
 import {
   interestCategoryApi,
@@ -58,6 +59,7 @@ interface GroupBuyItem {
   title: string;
   progress: number;
   currentParticipants: number;
+  minParticipants: number;
   targetParticipants: number;
   price: number;
   views: number;
@@ -70,6 +72,7 @@ interface GroupBuyItem {
   deadline: string;
   imageColor: string;
   imageUrl?: string;
+  pickupLocation?: string;
 }
 
 interface Account {
@@ -84,6 +87,8 @@ interface Comment {
   sender: string;
   text: string;
   date: string;
+  isSecret?: boolean;
+  authorRole?: string;
 }
 
 
@@ -158,6 +163,7 @@ export const GroupBuyView: React.FC<{
     maxParticipants: '10',
     deadline: '',
     pickupLocation: '',
+    customPickupLocation: '',
     imageUrl: '',
     accountId: ''
   });
@@ -240,6 +246,7 @@ export const GroupBuyView: React.FC<{
   // Comment Board States
   const [comments, setComments] = useState<Record<number, Comment[]>>({});
   const [newCommentText, setNewCommentText] = useState('');
+  const [newCommentSecret, setNewCommentSecret] = useState(false);
 
   const activeCategoryName = activeCategoryId
     ? categories.find((c) => c.id === activeCategoryId)?.name ?? null
@@ -369,10 +376,14 @@ export const GroupBuyView: React.FC<{
       const deadlineDate = new Date(bp.deadline);
       const diffTime = deadlineDate.getTime() - new Date().getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      if (diffDays <= 0) {
+      
+      if (diffTime < 0) {
+        statusText = '기한 만료';
+        statusType = 'grey';
+      } else if (diffDays <= 1) {
         statusText = '마감임박';
         statusType = 'red';
-      } else if (diffDays <= 2) {
+      } else if (diffDays <= 3) {
         statusText = `마감임박 (D-${diffDays})`;
         statusType = 'red';
       } else {
@@ -398,6 +409,7 @@ export const GroupBuyView: React.FC<{
       title: bp.title,
       progress: Math.round(bp.achievementRate),
       currentParticipants: bp.currentParticipants,
+      minParticipants: bp.minParticipants,
       targetParticipants: bp.maxParticipants,
       price: bp.price,
       views: bp.viewCount,
@@ -405,11 +417,12 @@ export const GroupBuyView: React.FC<{
       creatorId: bp.creatorId,
       creator: bp.creatorNickname || '이웃',
       creatorTemp: '36.5℃',
-      distance: '0.8km',
+      distance: '단지 내',
       description: bp.content,
       deadline: deadlineStr,
       imageColor: imageColor,
-      imageUrl: bp.imageUrl
+      imageUrl: bp.imageUrl,
+      pickupLocation: bp.pickupLocation
     };
   };
 
@@ -515,9 +528,11 @@ export const GroupBuyView: React.FC<{
           
           return {
             id: comm.id,
-            sender: comm.userNickname || '이웃',
+            sender: comm.authorNickname || comm.userNickname || '이웃',
             text: comm.content,
-            date: dateStr
+            date: dateStr,
+            isSecret: comm.isSecret,
+            authorRole: comm.authorRole
           };
         });
         setComments(prev => ({ ...prev, [postId]: mappedComments }));
@@ -616,7 +631,9 @@ export const GroupBuyView: React.FC<{
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!createForm.title || !createForm.categoryId || !createForm.content || !createForm.price || !createForm.deadline || !createForm.pickupLocation) {
+    const finalPickupLocation = createForm.pickupLocation === '기타 (직접 입력)' ? createForm.customPickupLocation : createForm.pickupLocation;
+    
+    if (!createForm.title || !createForm.categoryId || !createForm.content || !createForm.price || !createForm.deadline || !finalPickupLocation) {
       alert('필수 입력 항목을 모두 채워주세요.');
       return;
     }
@@ -633,7 +650,7 @@ export const GroupBuyView: React.FC<{
         minParticipants: Number(createForm.minParticipants),
         maxParticipants: Number(createForm.maxParticipants),
         deadline: formattedDeadline,
-        pickupLocation: createForm.pickupLocation,
+        pickupLocation: finalPickupLocation,
         accountId: Number(createForm.accountId),
         imageUrl: createForm.imageUrl
       };
@@ -648,7 +665,7 @@ export const GroupBuyView: React.FC<{
         triggerToast('공동구매 글이 성공적으로 등록되었습니다!');
         fetchGroupPurchases(); // refresh list
         setCreateForm({
-          title: '', categoryId: '', content: '', price: '', minParticipants: '1', maxParticipants: '10', deadline: '', pickupLocation: '', imageUrl: '',
+          title: '', categoryId: '', content: '', price: '', minParticipants: '1', maxParticipants: '10', deadline: '', pickupLocation: '', customPickupLocation: '', imageUrl: '',
     accountId: ''
         });
       }
@@ -667,7 +684,8 @@ export const GroupBuyView: React.FC<{
         method: 'POST',
         body: JSON.stringify({
           referenceType: 'GROUPPURCHASE',
-          content: newCommentText
+          content: newCommentText,
+          isSecret: newCommentSecret
         })
       });
       if (res.success) {
@@ -751,7 +769,7 @@ export const GroupBuyView: React.FC<{
         method: 'POST'
       });
       if (res.success) {
-        triggerToast('신청 취소 완료! 환불 내역이 기입되었습니다.');
+        triggerToast('신청 취소 완료!');
         fetchBudget();
         fetchUserWishedAndJoinedIds();
         fetchGroupPurchases();
@@ -762,6 +780,33 @@ export const GroupBuyView: React.FC<{
       console.error("Failed to leave group purchase:", err);
       alert(err.message || '취소에 실패했습니다.');
       setShowLeaveConfirmation(false);
+    }
+  };
+
+  // Early Close Group Purchase
+  const handleEarlyCloseClick = async () => {
+    if (!selectedItem) return;
+    const confirmClose = window.confirm("정말 이 공동구매를 조기 마감하시겠습니까?\\n즉시 성공 처리되며 참여자들의 결제가 진행됩니다.");
+    if (!confirmClose) return;
+
+    try {
+      const res = await fetchWithAuth(`/api/v1/group-purchases/${selectedItem.id}/early-close`, {
+        method: 'POST'
+      });
+      if (res.success) {
+        triggerToast('조기 마감이 완료되어 공동구매가 성공 처리되었습니다!');
+        fetchBudget(); // If creator was also participating, budget changes
+        fetchGroupPurchases();
+        
+        // Update selected item in modal
+        if (res.data) {
+          const updated = mapBackendItemToFrontend(res.data, categories);
+          setSelectedItem(updated);
+        }
+      }
+    } catch (err: any) {
+      console.error("Failed to early close group purchase:", err);
+      alert(err.message || '조기 마감 처리에 실패했습니다.');
     }
   };
 
@@ -1380,9 +1425,11 @@ export const GroupBuyView: React.FC<{
 
                   <p className="detail-content-text">{selectedItem.description}</p>
 
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', background: '#f8fafc', padding: '12px', borderRadius: '8px' }}>
-                    <strong>수령 장소/시간 안내:</strong> 개설자가 설정한 조율 시간 및 아파트 단지 입구 근처 놀이터에서 직접 인도가 원칙입니다.
-                  </div>
+                  {selectedItem.pickupLocation && (
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', background: '#f8fafc', padding: '12px', borderRadius: '8px' }}>
+                      <strong>수령 장소/시간 안내:</strong> {selectedItem.pickupLocation}
+                    </div>
+                  )}
                 </div>
 
                 {/* Right Col: Progress, Pricing & Q&A comments */}
@@ -1393,9 +1440,6 @@ export const GroupBuyView: React.FC<{
                     <div className="detail-price-main">
                       {formatKRW(selectedItem.price)}<span>원</span>
                     </div>
-                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', marginTop: '6px' }}>
-                      * 시중가 대비 약 25%~30% 할인된 특가입니다.
-                    </span>
                   </div>
 
                   {/* Progress bar info */}
@@ -1425,10 +1469,21 @@ export const GroupBuyView: React.FC<{
                       {(comments[selectedItem.id] || []).map((comm) => (
                         <div key={comm.id} className="comment-item">
                           <div className="comment-meta">
-                            <span>{comm.sender}</span>
+                            <span>
+                              {comm.sender}
+                              {comm.authorRole === 'CREATOR' && (
+                                <span style={{ marginLeft: '6px', fontSize: '10px', backgroundColor: '#eef2ff', color: '#4f46e5', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>방장</span>
+                              )}
+                              {comm.authorRole === 'PARTICIPANT' && (
+                                <span style={{ marginLeft: '6px', fontSize: '10px', backgroundColor: '#f0fdf4', color: '#16a34a', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>참여자</span>
+                              )}
+                            </span>
                             <span className="date">{comm.date}</span>
                           </div>
-                          <div className="comment-text">{comm.text}</div>
+                          <div className="comment-text">
+                            {comm.isSecret && <Lock size={12} style={{ display: 'inline', marginRight: '4px', color: 'var(--text-secondary)' }} />}
+                            {comm.text}
+                          </div>
                         </div>
                       ))}
                       {(comments[selectedItem.id] || []).length === 0 && (
@@ -1444,8 +1499,20 @@ export const GroupBuyView: React.FC<{
                         className="comment-input"
                         value={newCommentText}
                         onChange={(e) => setNewCommentText(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
+                        onKeyDown={(e) => {
+                          if (e.nativeEvent.isComposing) return;
+                          if (e.key === 'Enter') handleAddComment();
+                        }}
                       />
+                      <label style={{ display: 'flex', alignItems: 'center', fontSize: '12px', color: 'var(--text-secondary)', marginLeft: '10px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={newCommentSecret} 
+                          onChange={(e) => setNewCommentSecret(e.target.checked)} 
+                          style={{ marginRight: '4px' }}
+                        />
+                        비밀
+                      </label>
                       <button className="comment-btn" onClick={handleAddComment}>
                         <Send size={14} />
                       </button>
@@ -1453,7 +1520,30 @@ export const GroupBuyView: React.FC<{
                   </div>
 
                   {/* Participate CTA with integrated Budget Link check */}
-                  {participatedItems.includes(selectedItem.id) ? (
+                  {currentUserId === selectedItem.creatorId ? (
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button className="detail-btn-participate completed" disabled style={{ flex: 1, background: '#f1f5f9', color: '#64748b', border: 'none' }}>
+                        <span>내가 개설한 공동구매</span>
+                      </button>
+                      {selectedItem.statusType === 'blue' || selectedItem.statusType === 'red' ? (
+                        <button 
+                          className="detail-btn-participate"
+                          onClick={handleEarlyCloseClick}
+                          disabled={selectedItem.currentParticipants < selectedItem.minParticipants}
+                          title={selectedItem.currentParticipants < selectedItem.minParticipants ? "최소 인원이 충족되어야 조기 마감이 가능합니다." : ""}
+                          style={{ 
+                            flex: 'none',
+                            width: 'auto',
+                            background: selectedItem.currentParticipants >= selectedItem.minParticipants ? 'var(--blue)' : '#cbd5e1', 
+                            padding: '0 20px', 
+                            cursor: selectedItem.currentParticipants >= selectedItem.minParticipants ? 'pointer' : 'not-allowed'
+                          }}
+                        >
+                          조기 마감하기
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : participatedItems.includes(selectedItem.id) ? (
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <button className="detail-btn-participate completed" disabled style={{ flex: 1 }}>
                         <span>신청 완료한 공동구매</span>
@@ -1543,7 +1633,8 @@ export const GroupBuyView: React.FC<{
               </div>
 
               <p style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-                신청과 동시에 가계부 예산에서 즉시 차감(지출 기입)됩니다. 신청 취소 또는 모집 무산 시 자동으로 환불 처리됩니다.
+                신청 시에는 예약만 되며, <b>공동구매 확정(성공) 시</b> 지정된 계좌에서 즉시 차감(지출 기입)됩니다.<br/>
+                확정 전 신청 취소 시에는 결제되지 않으며, 무산 시에도 자동으로 취소됩니다.
               </p>
 
               <div className="form-actions" style={{ justifyContent: 'center' }}>
@@ -1865,7 +1956,30 @@ export const GroupBuyView: React.FC<{
 
                 <div>
                   <label style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>수령 장소 <span style={{color:'red'}}>*</span></label>
-                  <input type="text" placeholder="예: 서교동 123-45 (CU 편의점 앞)" value={createForm.pickupLocation} onChange={e => setCreateForm({...createForm, pickupLocation: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }} required />
+                  <select 
+                    value={createForm.pickupLocation} 
+                    onChange={e => setCreateForm({...createForm, pickupLocation: e.target.value})} 
+                    style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: 'white' }} 
+                    required
+                  >
+                    <option value="" disabled>수령 장소를 선택해주세요</option>
+                    <option value="101동 놀이터 앞">101동 놀이터 앞</option>
+                    <option value="105동 분리수거장">105동 분리수거장</option>
+                    <option value="정문 관리사무소">정문 관리사무소</option>
+                    <option value="후문 상가 앞">후문 상가 앞</option>
+                    <option value="커뮤니티 센터">커뮤니티 센터</option>
+                    <option value="기타 (직접 입력)">기타 (직접 입력)</option>
+                  </select>
+                  {createForm.pickupLocation === '기타 (직접 입력)' && (
+                    <input 
+                      type="text" 
+                      placeholder="예: OO빌라 1층 주차장" 
+                      value={createForm.customPickupLocation} 
+                      onChange={e => setCreateForm({...createForm, customPickupLocation: e.target.value})} 
+                      style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '8px' }} 
+                      required 
+                    />
+                  )}
                 </div>
               </div>
 
