@@ -129,7 +129,7 @@ async function handleAuthFailure(
   const renewed = await tryReissue();
   if (renewed) {
     headers.set('Authorization', `Bearer ${tokenStorage.getAccessToken()}`);
-    const retryRes = await fetch(requestUrl, { ...init, headers, ...FETCH_NO_REDIRECT });
+    const retryRes = await fetch(requestUrl, { credentials: 'include', ...init, headers, ...FETCH_NO_REDIRECT });
     if (isAuthFailureResponse(retryRes)) {
       handleAuthExpired();
     }
@@ -154,7 +154,7 @@ export async function publicRequest<T>(
     headers.set('X-XSRF-TOKEN', csrfToken);
   }
 
-  const res = await fetch(resolveApiUrl(url), { ...init, headers });
+  const res = await fetch(resolveApiUrl(url), { credentials: 'include', ...init, headers });
   return parseResponse<T>(res);
 }
 
@@ -163,7 +163,7 @@ async function executeWithReissue(
   init: RequestInit,
   headers: Headers,
 ): Promise<Response> {
-  let res = await fetch(requestUrl, { ...init, headers, ...FETCH_NO_REDIRECT });
+  let res = await fetch(requestUrl, { credentials: 'include', ...init, headers, ...FETCH_NO_REDIRECT });
 
   if (isAuthFailureResponse(res) && tokenStorage.hasToken()) {
     res = await handleAuthFailure(res, requestUrl, init, headers);
