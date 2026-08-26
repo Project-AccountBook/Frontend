@@ -195,7 +195,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   const handleSocialLogin = (provider: 'kakao' | 'naver' | 'google') => {
     tokenStorage.setPendingRememberMe(rememberMe);
     const redirectUri = getOAuthRedirectUri();
-    const url = `${getOAuthAuthorizationBaseUrl()}/oauth2/authorization/${provider}?redirect_uri=${encodeURIComponent(redirectUri)}`;
+    const url = `${getOAuthAuthorizationBaseUrl()}/oauth2/authorization/${provider}?post_login_redirect=${encodeURIComponent(redirectUri)}`;
 
     if (shouldUseSystemBrowserForOAuth()) {
       void Browser.open({ url });
