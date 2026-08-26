@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  ShoppingBag, 
-  MapPin, 
-  Wallet, 
-  Eye, 
-  Heart, 
-  Plus,
+import React, { useState, useEffect, useCallback } from 'react';
+import { Capacitor } from '@capacitor/core';
+import {
+  ShoppingBag,
+  MapPin,
+  Wallet,
+  Eye,
+  Heart,
+  PenSquare,
   Send,
   X,
   CheckCircle2,
@@ -13,7 +14,11 @@ import {
   BellOff,
   Loader2,
   AlertCircle,
-  Lock
+  Clock,
+  TrendingUp,
+  User,
+  Plus,
+  Lock,
 } from 'lucide-react';
 import {
   interestCategoryApi,
@@ -21,6 +26,7 @@ import {
   type InterestCategoryResponse,
 } from '../api';
 import { authFetch } from '../api/client';
+import { useBackHandler } from '../lib/nativeBack';
 
 const formatKRW = (value: number) => {
   return new Intl.NumberFormat('ko-KR').format(value);
@@ -31,6 +37,19 @@ const getProgressBarColor = (statusType: 'blue' | 'red' | 'grey') => {
   if (statusType === 'red') return 'var(--red)';
   return '#cbd5e1';
 };
+
+const SORT_TABS = [
+  { id: 'latest', label: '최신순', icon: Clock },
+  { id: 'deadline', label: '마감임박', icon: AlertCircle },
+  { id: 'progress', label: '달성률', icon: TrendingUp },
+];
+
+const DISTANCE_TABS = [
+  { id: '1.5km', label: '1.5km' },
+  { id: '3.0km', label: '3km' },
+  { id: '5.0km', label: '5km' },
+  { id: '전체', label: '전체' },
+];
 
 interface GroupBuyItem {
   id: number;
@@ -119,6 +138,7 @@ export const GroupBuyView: React.FC<{
   const [userAccounts, setUserAccounts] = useState<Account[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const isNative = Capacitor.isNativePlatform();
 
   // Report States
   const [showReportModal, setShowReportModal] = useState(false);
@@ -149,6 +169,53 @@ export const GroupBuyView: React.FC<{
   });
 
   const [isUploading, setIsUploading] = useState(false);
+
+  const closeTopOverlay = useCallback((): boolean => {
+    if (showReportModal) {
+      setShowReportModal(false);
+      return true;
+    }
+    if (showLeaveConfirmation) {
+      setShowLeaveConfirmation(false);
+      return true;
+    }
+    if (showConfirmation) {
+      setShowConfirmation(false);
+      return true;
+    }
+    if (showRequestModal) {
+      setShowRequestModal(false);
+      return true;
+    }
+    if (isCreateModalOpen) {
+      setIsCreateModalOpen(false);
+      return true;
+    }
+    if (selectedItem) {
+      setSelectedItem(null);
+      return true;
+    }
+    return false;
+  }, [
+    showReportModal,
+    showLeaveConfirmation,
+    showConfirmation,
+    showRequestModal,
+    isCreateModalOpen,
+    selectedItem,
+  ]);
+
+  useBackHandler(
+    Boolean(
+      selectedItem
+      || showRequestModal
+      || showConfirmation
+      || showLeaveConfirmation
+      || isCreateModalOpen
+      || showReportModal,
+    ),
+    closeTopOverlay,
+  );
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -774,7 +841,6 @@ export const GroupBuyView: React.FC<{
     }
   };
 
-  // Filter logic
   const filteredItems = items
     .filter(item => {
       if (activeCategoryName && item.category !== activeCategoryName) return false;
@@ -793,242 +859,518 @@ export const GroupBuyView: React.FC<{
       return 0;
     });
 
+  const renderProgressBar = (item: GroupBuyItem, compact = false) => (
+    <div className={compact ? 'groupbuy-progress-compact' : undefined}>
+      {!compact && (
+        <div className="group-buy-progress-row">
+          <span>
+            참여 ({item.currentParticipants}/{item.targetParticipants}명)
+          </span>
+          <span className="percent">{item.progress}%</span>
+        </div>
+      )}
+      <div className={`progress-bar-container${compact ? ' progress-bar-container--compact' : ''}`}>
+        <div
+          className="progress-bar-fill"
+          style={{
+            width: `${Math.min(100, item.progress)}%`,
+            backgroundColor: getProgressBarColor(item.statusType),
+          }}
+        />
+      </div>
+      {compact && (
+        <span className="groupbuy-progress-compact-meta">
+          {item.currentParticipants}/{item.targetParticipants}명 · {item.progress}%
+        </span>
+      )}
+    </div>
+  );
+
+  const renderParticipatedBadge = (extraClass = '') => (
+    <span className={`groupbuy-participated-badge${extraClass ? ` ${extraClass}` : ''}`}>
+      <CheckCircle2 size={10} />
+      신청완료
+    </span>
+  );
+
   return (
-    <div className="groupbuy-container fade-in">
-      
-      {/* 1. Address Link & Budget Link bar */}
-      <div className="groupbuy-budget-link-card">
-        <div className="groupbuy-budget-left">
-          <div className="groupbuy-budget-title">
-            <Wallet size={16} />
-            <span>내 가계부 예산 연동 활성화됨</span>
-          </div>
-          <div className="groupbuy-budget-val">
-            예산 잔액: {formatKRW(userBudget)}<span>원</span>
-          </div>
-        </div>
-        <div className="groupbuy-budget-right">
-          <div className="groupbuy-location-badge">
-            <MapPin size={14} />
-            <span>{userLocationText} (인증 {distanceLimit} 반경)</span>
-          </div>
-          <span style={{ fontSize: '11px', opacity: 0.6 }}>최종 결제 시 가계부 지출 자동 기입</span>
-        </div>
-      </div>
-
-      {/* 2. Filter & Sort Row */}
-      <div className="groupbuy-filter-row">
-        <div className="groupbuy-category-row">
-          <div className="dashboard-view-tabs groupbuy-category-tabs" style={{ margin: 0 }}>
-            <button
-              onClick={() => setActiveCategoryId(null)}
-              className={`dashboard-tab-btn ${activeCategoryId === null ? 'active' : ''}`}
-            >
-              전체
-            </button>
-            {categories.map((cat) => {
-              const isActive = activeCategoryId === cat.id;
-              const isSubscribed = interestCategories.some((ic) => ic.categoryId === cat.id);
-
-              return (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => setActiveCategoryId(cat.id)}
-                  className={`dashboard-tab-btn ${isActive ? 'active' : ''} ${isSubscribed ? 'subscribed' : ''}`}
-                >
-                  {cat.name}
-                  {isSubscribed && <span className="groupbuy-category-tab-dot" title="알림 등록됨" />}
-                </button>
-              );
-            })}
-          </div>
-
-          {activeCategoryId !== null && activeCategoryName && (
-            <button
-              type="button"
-              onClick={handleToggleCategoryNotification}
-              disabled={subscribingCategory}
-              className={`groupbuy-category-bell-btn${subscribedInterest ? ' subscribed' : ''}`}
-              title={
-                subscribedInterest
-                  ? `"${activeCategoryName}" 카테고리 알림 취소`
-                  : `"${activeCategoryName}" 새 공구 알림 받기`
-              }
-            >
-              {subscribingCategory ? (
-                <Loader2 size={14} className="spin-animation" />
-              ) : subscribedInterest ? (
-                <BellOff size={14} />
-              ) : (
-                <Bell size={14} />
-              )}
-              <span>
-                {activeCategoryName} · {subscribedInterest ? '알림 취소' : '새 공구 알림'}
-              </span>
-            </button>
-          )}
-        </div>
-
-        <div className="groupbuy-right-filters">
-          {/* Sorting */}
-          <select 
-            className="groupbuy-select"
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-          >
-            <option value="latest">최신순</option>
-            <option value="deadline">마감임박순</option>
-            <option value="progress">달성률순</option>
-          </select>
-
-          {/* certified radius */}
-          <select
-            className="groupbuy-select"
-            value={distanceLimit}
-            onChange={(e) => setDistanceLimit(e.target.value)}
-          >
-            <option value="1.5km">반경 1.5km 내</option>
-            <option value="3.0km">반경 3.0km 내</option>
-            <option value="5.0km">반경 5.0km 내</option>
-            <option value="전체">전체 보기</option>
-          </select>
-
-          {/* bookmark toggle */}
-          <button
-            onClick={() => setShowBookmarksOnly(!showBookmarksOnly)}
-            className={`groupbuy-toggle-btn ${showBookmarksOnly ? 'active' : ''}`}
-          >
-            찜 목록
-          </button>
-
-                    {/* my posts toggle */}
-          <button
-            onClick={() => setShowMyPostsOnly(!showMyPostsOnly)}
-            className={`groupbuy-toggle-btn ${showMyPostsOnly ? 'active' : ''}`}
-            style={{ marginRight: '8px' }}
-          >
-            내가 쓴 글
-          </button>
-
-          {/* create groupbuy btn */}
-          <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="groupbuy-action-btn"
-            style={{ backgroundColor: '#ff7e36', color: 'white', border: 'none', display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}
-          >
-            <Plus size={16} />
-            <span>공동구매 글쓰기</span>
-          </button>
-
-
-        </div>
-      </div>
-
-      {/* 3. Group Buy listing grid */}
-      <div className="group-buy-grid" style={{ marginTop: 0 }}>
-        {filteredItems.map((item) => {
-          const isBookmarked = userBookmarks.includes(item.id);
-          const isParticipated = participatedItems.includes(item.id);
-
-          return (
-            <div 
-              key={item.id} 
-              className="group-buy-card"
-              onClick={() => handleItemClick(item)}
-              style={{ cursor: 'pointer', position: 'relative' }}
-            >
-              {isParticipated && (
-                <div style={{
-                  position: 'absolute',
-                  top: -8,
-                  left: -8,
-                  background: 'var(--green)',
-                  color: 'white',
-                  padding: '4px 10px',
-                  borderRadius: '12px',
-                  fontSize: '11px',
-                  fontWeight: '700',
-                  boxShadow: 'var(--shadow-sm)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  zIndex: 2
-                }}>
-                  <CheckCircle2 size={12} />
-                  신청완료
-                </div>
-              )}
-
-              <div className="group-buy-header">
-                <span className="group-buy-category">{item.category}</span>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <span className={`group-buy-status-badge ${item.statusType}`}>
-                    {item.status}
-                  </span>
-                  <button 
-                    onClick={(e) => toggleBookmark(item.id, e)}
-                    style={{ color: isBookmarked ? 'var(--red)' : 'var(--text-muted)' }}
-                  >
-                    <Heart size={16} fill={isBookmarked ? 'var(--red)' : 'transparent'} />
-                  </button>
-                </div>
-              </div>
-
-              <div className="group-buy-title" style={{ fontSize: '16px' }}>{item.title}</div>
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <MapPin size={12} />
-                  {item.creator} • {item.distance}
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '2px' }}><Eye size={12} /> {item.views}</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '2px' }}><Heart size={12} /> {item.bookmarks}</span>
-                </span>
-              </div>
-
-              <div>
-                <div className="group-buy-progress-row">
-                  <span>참여 인원 ({item.currentParticipants}/{item.targetParticipants}명)</span>
-                  <span className="percent">{item.progress}%</span>
-                </div>
-                <div className="progress-bar-container">
-                  <div 
-                    className="progress-bar-fill" 
-                    style={{ 
-                      width: `${Math.min(100, item.progress)}%`, 
-                      backgroundColor: getProgressBarColor(item.statusType) 
-                    }}
-                  ></div>
-                </div>
-              </div>
-
-              <div className="group-buy-price-row">
-                <span className="group-buy-price-lbl">공구 가격</span>
-                <div className="group-buy-price-val">
-                  {formatKRW(item.price)}
+    <div className={`groupbuy-container fade-in${isNative ? ' groupbuy-page' : ''}`}>
+      {isNative ? (
+        <>
+          <div className="groupbuy-budget-link-card groupbuy-budget-link-card--app">
+            <div className="groupbuy-budget-main">
+              <Wallet size={15} />
+              <div className="groupbuy-budget-copy">
+                <span className="groupbuy-budget-label">예산 잔액</span>
+                <span className="groupbuy-budget-amount">
+                  {formatKRW(userBudget)}
                   <span>원</span>
-                </div>
+                </span>
               </div>
             </div>
-          );
-        })}
-
-        {filteredItems.length === 0 && (
-          <div style={{
-            gridColumn: '1 / -1',
-            background: 'white',
-            border: '1px solid var(--border)',
-            borderRadius: '16px',
-            padding: '60px 24px',
-            textAlign: 'center',
-            color: 'var(--text-secondary)'
-          }}>
-            검색 결과 조건에 맞는 공동구매가 없습니다.
+            <div className="groupbuy-budget-meta">
+              <span className="groupbuy-location-badge groupbuy-location-badge--app">
+                <MapPin size={12} />
+                <span>{userLocationText}</span>
+              </span>
+              <span className="groupbuy-budget-hint">가계부 연동 · {distanceLimit} 반경</span>
+            </div>
           </div>
-        )}
-      </div>
+
+          <div className="qna-page-toolbar groupbuy-page-toolbar">
+            <div className="qna-page-toolbar-actions groupbuy-page-toolbar-actions">
+              <button
+                type="button"
+                onClick={() => setShowBookmarksOnly(!showBookmarksOnly)}
+                className={`header-btn-secondary${showBookmarksOnly ? ' active' : ''}`}
+              >
+                <Heart size={16} fill={showBookmarksOnly ? 'currentColor' : 'transparent'} />
+                <span>찜</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowMyPostsOnly(!showMyPostsOnly)}
+                className={`header-btn-secondary${showMyPostsOnly ? ' active' : ''}`}
+              >
+                <User size={16} />
+                <span>내 글</span>
+              </button>
+            </div>
+            <div className="qna-page-toolbar-actions groupbuy-page-toolbar-actions">
+              <button
+                type="button"
+                onClick={() => setIsCreateModalOpen(true)}
+                className="header-btn-primary groupbuy-write-btn"
+              >
+                <PenSquare size={16} />
+                <span>글쓰기</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="groupbuy-category-section">
+            <div className="groupbuy-category-scroll">
+              <div
+                className="dashboard-view-tabs groupbuy-category-tabs groupbuy-category-tabs--app"
+                role="tablist"
+                aria-label="카테고리"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeCategoryId === null}
+                  onClick={() => setActiveCategoryId(null)}
+                  className={`dashboard-tab-btn ${activeCategoryId === null ? 'active' : ''}`}
+                >
+                  전체
+                </button>
+                {categories.map((cat) => {
+                  const isActive = activeCategoryId === cat.id;
+                  const isSubscribed = interestCategories.some((ic) => ic.categoryId === cat.id);
+
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={isActive}
+                      onClick={() => setActiveCategoryId(cat.id)}
+                      className={`dashboard-tab-btn ${isActive ? 'active' : ''} ${isSubscribed ? 'subscribed' : ''}`}
+                    >
+                      {cat.name}
+                      {isSubscribed && (
+                        <span className="groupbuy-category-tab-dot" title="알림 등록됨" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {activeCategoryId !== null && activeCategoryName && (
+              <button
+                type="button"
+                onClick={handleToggleCategoryNotification}
+                disabled={subscribingCategory}
+                className={`groupbuy-category-bell-btn${subscribedInterest ? ' subscribed' : ''}`}
+                title={
+                  subscribedInterest
+                    ? `"${activeCategoryName}" 카테고리 알림 취소`
+                    : `"${activeCategoryName}" 새 공구 알림 받기`
+                }
+              >
+                {subscribingCategory ? (
+                  <Loader2 size={14} className="spin-animation" />
+                ) : subscribedInterest ? (
+                  <BellOff size={14} />
+                ) : (
+                  <Bell size={14} />
+                )}
+                <span>
+                  {activeCategoryName} · {subscribedInterest ? '알림 취소' : '새 공구 알림'}
+                </span>
+              </button>
+            )}
+          </div>
+
+          <div className="card qna-filter groupbuy-filter">
+            <div className="qna-filter-top">
+              <div className="qna-filter-seg" role="tablist" aria-label="정렬">
+                {SORT_TABS.map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={sortBy === tab.id}
+                      className={sortBy === tab.id ? 'active' : ''}
+                      onClick={() => setSortBy(tab.id)}
+                    >
+                      <Icon size={13} />
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <span className="qna-filter-count">
+                전체 <strong>{filteredItems.length}</strong>개
+              </span>
+            </div>
+
+            <div className="groupbuy-distance-seg" role="tablist" aria-label="반경">
+              {DISTANCE_TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={distanceLimit === tab.id}
+                  className={distanceLimit === tab.id ? 'active' : ''}
+                  onClick={() => setDistanceLimit(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {filteredItems.length === 0 ? (
+            <div className="card groupbuy-empty">검색 결과 조건에 맞는 공동구매가 없습니다.</div>
+          ) : (
+            <div className="group-buy-grid groupbuy-card-grid">
+              {filteredItems.map((item) => {
+                const isBookmarked = userBookmarks.includes(item.id);
+                const isParticipated = participatedItems.includes(item.id);
+
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="card groupbuy-card-compact"
+                    onClick={() => handleItemClick(item)}
+                  >
+                    {isParticipated && renderParticipatedBadge('groupbuy-participated-badge--compact')}
+                    {item.imageUrl ? (
+                      <div
+                        className="groupbuy-card-compact-thumb"
+                        style={{ backgroundImage: `url(${item.imageUrl})` }}
+                      />
+                    ) : (
+                      <div
+                        className="groupbuy-card-compact-thumb groupbuy-card-compact-thumb--placeholder"
+                        style={{ background: item.imageColor }}
+                      >
+                        <ShoppingBag size={22} />
+                      </div>
+                    )}
+                    <div className="groupbuy-card-compact-body">
+                      <div className="groupbuy-card-compact-badges">
+                        <span className={`group-buy-status-badge ${item.statusType}`}>{item.status}</span>
+                      </div>
+                      <p className="groupbuy-card-compact-title">{item.title}</p>
+                      <div className="groupbuy-card-compact-price">{formatKRW(item.price)}원</div>
+                      {renderProgressBar(item, true)}
+                      <div className="groupbuy-card-compact-meta">
+                        <span>
+                          <Eye size={12} />
+                          {item.views}
+                        </span>
+                        <button
+                          type="button"
+                          className="groupbuy-card-compact-bookmark"
+                          onClick={(e) => toggleBookmark(item.id, e)}
+                          aria-label={isBookmarked ? '찜 해제' : '찜하기'}
+                        >
+                          <Heart
+                            size={12}
+                            fill={isBookmarked ? 'var(--red)' : 'transparent'}
+                            color={isBookmarked ? 'var(--red)' : 'var(--text-muted)'}
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="groupbuy-budget-link-card">
+            <div className="groupbuy-budget-left">
+              <div className="groupbuy-budget-title">
+                <Wallet size={16} />
+                <span>내 가계부 예산 연동 활성화됨</span>
+              </div>
+              <div className="groupbuy-budget-val">
+                예산 잔액: {formatKRW(userBudget)}<span>원</span>
+              </div>
+            </div>
+            <div className="groupbuy-budget-right">
+              <div className="groupbuy-location-badge">
+                <MapPin size={14} />
+                <span>{userLocationText} (인증 {distanceLimit} 반경)</span>
+              </div>
+              <span style={{ fontSize: '11px', opacity: 0.6 }}>최종 결제 시 가계부 지출 자동 기입</span>
+            </div>
+          </div>
+
+          <div className="groupbuy-filter-row">
+            <div className="groupbuy-category-row">
+              <div className="dashboard-view-tabs groupbuy-category-tabs" style={{ margin: 0 }}>
+                <button
+                  onClick={() => setActiveCategoryId(null)}
+                  className={`dashboard-tab-btn ${activeCategoryId === null ? 'active' : ''}`}
+                >
+                  전체
+                </button>
+                {categories.map((cat) => {
+                  const isActive = activeCategoryId === cat.id;
+                  const isSubscribed = interestCategories.some((ic) => ic.categoryId === cat.id);
+
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setActiveCategoryId(cat.id)}
+                      className={`dashboard-tab-btn ${isActive ? 'active' : ''} ${isSubscribed ? 'subscribed' : ''}`}
+                    >
+                      {cat.name}
+                      {isSubscribed && <span className="groupbuy-category-tab-dot" title="알림 등록됨" />}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {activeCategoryId !== null && activeCategoryName && (
+                <button
+                  type="button"
+                  onClick={handleToggleCategoryNotification}
+                  disabled={subscribingCategory}
+                  className={`groupbuy-category-bell-btn${subscribedInterest ? ' subscribed' : ''}`}
+                  title={
+                    subscribedInterest
+                      ? `"${activeCategoryName}" 카테고리 알림 취소`
+                      : `"${activeCategoryName}" 새 공구 알림 받기`
+                  }
+                >
+                  {subscribingCategory ? (
+                    <Loader2 size={14} className="spin-animation" />
+                  ) : subscribedInterest ? (
+                    <BellOff size={14} />
+                  ) : (
+                    <Bell size={14} />
+                  )}
+                  <span>
+                    {activeCategoryName} · {subscribedInterest ? '알림 취소' : '새 공구 알림'}
+                  </span>
+                </button>
+              )}
+            </div>
+
+            <div className="groupbuy-right-filters">
+              <select
+                className="groupbuy-select"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+              >
+                <option value="latest">최신순</option>
+                <option value="deadline">마감임박순</option>
+                <option value="progress">달성률순</option>
+              </select>
+
+              <select
+                className="groupbuy-select"
+                value={distanceLimit}
+                onChange={(e) => setDistanceLimit(e.target.value)}
+              >
+                <option value="1.5km">반경 1.5km 내</option>
+                <option value="3.0km">반경 3.0km 내</option>
+                <option value="5.0km">반경 5.0km 내</option>
+                <option value="전체">전체 보기</option>
+              </select>
+
+              <button
+                onClick={() => setShowBookmarksOnly(!showBookmarksOnly)}
+                className={`groupbuy-toggle-btn ${showBookmarksOnly ? 'active' : ''}`}
+              >
+                찜 목록
+              </button>
+
+              <button
+                onClick={() => setShowMyPostsOnly(!showMyPostsOnly)}
+                className={`groupbuy-toggle-btn ${showMyPostsOnly ? 'active' : ''}`}
+                style={{ marginRight: '8px' }}
+              >
+                내가 쓴 글
+              </button>
+
+              <button
+                onClick={() => setIsCreateModalOpen(true)}
+                className="groupbuy-action-btn"
+                style={{
+                  backgroundColor: '#ff7e36',
+                  color: 'white',
+                  border: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+              >
+                <Plus size={16} />
+                <span>공동구매 글쓰기</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="group-buy-grid" style={{ marginTop: 0 }}>
+            {filteredItems.map((item) => {
+              const isBookmarked = userBookmarks.includes(item.id);
+              const isParticipated = participatedItems.includes(item.id);
+
+              return (
+                <div
+                  key={item.id}
+                  className="group-buy-card"
+                  onClick={() => handleItemClick(item)}
+                  style={{ cursor: 'pointer', position: 'relative' }}
+                >
+                  {isParticipated && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: -8,
+                        left: -8,
+                        background: 'var(--green)',
+                        color: 'white',
+                        padding: '4px 10px',
+                        borderRadius: '12px',
+                        fontSize: '11px',
+                        fontWeight: '700',
+                        boxShadow: 'var(--shadow-sm)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        zIndex: 2,
+                      }}
+                    >
+                      <CheckCircle2 size={12} />
+                      신청완료
+                    </div>
+                  )}
+
+                  <div className="group-buy-header">
+                    <span className="group-buy-category">{item.category}</span>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <span className={`group-buy-status-badge ${item.statusType}`}>{item.status}</span>
+                      <button
+                        onClick={(e) => toggleBookmark(item.id, e)}
+                        style={{ color: isBookmarked ? 'var(--red)' : 'var(--text-muted)' }}
+                      >
+                        <Heart size={16} fill={isBookmarked ? 'var(--red)' : 'transparent'} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="group-buy-title" style={{ fontSize: '16px' }}>
+                    {item.title}
+                  </div>
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      fontSize: '12px',
+                      color: 'var(--text-secondary)',
+                      marginBottom: '8px',
+                    }}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <MapPin size={12} />
+                      {item.creator} • {item.distance}
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                        <Eye size={12} /> {item.views}
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                        <Heart size={12} /> {item.bookmarks}
+                      </span>
+                    </span>
+                  </div>
+
+                  <div>
+                    <div className="group-buy-progress-row">
+                      <span>
+                        참여 인원 ({item.currentParticipants}/{item.targetParticipants}명)
+                      </span>
+                      <span className="percent">{item.progress}%</span>
+                    </div>
+                    <div className="progress-bar-container">
+                      <div
+                        className="progress-bar-fill"
+                        style={{
+                          width: `${Math.min(100, item.progress)}%`,
+                          backgroundColor: getProgressBarColor(item.statusType),
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="group-buy-price-row">
+                    <span className="group-buy-price-lbl">공구 가격</span>
+                    <div className="group-buy-price-val">
+                      {formatKRW(item.price)}
+                      <span>원</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {filteredItems.length === 0 && (
+              <div
+                style={{
+                  gridColumn: '1 / -1',
+                  background: 'white',
+                  border: '1px solid var(--border)',
+                  borderRadius: '16px',
+                  padding: '60px 24px',
+                  textAlign: 'center',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                검색 결과 조건에 맞는 공동구매가 없습니다.
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       {/* 4. DETAIL MODAL DIALOG */}
       {selectedItem && (

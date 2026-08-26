@@ -17,6 +17,7 @@ import {
   normalizeAccountRole,
   type AccountRole
 } from '../lib/accountGoalStorage';
+import { useBackHandler } from '../lib/nativeBack';
 
 const CATEGORY_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899'];
 
@@ -123,6 +124,11 @@ export const GoalSettingsSection: React.FC<GoalSettingsSectionProps> = ({
     setEditingAccountId(null);
     setEditingHasGoal(false);
   };
+
+  useBackHandler(showGoalModal, () => {
+    closeGoalModal();
+    return true;
+  });
 
   const handleSaveGoal = async (e: React.FormEvent) => {
     e.preventDefault();

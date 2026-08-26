@@ -3,6 +3,7 @@ import { AlertCircle, Calendar, CheckCircle, Loader2, MapPin } from 'lucide-reac
 import { userApi } from '../api';
 import type { UserProfileResponse } from '../api/types';
 import { openAddressSearch } from '../utils/daumPostcode';
+import { useBackHandler } from '../lib/nativeBack';
 import modiLogo from '../assets/modi-logo.png';
 
 interface SocialSignupCompleteViewProps {
@@ -47,6 +48,11 @@ export const SocialSignupCompleteView: React.FC<SocialSignupCompleteViewProps> =
     };
     fetchProfile();
   }, []);
+
+  useBackHandler(true, () => {
+    onComplete();
+    return true;
+  });
 
   const handleAddressSearch = async () => {
     try {

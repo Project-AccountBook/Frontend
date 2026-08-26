@@ -13,6 +13,7 @@ import {
   Info
 } from 'lucide-react';
 import { notificationApi } from '../api';
+import { Capacitor } from '@capacitor/core';
 import type { NotificationResponse, NotificationType } from '../api/types';
 import type { AssetActiveSection } from './AssetView';
 
@@ -65,6 +66,7 @@ const KNOWN_APP_TABS = new Set([
   'groupbuyAdmin',
   'notifications',
   'settings',
+  'community',
   'admin'
 ]);
 
@@ -372,6 +374,17 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
     );
   };
 
+  const handleOpenNotification = (notification: NotificationResponse) => {
+    const tab = resolveNotificationTab(notification.redirectUrl, notification.type);
+    if (tab && onNavigate) {
+      void handleGoToTarget(notification);
+      return;
+    }
+    if (!notification.isRead) {
+      void handleMarkAsRead(notification.id);
+    }
+  };
+
   const handleBulkDelete = async () => {
     const ids = [...selectedIds];
     if (ids.length === 0) return;
@@ -397,6 +410,120 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
     paginated.length > 0 && pageIds.every((id) => selectedIds.has(id));
   const isSomePageSelected =
     paginated.some((n) => selectedIds.has(n.id)) && !isAllPageSelected;
+  const isNative = Capacitor.isNativePlatform();
+
+  if (isNative) {
+    return (
+      <div className="notif-app">
+        <div className="notif-app-head">
+          <div className="notif-app-head-left">
+            <h1>알림</h1>
+            {unreadCount > 0 && (
+              <span className="notif-app-badge">{unreadCount}</span>
+            )}
+          </div>
+          <button
+            type="button"
+            className="notif-app-mark"
+            onClick={() => void handleMarkAllAsRead()}
+            disabled={actionLoading || isLoading || unreadCount === 0}
+          >
+            전체 읽음
+          </button>
+        </div>
+
+        {error && <div className="notif-app-error">{error}</div>}
+
+        <p className="notif-app-meta">
+          전체 {notifications.length} · 안 읽음 {unreadCount} · 읽음 {readCount}
+        </p>
+
+        <div className="notif-app-seg" role="tablist" aria-label="읽음 상태">
+          {FILTER_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={activeFilter === tab.id}
+              className={activeFilter === tab.id ? 'active' : ''}
+              onClick={() => handleFilterChange(tab.id)}
+            >
+              {tab.label}
+              {tab.id === 'unread' && unreadCount > 0 ? ` ${unreadCount}` : ''}
+            </button>
+          ))}
+        </div>
+
+        <div className="notif-app-chips" role="tablist" aria-label="카테고리">
+          {CATEGORY_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={activeCategory === tab.id ? 'active' : ''}
+              onClick={() => handleCategoryChange(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {isLoading ? (
+          <p className="notif-app-status">불러오는 중...</p>
+        ) : filtered.length === 0 ? (
+          <div className="notif-app-empty">
+            <BellOff size={28} strokeWidth={1.6} />
+            <strong>
+              {activeFilter === 'unread'
+                ? '안 읽은 알림이 없어요'
+                : activeCategory !== 'all'
+                  ? `${CATEGORY_TABS.find((t) => t.id === activeCategory)?.label} 알림이 없어요`
+                  : '알림이 없어요'}
+            </strong>
+            <span>새 소식이 오면 여기에 표시돼요</span>
+          </div>
+        ) : (
+          <div className="notif-app-list">
+            {filtered.map((notification) => {
+              const typeConfig = TYPE_CONFIG[notification.type];
+              return (
+                <div
+                  key={notification.id}
+                  className={`notif-app-row ${notification.isRead ? '' : 'unread'}`}
+                >
+                  <button
+                    type="button"
+                    className="notif-app-main"
+                    disabled={actionLoading}
+                    onClick={() => handleOpenNotification(notification)}
+                  >
+                    <span className="notif-app-dot" aria-hidden="true" />
+                    <span className="notif-app-copy">
+                      <span className="notif-app-top">
+                        <span className="notif-app-title">{notification.title}</span>
+                        <span className="notif-app-time">{formatRelativeTime(notification.createdAt)}</span>
+                      </span>
+                      <span className="notif-app-msg">{notification.message}</span>
+                      <span className="notif-app-type">{typeConfig.label}</span>
+                    </span>
+                    <ChevronRight size={18} className="notif-app-chevron" />
+                  </button>
+                  <button
+                    type="button"
+                    className="notif-app-delete"
+                    disabled={actionLoading}
+                    aria-label="알림 삭제"
+                    onClick={() => void handleDelete(notification.id)}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -656,7 +783,7 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
 
       {selectedCount > 0 && (
         <div
-          className="card"
+          className="card native-hide"
           style={{
             marginBottom: '16px',
             padding: '14px 20px',
@@ -781,9 +908,9 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
           </div>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div className="notif-list" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <div
-            className="card"
+            className="card native-hide"
             style={{
               padding: '12px 24px',
               display: 'flex',
@@ -829,7 +956,8 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
             return (
               <div
                 key={notification.id}
-                className="card"
+                className={`card notif-item ${notification.isRead ? '' : 'unread'}`}
+                onClick={isNative ? () => handleOpenNotification(notification) : undefined}
                 style={{
                   padding: '18px 24px',
                   background: isSelected
@@ -849,6 +977,7 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
               >
                 <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
                   <label
+                    className="native-hide"
                     style={{
                       display: 'flex',
                       alignItems: 'flex-start',
@@ -872,6 +1001,7 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
                   </label>
 
                   <div
+                    className="notif-type-icon"
                     style={{
                       width: '44px',
                       height: '44px',
@@ -898,6 +1028,7 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
                       }}
                     >
                       <span
+                        className="native-hide"
                         style={{
                           fontSize: '11px',
                           fontWeight: '700',
@@ -911,6 +1042,7 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
                       </span>
                       {!notification.isRead && (
                         <span
+                          className="native-hide"
                           style={{
                             fontSize: '11px',
                             fontWeight: '800',
@@ -959,6 +1091,7 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
                     </p>
 
                     <div
+                      className="notif-item-actions"
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -967,7 +1100,7 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
                         flexWrap: 'wrap'
                       }}
                     >
-                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <div className="native-hide" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                         {!notification.isRead && (
                           <button
                             onClick={() => handleMarkAsRead(notification.id)}
@@ -1014,7 +1147,10 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
                       </div>
 
                       <button
-                        onClick={() => handleDelete(notification.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleDelete(notification.id);
+                        }}
                         disabled={actionLoading}
                         aria-label="알림 삭제"
                         style={{
@@ -1029,7 +1165,7 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
                         }}
                       >
                         <Trash2 size={13} />
-                        삭제
+                        <span className="native-hide">삭제</span>
                       </button>
                     </div>
                   </div>

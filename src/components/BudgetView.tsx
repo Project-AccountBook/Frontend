@@ -16,8 +16,11 @@ import {
   Activity,
   Copy,
   LayoutGrid,
-  Table2
+  Table2,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import { budgetApi, categoryApi } from '../api';
 import type {
   BudgetCopyResponse,
@@ -290,11 +293,20 @@ const PaceInlineStat: React.FC<{
   </div>
 );
 
+const PACE_STATUS_LABEL: Record<PaceStatus, string> = {
+  normal: '적정',
+  fast: '빠른 페이스',
+  slow: '여유',
+  over: '예산 초과'
+};
+
 const WeeklyPacePanel: React.FC<{
   pace: WeeklyPaceData;
   totalPlanned: number;
   loading?: boolean;
 }> = ({ pace, totalPlanned, loading }) => {
+  const isNative = Capacitor.isNativePlatform();
+  const [expanded, setExpanded] = useState(false);
   const maxWeekExpense = Math.max(...pace.weeks.map((w) => w.expense), 1);
   const weeklyTarget =
     pace.isCurrentMonth && pace.recommendedWeekly > 0
@@ -303,10 +315,103 @@ const WeeklyPacePanel: React.FC<{
         ? totalPlanned / Math.max(pace.weeks.length, 1)
         : 0;
   const barTarget = Math.max(maxWeekExpense, weeklyTarget, 1);
+  const totalWeekExpense = pace.weeks.reduce((sum, week) => sum + week.expense, 0);
+
+  const currentMonthStatsInner = (
+    <>
+      <PaceInlineStat
+        label="권장 주간 지출"
+        value={`${formatKRW(Math.round(pace.recommendedWeekly))}원`}
+        sub={`남은 ${pace.remainingWeeks}주 기준`}
+      />
+      <div style={{ width: '1px', background: 'var(--border)', flexShrink: 0 }} />
+      <PaceInlineStat
+        label="이번 주 지출"
+        value={`${formatKRW(pace.currentWeekExpense)}원`}
+        sub={
+          pace.proratedRecommended > 0
+            ? `권장 대비 ${Math.round((pace.currentWeekExpense / pace.proratedRecommended) * 100)}%`
+            : '이번 주 누적'
+        }
+        valueColor={
+          pace.paceStatus === 'fast' || pace.paceStatus === 'over'
+            ? 'var(--red)'
+            : pace.paceStatus === 'slow'
+              ? 'var(--blue)'
+              : undefined
+        }
+      />
+    </>
+  );
+
+  const weekBars = (
+    <div className="budget-pace-bars">
+      {pace.weeks.map((week) => {
+        const widthPct = Math.min((week.expense / barTarget) * 100, 100);
+        const targetPct =
+          weeklyTarget > 0 ? Math.min((weeklyTarget / barTarget) * 100, 100) : 0;
+        const isOverTarget = weeklyTarget > 0 && week.expense > weeklyTarget;
+
+        return (
+          <div key={week.weekIndex} className="budget-pace-bar-row">
+            <div className="budget-pace-bar-head">
+              <div className="budget-pace-bar-labels">
+                <span
+                  className="budget-pace-bar-week"
+                  style={{ color: week.isCurrentWeek ? 'var(--blue)' : 'var(--text-primary)' }}
+                >
+                  {week.label}
+                </span>
+                <span className="budget-pace-bar-range">{week.rangeLabel}</span>
+                {week.isCurrentWeek && <span className="budget-pace-bar-current">이번 주</span>}
+              </div>
+              <span
+                className="budget-pace-bar-amount"
+                style={{ color: isOverTarget ? 'var(--red)' : 'var(--text-primary)' }}
+              >
+                {formatKRW(week.expense)}원
+              </span>
+            </div>
+            <div className="budget-pace-bar-track">
+              {weeklyTarget > 0 && (
+                <div
+                  className="budget-pace-bar-target"
+                  style={{ left: `${targetPct}%` }}
+                  title={`주간 권장 ${formatKRW(Math.round(weeklyTarget))}원`}
+                />
+              )}
+              <div
+                className="budget-pace-bar-fill"
+                style={{
+                  width: `${widthPct}%`,
+                  background: isOverTarget
+                    ? 'var(--red)'
+                    : week.isCurrentWeek
+                      ? 'var(--blue)'
+                      : '#64748b'
+                }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const barLegend =
+    weeklyTarget > 0 ? (
+      <p className="budget-pace-legend">
+        막대 끝 세로선 = 주간 권장 지출 (
+        {pace.isCurrentMonth
+          ? `남은 예산 ÷ ${pace.remainingWeeks}주`
+          : `월 예산 ÷ ${pace.weeks.length}주`}
+        )
+      </p>
+    ) : null;
 
   if (loading) {
     return (
-      <div className="card" style={{ marginBottom: '20px', padding: '16px 20px' }}>
+      <div className="card budget-pace-card" style={{ marginBottom: '20px', padding: '16px 20px' }}>
         <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-secondary)', fontSize: '13px' }}>
           주별 소비 데이터를 불러오는 중...
         </div>
@@ -314,9 +419,63 @@ const WeeklyPacePanel: React.FC<{
     );
   }
 
+  if (isNative) {
+    return (
+      <div className="card budget-pace-card budget-pace-native">
+        <div className="budget-pace-head budget-pace-native-head">
+          <span className="card-title">주별 소비 페이스</span>
+          {totalPlanned > 0 && pace.isCurrentMonth && (
+            <span className={`budget-pace-status budget-pace-status--${pace.paceStatus}`}>
+              {PACE_STATUS_LABEL[pace.paceStatus]}
+            </span>
+          )}
+        </div>
+
+        {totalPlanned <= 0 ? (
+          <p className="budget-pace-empty">예산을 등록하면 주별 소비 페이스를 확인할 수 있습니다.</p>
+        ) : (
+          <>
+            {pace.isCurrentMonth ? (
+              <div className="budget-pace-native-summary">{currentMonthStatsInner}</div>
+            ) : (
+              <p className="budget-pace-native-meta">
+                {pace.weeks.length}주 · 총 {formatKRW(totalWeekExpense)}원
+              </p>
+            )}
+
+            {!expanded ? (
+              <button
+                type="button"
+                className="budget-pace-native-toggle"
+                onClick={() => setExpanded(true)}
+              >
+                주차별 상세 보기
+                <ChevronDown size={16} />
+              </button>
+            ) : (
+              <>
+                {weekBars}
+                {barLegend}
+                <button
+                  type="button"
+                  className="budget-pace-native-toggle budget-pace-native-toggle--collapse"
+                  onClick={() => setExpanded(false)}
+                >
+                  접기
+                  <ChevronUp size={16} />
+                </button>
+              </>
+            )}
+          </>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="card" style={{ marginBottom: '20px', padding: '16px 20px' }}>
+    <div className="card budget-pace-card" style={{ marginBottom: '20px', padding: '16px 20px' }}>
       <div
+        className="budget-pace-head"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -359,141 +518,12 @@ const WeeklyPacePanel: React.FC<{
                 border: '1px solid var(--border)'
               }}
             >
-              <PaceInlineStat
-                label="권장 주간 지출"
-                value={`${formatKRW(Math.round(pace.recommendedWeekly))}원`}
-                sub={`남은 ${pace.remainingWeeks}주 기준`}
-              />
-              <div style={{ width: '1px', background: 'var(--border)', flexShrink: 0 }} />
-              <PaceInlineStat
-                label="이번 주 지출"
-                value={`${formatKRW(pace.currentWeekExpense)}원`}
-                sub={
-                  pace.proratedRecommended > 0
-                    ? `권장 대비 ${Math.round((pace.currentWeekExpense / pace.proratedRecommended) * 100)}%`
-                    : '이번 주 누적'
-                }
-                valueColor={
-                  pace.paceStatus === 'fast' || pace.paceStatus === 'over'
-                    ? 'var(--red)'
-                    : pace.paceStatus === 'slow'
-                      ? 'var(--blue)'
-                      : undefined
-                }
-              />
+              {currentMonthStatsInner}
             </div>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {pace.weeks.map((week) => {
-              const widthPct = Math.min((week.expense / barTarget) * 100, 100);
-              const targetPct =
-                weeklyTarget > 0 ? Math.min((weeklyTarget / barTarget) * 100, 100) : 0;
-              const isOverTarget = weeklyTarget > 0 && week.expense > weeklyTarget;
-
-              return (
-                <div key={week.weekIndex}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      marginBottom: '6px',
-                      gap: '8px'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-                      <span
-                        style={{
-                          fontSize: '12px',
-                          fontWeight: '800',
-                          color: week.isCurrentWeek ? 'var(--blue)' : 'var(--text-primary)'
-                        }}
-                      >
-                        {week.label}
-                      </span>
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                        {week.rangeLabel}
-                      </span>
-                      {week.isCurrentWeek && (
-                        <span
-                          style={{
-                            fontSize: '10px',
-                            fontWeight: '700',
-                            padding: '2px 7px',
-                            borderRadius: '20px',
-                            background: 'var(--blue-bg)',
-                            color: 'var(--blue)',
-                            border: '1px solid var(--blue-border)',
-                            flexShrink: 0
-                          }}
-                        >
-                          이번 주
-                        </span>
-                      )}
-                    </div>
-                    <span
-                      style={{
-                        fontSize: '12px',
-                        fontWeight: '700',
-                        color: isOverTarget ? 'var(--red)' : 'var(--text-primary)',
-                        flexShrink: 0
-                      }}
-                    >
-                      {formatKRW(week.expense)}원
-                    </span>
-                  </div>
-                  <div
-                    style={{
-                      position: 'relative',
-                      height: '10px',
-                      borderRadius: '6px',
-                      background: '#f1f5f9',
-                      overflow: 'hidden'
-                    }}
-                  >
-                    {weeklyTarget > 0 && (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          left: `${targetPct}%`,
-                          top: 0,
-                          bottom: 0,
-                          width: '2px',
-                          background: '#94a3b8',
-                          zIndex: 1
-                        }}
-                        title={`주간 권장 ${formatKRW(Math.round(weeklyTarget))}원`}
-                      />
-                    )}
-                    <div
-                      style={{
-                        height: '100%',
-                        width: `${widthPct}%`,
-                        borderRadius: '6px',
-                        background: isOverTarget
-                          ? 'var(--red)'
-                          : week.isCurrentWeek
-                            ? 'var(--blue)'
-                            : '#64748b',
-                        transition: 'width 0.3s ease'
-                      }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {weeklyTarget > 0 && (
-            <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '12px' }}>
-              막대 끝 세로선 = 주간 권장 지출 (
-              {pace.isCurrentMonth
-                ? `남은 예산 ÷ ${pace.remainingWeeks}주`
-                : `월 예산 ÷ ${pace.weeks.length}주`}
-              )
-            </p>
-          )}
+          {weekBars}
+          {barLegend}
         </>
       )}
     </div>
@@ -622,9 +652,10 @@ const CategoryProgressCard: React.FC<{
         cursor: onClick ? 'pointer' : undefined,
         transition: onClick ? 'box-shadow 0.15s ease, border-color 0.15s ease' : undefined
       }}
+      className="budget-category-card"
     >
       <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
-        <div style={{ position: 'relative', width: 64, height: 64, flexShrink: 0 }}>
+        <div className="budget-category-ring" style={{ position: 'relative', width: 64, height: 64, flexShrink: 0 }}>
           <CircularRing percent={item.progress} color={color} />
           <div
             style={{
@@ -1865,7 +1896,7 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
   };
 
   return (
-    <div className="fade-in">
+    <div className="fade-in budget-page">
       {(error || actionError) && (
         <div
           className="card"
@@ -1884,7 +1915,7 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
       )}
 
       <div className="dashboard-view-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div className="native-hide" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div
             style={{
               width: '40px',
@@ -1925,20 +1956,10 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
             onDateChange={setCurrentDate}
             compact
           />
-          {onGoToCategorySettings && (
-            <button
-              type="button"
-              onClick={handleGoToCategorySettings}
-              className="header-btn-secondary"
-            >
-              <Tag size={16} />
-              <span>카테고리 관리</span>
-            </button>
-          )}
           <button
             type="button"
             onClick={openCreateModal}
-            className="header-btn-primary"
+            className="header-btn-primary budget-header-add-btn"
             style={{ background: 'var(--blue)' }}
           >
             <Plus size={16} />
@@ -1948,8 +1969,9 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
       </div>
 
       {/* Summary */}
-      <div className="card" style={{ marginBottom: '20px', padding: '16px 20px' }}>
+      <div className="card budget-summary-card" style={{ marginBottom: '20px', padding: '16px 20px' }}>
         <div
+          className="budget-summary-head"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -2007,7 +2029,7 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
             </div>
             <span className="stat-label">{overBudgetItems.length}개</span>
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }} className="budget-over-chips">
             {overBudgetItems.map((item) => (
               <div
                 key={item.id}
@@ -2029,8 +2051,9 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
       )}
 
       {/* Category budget */}
-      <div className="card" style={{ marginBottom: '20px', padding: '18px' }}>
+      <div className="card budget-category-section" style={{ marginBottom: '20px', padding: '18px' }}>
         <div
+          className="budget-category-head"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -2041,21 +2064,33 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
         >
           <span className="card-title">카테고리별 예산</span>
           {budgets.length > 0 && (
-            <>
-              <span
-                style={{
-                  fontSize: '12px',
-                  fontWeight: '700',
-                  padding: '4px 10px',
-                  borderRadius: '6px',
-                  background: '#fff',
-                  color: usagePercent > 90 ? 'var(--red)' : 'var(--blue)',
-                  border: `1px solid ${usagePercent > 90 ? 'var(--red-border)' : 'var(--blue-border)'}`
-                }}
+            <span
+              style={{
+                fontSize: '12px',
+                fontWeight: '700',
+                padding: '4px 10px',
+                borderRadius: '6px',
+                background: '#fff',
+                color: usagePercent > 90 ? 'var(--red)' : 'var(--blue)',
+                border: `1px solid ${usagePercent > 90 ? 'var(--red-border)' : 'var(--blue-border)'}`
+              }}
+            >
+              전체 {usagePercent}%
+            </span>
+          )}
+          <div className="budget-category-head-actions">
+            {onGoToCategorySettings && (
+              <button
+                type="button"
+                onClick={handleGoToCategorySettings}
+                className="header-btn-secondary"
               >
-                전체 {usagePercent}%
-              </span>
-              <div className="view-mode-toggle" style={{ marginLeft: 'auto' }}>
+                <Tag size={16} />
+                <span>카테고리 관리</span>
+              </button>
+            )}
+            {budgets.length > 0 && (
+              <div className="view-mode-toggle">
                 {CATEGORY_VIEW_TABS.map((tab) => {
                   const Icon = tab.icon;
                   return (
@@ -2072,23 +2107,20 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
                   );
                 })}
               </div>
-            </>
-          )}
+            )}
+          </div>
         </div>
 
         {budgets.length > 0 && (
-          <div style={{ marginBottom: '16px' }}>
+          <div className="budget-filter-toolbar" style={{ marginBottom: '16px' }}>
             <div
+              className="budget-filter-types-scroll"
               style={{
                 display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                gap: '12px',
-                flexWrap: 'wrap',
-                marginBottom: '12px'
+                gap: '6px',
+                flexWrap: 'wrap'
               }}
             >
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                 {filterTabs.map((cat) => (
                   <button
                     key={cat}
@@ -2099,8 +2131,9 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
                     {cat}
                   </button>
                 ))}
-              </div>
+            </div>
               <div
+                className="budget-filter-search"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -2130,8 +2163,8 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
                   }}
                 />
               </div>
-            </div>
             <div
+              className="budget-filter-status-row"
               style={{
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -2140,7 +2173,7 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
                 borderTop: '1px solid var(--border)'
               }}
             >
-              <div className="sub-tabs-container" style={{ marginBottom: 0 }}>
+              <div className="sub-tabs-container budget-filter-status-tabs" style={{ marginBottom: 0 }}>
                 {STATUS_TABS.map((tab) => (
                   <button
                     key={tab.id}

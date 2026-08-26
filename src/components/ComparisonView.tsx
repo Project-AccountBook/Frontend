@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import {
   Wallet,
   Users,
@@ -23,6 +24,7 @@ import {
   portfolioCompareApi,
   userApi,
 } from '../api';
+import { MonthYearNavigator } from './MonthYearNavigator';
 import type {
   BudgetCompareResponse,
   CategoryAmountResponse,
@@ -254,6 +256,8 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [myUserId, setMyUserId] = useState<number | null>(null);
 
+  const isNative = Capacitor.isNativePlatform();
+
   useEffect(() => {
     let cancelled = false;
     userApi.getMyProfile().then((res) => {
@@ -265,6 +269,11 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
   }, []);
 
   const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
+  const comparisonDate = useMemo(() => new Date(year, month - 1, 1), [year, month]);
+  const handleComparisonDateChange = useCallback((date: Date) => {
+    setYear(date.getFullYear());
+    setMonth(date.getMonth() + 1);
+  }, []);
   const activeMetric: MetricKey | null =
     mainTab === 'overall' ? null : (mainTab as MetricKey);
 
@@ -553,7 +562,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
     return (
       <>
         <div className="comparison-summary-grid">
-          <div className={`card stat-card ${config.themeClass}`}>
+          <div className={`card stat-card comparison-summary-stat comparison-summary-stat--mine ${config.themeClass}`}>
             <div className="card-header-row">
               <span className="card-title">내 월 총 {config.label}</span>
               <div className="icon-wrapper">{metricIcon[config.key]}</div>
@@ -562,7 +571,11 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
             <div className="stat-label">{yearMonth} 기준</div>
           </div>
 
-          <div className="card stat-card purple-theme">
+          <div
+            className={`card stat-card comparison-summary-stat comparison-summary-stat--context purple-theme${
+              isNative && !locationMode ? ' comparison-summary-stat--hidden' : ''
+            }`}
+          >
             <div className="card-header-row">
               <span className="card-title">
                 {locationMode ? '반경 이웃 수' : '카테고리 수'}
@@ -581,7 +594,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
             </div>
           </div>
 
-          <div className="card stat-card navy-theme">
+          <div className="card stat-card comparison-summary-stat comparison-summary-stat--avg navy-theme">
             <div className="card-header-row">
               <span className="card-title">평균 대비</span>
               <div className="icon-wrapper">
@@ -814,148 +827,183 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
           </div>
         </div>
 
-        <div className="card" style={{ marginTop: '24px' }}>
-          <div className="card-header-row">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div
-                style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '8px',
-                  background: 'var(--blue-bg)',
-                  color: 'var(--blue)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Filter size={18} />
-              </div>
-              <span className="card-title">
-                {locationMode ? '위치 기반' : '공개'} {config.label} 필터
-              </span>
-            </div>
-            {locationMode && (
-              <span className="stat-label" style={{ marginTop: 0 }}>
-                내 위치로부터 반경 내 공개 사용자만 조회
-              </span>
-            )}
-          </div>
-
-          <div className="filter-grid filter-grid-3">
-            <div>
-              <label className="filter-label">연도</label>
-              <select
-                value={year}
-                onChange={(e) => setYear(Number(e.target.value))}
-                className="filter-select"
-              >
-                {[year - 2, year - 1, year, year + 1].map((y) => (
-                  <option key={y} value={y}>
-                    {y}년
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="filter-label">월</label>
-              <select
-                value={month}
-                onChange={(e) => setMonth(Number(e.target.value))}
-                className="filter-select"
-              >
-                {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                  <option key={m} value={m}>
-                    {m}월
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {locationMode ? (
-              <div className="filter-grid-amount">
-                <label className="filter-label">
-                  반경:{' '}
-                  <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
-                    {radiusKm}km
+        <div className={isNative ? 'comparison-public-section' : undefined}>
+          <div
+            className={`card comparison-public-filter${isNative ? ' comparison-public-filter--merged' : ''}`}
+            style={isNative ? undefined : { marginTop: '24px' }}
+          >
+            {isNative ? (
+              <div className="comparison-public-unified-head">
+                <div className="comparison-public-unified-title">
+                  <Users size={18} />
+                  <span>
+                    {locationMode ? '반경 내 이웃' : '공개 사용자'} {config.label}
                   </span>
-                </label>
-                <input
-                  type="range"
-                  min={0.5}
-                  max={50}
-                  step={0.5}
-                  value={radiusKm}
-                  onChange={(e) => setRadiusKm(Number(e.target.value))}
-                  style={{ width: '100%', accentColor: config.accentColor }}
-                />
+                </div>
+                <span className="comparison-public-unified-sub">
+                  {locationMode
+                    ? '반경을 조정하면 아래 목록이 바뀌어요'
+                    : '금액 구간으로 비교 대상을 좁혀 보세요'}
+                </span>
               </div>
             ) : (
-              <div className="filter-grid-amount">
-                <label className="filter-label">
-                  월 총 {config.label} 금액 구간:{' '}
-                  <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
-                    {formatKRW(minAmount)}원 ~ {formatKRW(maxAmount)}원
+              <div className="card-header-row">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div
+                    style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '8px',
+                      background: 'var(--blue-bg)',
+                      color: 'var(--blue)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Filter size={18} />
+                  </div>
+                  <span className="card-title">
+                    {locationMode ? '위치 기반' : '공개'} {config.label} 필터
                   </span>
-                </label>
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', minWidth: 0 }}>
-                  <input
-                    type="range"
-                    min={0}
-                    max={20000000}
-                    step={500000}
-                    value={minAmount}
-                    onChange={(e) =>
-                      setMinAmount(Math.min(Number(e.target.value), maxAmount))
-                    }
-                    style={{ flex: 1, minWidth: 0, width: '100%', accentColor: config.accentColor }}
-                  />
-                  <input
-                    type="range"
-                    min={0}
-                    max={20000000}
-                    step={500000}
-                    value={maxAmount}
-                    onChange={(e) =>
-                      setMaxAmount(Math.max(Number(e.target.value), minAmount))
-                    }
-                    style={{ flex: 1, minWidth: 0, width: '100%', accentColor: config.accentColor }}
-                  />
                 </div>
+                {locationMode && (
+                  <span className="stat-label" style={{ marginTop: 0 }}>
+                    내 위치로부터 반경 내 공개 사용자만 조회
+                  </span>
+                )}
               </div>
             )}
-          </div>
-        </div>
 
-        <div className="card public-users-card" style={{ marginTop: '24px' }}>
-          <div className="card-header-row">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-              <div
-                style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '8px',
-                  background: 'var(--purple-bg)',
-                  color: 'var(--purple)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                }}
-              >
-                <Users size={18} />
-              </div>
-              <span className="card-title">
-                {locationMode ? '반경 내 이웃' : '공개 사용자'} 월 총 {config.label}
-              </span>
+            <div className="filter-grid filter-grid-3 comparison-public-filter-grid">
+              {!isNative && (
+                <>
+                  <div className="comparison-filter-dates">
+                    <label className="filter-label">연도</label>
+                    <select
+                      value={year}
+                      onChange={(e) => setYear(Number(e.target.value))}
+                      className="filter-select"
+                    >
+                      {[year - 2, year - 1, year, year + 1].map((y) => (
+                        <option key={y} value={y}>
+                          {y}년
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="comparison-filter-dates">
+                    <label className="filter-label">월</label>
+                    <select
+                      value={month}
+                      onChange={(e) => setMonth(Number(e.target.value))}
+                      className="filter-select"
+                    >
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                        <option key={m} value={m}>
+                          {m}월
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {locationMode ? (
+                <div className="filter-grid-amount">
+                  <label className="filter-label">
+                    반경:{' '}
+                    <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
+                      {radiusKm}km
+                    </span>
+                  </label>
+                  <input
+                    type="range"
+                    min={0.5}
+                    max={50}
+                    step={0.5}
+                    value={radiusKm}
+                    onChange={(e) => setRadiusKm(Number(e.target.value))}
+                    style={{ width: '100%', accentColor: config.accentColor }}
+                  />
+                </div>
+              ) : (
+                <div className="filter-grid-amount">
+                  <label className="filter-label">
+                    월 총 {config.label} 금액 구간:{' '}
+                    <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
+                      {formatKRW(minAmount)}원 ~ {formatKRW(maxAmount)}원
+                    </span>
+                  </label>
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center', minWidth: 0 }}>
+                    <input
+                      type="range"
+                      min={0}
+                      max={20000000}
+                      step={500000}
+                      value={minAmount}
+                      onChange={(e) =>
+                        setMinAmount(Math.min(Number(e.target.value), maxAmount))
+                      }
+                      style={{ flex: 1, minWidth: 0, width: '100%', accentColor: config.accentColor }}
+                    />
+                    <input
+                      type="range"
+                      min={0}
+                      max={20000000}
+                      step={500000}
+                      value={maxAmount}
+                      onChange={(e) =>
+                        setMaxAmount(Math.max(Number(e.target.value), minAmount))
+                      }
+                      style={{ flex: 1, minWidth: 0, width: '100%', accentColor: config.accentColor }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
-            <span className="stat-label" style={{ marginTop: 0 }}>
-              {locationMode
-                ? `${filteredPublicUsers.length}명 · 평균 ${formatKRW(avgPublic)}원`
-                : `필터링 결과 ${filteredPublicUsers.length}건 · 평균 ${formatKRW(avgPublic)}원`}
-            </span>
           </div>
+
+          <div
+            className={`card public-users-card comparison-public-users${isNative ? ' comparison-public-users--merged' : ''}`}
+            style={isNative ? undefined : { marginTop: '24px' }}
+          >
+            {!isNative ? (
+              <div className="card-header-row">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                  <div
+                    style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '8px',
+                      background: 'var(--purple-bg)',
+                      color: 'var(--purple)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Users size={18} />
+                  </div>
+                  <span className="card-title">
+                    {locationMode ? '반경 내 이웃' : '공개 사용자'} 월 총 {config.label}
+                  </span>
+                </div>
+                <span className="stat-label" style={{ marginTop: 0 }}>
+                  {locationMode
+                    ? `${filteredPublicUsers.length}명 · 평균 ${formatKRW(avgPublic)}원`
+                    : `필터링 결과 ${filteredPublicUsers.length}건 · 평균 ${formatKRW(avgPublic)}원`}
+                </span>
+              </div>
+            ) : (
+              <div className="comparison-public-users-meta">
+                {locationMode
+                  ? `${filteredPublicUsers.length}명 · 평균 ${formatKRW(avgPublic)}원`
+                  : `필터링 결과 ${filteredPublicUsers.length}건 · 평균 ${formatKRW(avgPublic)}원`}
+              </div>
+            )}
 
           {locationMode && locationMissing ? (
             <div className="empty-state">
@@ -1015,6 +1063,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
               })}
             </div>
           )}
+          </div>
         </div>
       </>
     );
@@ -1541,171 +1590,206 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
           </div>
         </div>
 
-        <div className="card" style={{ marginTop: '24px' }}>
-          <div className="card-header-row">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div
-                style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '8px',
-                  background: 'var(--blue-bg)',
-                  color: 'var(--blue)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Filter size={18} />
+        <div className={isNative ? 'comparison-public-section' : undefined}>
+          <div
+            className={`card comparison-public-filter${isNative ? ' comparison-public-filter--merged' : ''}`}
+            style={isNative ? undefined : { marginTop: '24px' }}
+          >
+            {isNative ? (
+              <div className="comparison-public-unified-head">
+                <div className="comparison-public-unified-title">
+                  <Users size={18} />
+                  <span>
+                    {locationMode ? '반경 내 이웃 종합' : '공개 사용자 종합'}
+                  </span>
+                </div>
+                <span className="comparison-public-unified-sub">
+                  {locationMode
+                    ? '반경을 조정하면 아래 목록이 바뀌어요'
+                    : '금액 기준과 구간으로 비교 대상을 좁혀 보세요'}
+                </span>
               </div>
-              <span className="card-title">
-                {locationMode ? '위치 기반 이웃 필터' : '공개 사용자 필터'}
-              </span>
-            </div>
-            {locationMode && (
-              <span className="stat-label" style={{ marginTop: 0 }}>
-                내 위치로부터 반경 내 공개 사용자만 조회
-              </span>
+            ) : (
+              <div className="card-header-row">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div
+                    style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '8px',
+                      background: 'var(--blue-bg)',
+                      color: 'var(--blue)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Filter size={18} />
+                  </div>
+                  <span className="card-title">
+                    {locationMode ? '위치 기반 이웃 필터' : '공개 사용자 필터'}
+                  </span>
+                </div>
+                {locationMode && (
+                  <span className="stat-label" style={{ marginTop: 0 }}>
+                    내 위치로부터 반경 내 공개 사용자만 조회
+                  </span>
+                )}
+              </div>
             )}
+
+            <div
+              className={`filter-grid comparison-public-filter-grid ${
+                locationMode ? 'filter-grid-3' : 'filter-grid-4'
+              }`}
+            >
+              {!isNative && (
+                <>
+                  <div className="comparison-filter-dates">
+                    <label className="filter-label">연도</label>
+                    <select
+                      value={year}
+                      onChange={(ev) => setYear(Number(ev.target.value))}
+                      className="filter-select"
+                    >
+                      {[year - 2, year - 1, year, year + 1].map((y) => (
+                        <option key={y} value={y}>
+                          {y}년
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="comparison-filter-dates">
+                    <label className="filter-label">월</label>
+                    <select
+                      value={month}
+                      onChange={(ev) => setMonth(Number(ev.target.value))}
+                      className="filter-select"
+                    >
+                      {Array.from({ length: 12 }, (_, idx) => idx + 1).map((m) => (
+                        <option key={m} value={m}>
+                          {m}월
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {locationMode ? (
+                <div className="filter-grid-amount">
+                  <label className="filter-label">
+                    반경:{' '}
+                    <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
+                      {radiusKm}km
+                    </span>
+                  </label>
+                  <input
+                    type="range"
+                    min={0.5}
+                    max={50}
+                    step={0.5}
+                    value={radiusKm}
+                    onChange={(ev) => setRadiusKm(Number(ev.target.value))}
+                    style={{
+                      width: '100%',
+                      accentColor: METRIC_CONFIGS[overallFilterMetric].accentColor,
+                    }}
+                  />
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="filter-label">금액 기준</label>
+                    <select
+                      value={overallFilterMetric}
+                      onChange={(ev) => setOverallFilterMetric(ev.target.value as MetricKey)}
+                      className="filter-select"
+                    >
+                      <option value="budget">예산</option>
+                      <option value="expense">지출</option>
+                      <option value="income">수입</option>
+                    </select>
+                  </div>
+
+                  <div className="filter-grid-amount">
+                    <label className="filter-label">
+                      월 총 {METRIC_CONFIGS[overallFilterMetric].label} 금액 구간:{' '}
+                      <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
+                        {formatKRW(minAmount)}원 ~ {formatKRW(maxAmount)}원
+                      </span>
+                    </label>
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                      <input
+                        type="range"
+                        min={0}
+                        max={20000000}
+                        step={500000}
+                        value={minAmount}
+                        onChange={(ev) =>
+                          setMinAmount(Math.min(Number(ev.target.value), maxAmount))
+                        }
+                        style={{
+                          flex: 1,
+                          accentColor: METRIC_CONFIGS[overallFilterMetric].accentColor,
+                        }}
+                      />
+                      <input
+                        type="range"
+                        min={0}
+                        max={20000000}
+                        step={500000}
+                        value={maxAmount}
+                        onChange={(ev) =>
+                          setMaxAmount(Math.max(Number(ev.target.value), minAmount))
+                        }
+                        style={{
+                          flex: 1,
+                          accentColor: METRIC_CONFIGS[overallFilterMetric].accentColor,
+                        }}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
           <div
-            className={`filter-grid ${locationMode ? 'filter-grid-3' : 'filter-grid-4'}`}
+            className={`card comparison-public-users${isNative ? ' comparison-public-users--merged' : ''}`}
+            style={isNative ? undefined : { marginTop: '24px' }}
           >
-            <div>
-              <label className="filter-label">연도</label>
-              <select
-                value={year}
-                onChange={(ev) => setYear(Number(ev.target.value))}
-                className="filter-select"
-              >
-                {[year - 2, year - 1, year, year + 1].map((y) => (
-                  <option key={y} value={y}>
-                    {y}년
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="filter-label">월</label>
-              <select
-                value={month}
-                onChange={(ev) => setMonth(Number(ev.target.value))}
-                className="filter-select"
-              >
-                {Array.from({ length: 12 }, (_, idx) => idx + 1).map((m) => (
-                  <option key={m} value={m}>
-                    {m}월
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {locationMode ? (
-              <div className="filter-grid-amount">
-                <label className="filter-label">
-                  반경:{' '}
-                  <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
-                    {radiusKm}km
+            {!isNative ? (
+              <div className="card-header-row">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div
+                    style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '8px',
+                      background: 'var(--purple-bg)',
+                      color: 'var(--purple)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Users size={18} />
+                  </div>
+                  <span className="card-title">
+                    {locationMode ? '반경 내 이웃 종합 현황' : '공개 사용자 종합 현황'}
                   </span>
-                </label>
-                <input
-                  type="range"
-                  min={0.5}
-                  max={50}
-                  step={0.5}
-                  value={radiusKm}
-                  onChange={(ev) => setRadiusKm(Number(ev.target.value))}
-                  style={{
-                    width: '100%',
-                    accentColor: METRIC_CONFIGS[overallFilterMetric].accentColor,
-                  }}
-                />
+                </div>
+                <span className="stat-label" style={{ marginTop: 0 }}>
+                  {filteredOverall.length}명 · 사용자를 선택하면 상세 비교가 열려요
+                </span>
               </div>
             ) : (
-              <>
-                <div>
-                  <label className="filter-label">금액 기준</label>
-                  <select
-                    value={overallFilterMetric}
-                    onChange={(ev) => setOverallFilterMetric(ev.target.value as MetricKey)}
-                    className="filter-select"
-                  >
-                    <option value="budget">예산</option>
-                    <option value="expense">지출</option>
-                    <option value="income">수입</option>
-                  </select>
-                </div>
-
-                <div className="filter-grid-amount">
-                  <label className="filter-label">
-                    월 총 {METRIC_CONFIGS[overallFilterMetric].label} 금액 구간:{' '}
-                    <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
-                      {formatKRW(minAmount)}원 ~ {formatKRW(maxAmount)}원
-                    </span>
-                  </label>
-                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                    <input
-                      type="range"
-                      min={0}
-                      max={20000000}
-                      step={500000}
-                      value={minAmount}
-                      onChange={(ev) =>
-                        setMinAmount(Math.min(Number(ev.target.value), maxAmount))
-                      }
-                      style={{
-                        flex: 1,
-                        accentColor: METRIC_CONFIGS[overallFilterMetric].accentColor,
-                      }}
-                    />
-                    <input
-                      type="range"
-                      min={0}
-                      max={20000000}
-                      step={500000}
-                      value={maxAmount}
-                      onChange={(ev) =>
-                        setMaxAmount(Math.max(Number(ev.target.value), minAmount))
-                      }
-                      style={{
-                        flex: 1,
-                        accentColor: METRIC_CONFIGS[overallFilterMetric].accentColor,
-                      }}
-                    />
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        <div className="card" style={{ marginTop: '24px' }}>
-          <div className="card-header-row">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div
-                style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '8px',
-                  background: 'var(--purple-bg)',
-                  color: 'var(--purple)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Users size={18} />
+              <div className="comparison-public-users-meta">
+                {filteredOverall.length}명 · 사용자를 선택하면 상세 비교가 열려요
               </div>
-              <span className="card-title">
-                {locationMode ? '반경 내 이웃 종합 현황' : '공개 사용자 종합 현황'}
-              </span>
-            </div>
-            <span className="stat-label" style={{ marginTop: 0 }}>
-              {filteredOverall.length}명 · 사용자를 선택하면 상세 비교가 열려요
-            </span>
-          </div>
+            )}
 
           {locationMode && locationMissing ? (
             <div className="empty-state">
@@ -1780,6 +1864,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
               })}
             </div>
           )}
+          </div>
         </div>
       </>
     );
@@ -2092,7 +2177,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
   };
 
   return (
-    <div className="fade-in">
+    <div className={`fade-in${isNative ? ' comparison-page' : ''}`}>
       <div className="dashboard-view-header">
         <div className="dashboard-view-tabs">
           {mainTabs.map((tab) => (
@@ -2105,52 +2190,85 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
             </button>
           ))}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button
-            type="button"
-            onClick={() => {
-              setLocationMode((prev) => !prev);
-              setSelectedUserId(null);
-            }}
-            aria-pressed={locationMode}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 14px',
-              borderRadius: '999px',
-              border: `1px solid ${locationMode ? 'var(--blue)' : 'var(--border)'}`,
-              background: locationMode ? 'var(--blue)' : '#fff',
-              color: locationMode ? '#fff' : 'var(--text-secondary)',
-              fontSize: '13px',
-              fontWeight: 700,
-              cursor: 'pointer',
-              transition: 'all var(--transition-fast)',
-            }}
-            title={locationMode ? '위치 기반 비교 켜짐 · 클릭하여 끄기' : '위치 기반 비교 꺼짐 · 클릭하여 켜기'}
-          >
-            <MapPin size={14} />
-            <span>위치 기반</span>
-          </button>
-          <div className="dashboard-date-selector">
-            <button
-              className="dashboard-date-arrow"
-              onClick={handlePrevMonth}
-              aria-label="Previous month"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <span>
-              {year}년 {month}월
-            </span>
-            <button
-              className="dashboard-date-arrow"
-              onClick={handleNextMonth}
-              aria-label="Next month"
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
+        <div className="comparison-header-actions">
+          {isNative ? (
+            <>
+              <MonthYearNavigator
+                date={comparisonDate}
+                onDateChange={handleComparisonDateChange}
+                compact
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setLocationMode((prev) => !prev);
+                  setSelectedUserId(null);
+                }}
+                aria-pressed={locationMode}
+                className={`comparison-loc-btn${locationMode ? ' active' : ''}`}
+                title={
+                  locationMode
+                    ? '위치 기반 비교 켜짐 · 클릭하여 끄기'
+                    : '위치 기반 비교 꺼짐 · 클릭하여 켜기'
+                }
+              >
+                <MapPin size={14} />
+                <span>위치 기반</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setLocationMode((prev) => !prev);
+                  setSelectedUserId(null);
+                }}
+                aria-pressed={locationMode}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 14px',
+                  borderRadius: '999px',
+                  border: `1px solid ${locationMode ? 'var(--blue)' : 'var(--border)'}`,
+                  background: locationMode ? 'var(--blue)' : '#fff',
+                  color: locationMode ? '#fff' : 'var(--text-secondary)',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'all var(--transition-fast)',
+                }}
+                title={
+                  locationMode
+                    ? '위치 기반 비교 켜짐 · 클릭하여 끄기'
+                    : '위치 기반 비교 꺼짐 · 클릭하여 켜기'
+                }
+              >
+                <MapPin size={14} />
+                <span>위치 기반</span>
+              </button>
+              <div className="dashboard-date-selector">
+                <button
+                  className="dashboard-date-arrow"
+                  onClick={handlePrevMonth}
+                  aria-label="Previous month"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <span>
+                  {year}년 {month}월
+                </span>
+                <button
+                  className="dashboard-date-arrow"
+                  onClick={handleNextMonth}
+                  aria-label="Next month"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
