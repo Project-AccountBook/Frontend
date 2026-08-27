@@ -115,7 +115,9 @@ export const GroupBuyView: React.FC<{
   const [selectedItem, setSelectedItem] = useState<GroupBuyItem | null>(null);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
   const [showLeaveConfirmation, setShowLeaveConfirmation] = useState(false);
+  const [showEarlyCloseConfirmation, setShowEarlyCloseConfirmation] = useState(false);
   const [userAccounts, setUserAccounts] = useState<Account[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -649,6 +651,7 @@ export const GroupBuyView: React.FC<{
     } catch (e) {
       console.error("Failed to fetch accounts", e);
     }
+    setConfirmError(null);
     setShowConfirmation(true);
   };
 
@@ -658,9 +661,10 @@ export const GroupBuyView: React.FC<{
 
     try {
       if (!selectedAccountId) {
-        alert('결제 계좌를 선택해주세요.');
+        setConfirmError('결제 계좌를 선택해주세요.');
         return;
       }
+      setConfirmError(null);
       const res = await fetchWithAuth(`/api/v1/group-purchases/${selectedItem.id}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -684,8 +688,7 @@ export const GroupBuyView: React.FC<{
       }
     } catch (err: any) {
       console.error("Failed to join group purchase:", err);
-      alert(err.message || '공동구매 신청에 실패했습니다.');
-      setShowConfirmation(false);
+      setConfirmError(err.message || '공동구매 신청에 실패했습니다.');
     }
   };
 
@@ -717,11 +720,14 @@ export const GroupBuyView: React.FC<{
   };
 
   // Early Close Group Purchase
-  const handleEarlyCloseClick = async () => {
+  const handleEarlyCloseClick = () => {
     if (!selectedItem) return;
-    const confirmClose = window.confirm("정말 이 공동구매를 조기 마감하시겠습니까?\\n즉시 성공 처리되며 참여자들의 결제가 진행됩니다.");
-    if (!confirmClose) return;
+    setShowEarlyCloseConfirmation(true);
+  };
 
+  const handleConfirmEarlyClose = async () => {
+    if (!selectedItem) return;
+    
     try {
       const res = await fetchWithAuth(`/api/v1/group-purchases/${selectedItem.id}/early-close`, {
         method: 'POST'
@@ -736,10 +742,12 @@ export const GroupBuyView: React.FC<{
           const updated = mapBackendItemToFrontend(res.data, categories);
           setSelectedItem(updated);
         }
+        setShowEarlyCloseConfirmation(false);
       }
     } catch (err: any) {
       console.error("Failed to early close group purchase:", err);
       alert(err.message || '조기 마감 처리에 실패했습니다.');
+      setShowEarlyCloseConfirmation(false);
     }
   };
 
@@ -780,10 +788,16 @@ export const GroupBuyView: React.FC<{
       if (activeCategoryName && item.category !== activeCategoryName) return false;
       if (showBookmarksOnly && !userBookmarks.includes(item.id)) return false;
       if (showMyPostsOnly && item.creatorId !== currentUserId) return false;
+      
+      if (sortBy === 'closed') {
+        const isClosed = ['모집 성공', '무산됨', '거래 종료', '기한 만료'].includes(item.status);
+        if (!isClosed) return false;
+      }
+
       return true;
     })
     .sort((a, b) => {
-      if (sortBy === 'latest') return b.id - a.id;
+      if (sortBy === 'latest' || sortBy === 'closed') return b.id - a.id;
       if (sortBy === 'deadline') {
         if (a.statusType === 'red') return -1;
         if (b.statusType === 'red') return 1;
@@ -880,6 +894,7 @@ export const GroupBuyView: React.FC<{
             <option value="latest">최신순</option>
             <option value="deadline">마감임박순</option>
             <option value="progress">달성률순</option>
+            <option value="closed">마감순</option>
           </select>
 
           {/* certified radius */}
@@ -1290,10 +1305,16 @@ export const GroupBuyView: React.FC<{
                 </div>
               </div>
 
-              <p style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+              <p style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.4', marginBottom: '16px' }}>
                 신청 시에는 예약만 되며, <b>공동구매 확정(성공) 시</b> 지정된 계좌에서 즉시 차감(지출 기입)됩니다.<br/>
                 확정 전 신청 취소 시에는 결제되지 않으며, 무산 시에도 자동으로 취소됩니다.
               </p>
+
+              {confirmError && (
+                <div style={{ color: '#ef4444', fontSize: '13px', fontWeight: 'bold', marginBottom: '16px', background: '#fef2f2', padding: '8px', borderRadius: '8px' }}>
+                  {confirmError}
+                </div>
+              )}
 
               <div className="form-actions" style={{ justifyContent: 'center' }}>
                 <button 
@@ -1392,6 +1413,81 @@ export const GroupBuyView: React.FC<{
                   }}
                 >
                   신청 취소하기
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5-3. EARLY CLOSE CONFIRMATION POPUP */}
+      {showEarlyCloseConfirmation && selectedItem && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="modal-content small">
+            <div className="modal-header">
+              <span className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <AlertCircle size={18} />
+                <span>조기 마감 안내</span>
+              </span>
+              <X size={18} className="modal-close-btn" onClick={() => setShowEarlyCloseConfirmation(false)} />
+            </div>
+            <div className="modal-body" style={{ textAlign: 'center' }}>
+              <div style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: '50%',
+                background: '#eff6ff',
+                color: 'var(--blue)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '16px'
+              }}>
+                <CheckCircle2 size={24} />
+              </div>
+              <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '8px' }}>정말 이 공동구매를 조기 마감하시겠습니까?</h3>
+              
+              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', textAlign: 'left', fontSize: '13px', margin: '16px 0', border: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>현재 참여 인원:</span>
+                  <span style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{selectedItem.currentParticipants}명</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>상품 가격:</span>
+                  <span style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{formatKRW(selectedItem.price)}원</span>
+                </div>
+              </div>
+
+              <p style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                즉시 성공 처리되며 참여자들의 결제가 진행됩니다.
+              </p>
+
+              <div className="form-actions" style={{ justifyContent: 'center' }}>
+                <button 
+                  onClick={() => setShowEarlyCloseConfirmation(false)}
+                  style={{
+                    background: '#f1f5f9',
+                    color: 'var(--text-primary)',
+                    padding: '10px 24px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: '700'
+                  }}
+                >
+                  돌아가기
+                </button>
+                <button 
+                  onClick={handleConfirmEarlyClose}
+                  style={{
+                    background: 'var(--blue)',
+                    color: 'white',
+                    padding: '10px 24px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: '700'
+                  }}
+                >
+                  조기 마감하기
                 </button>
               </div>
             </div>
