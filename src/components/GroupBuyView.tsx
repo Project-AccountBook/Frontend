@@ -42,6 +42,7 @@ const SORT_TABS = [
   { id: 'latest', label: '최신순', icon: Clock },
   { id: 'deadline', label: '마감임박', icon: AlertCircle },
   { id: 'progress', label: '달성률', icon: TrendingUp },
+  { id: 'closed', label: '마감순', icon: CheckCircle2 },
 ];
 
 const DISTANCE_TABS = [
@@ -134,7 +135,6 @@ export const GroupBuyView: React.FC<{
   const [selectedItem, setSelectedItem] = useState<GroupBuyItem | null>(null);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const [confirmError, setConfirmError] = useState<string | null>(null);
   const [showLeaveConfirmation, setShowLeaveConfirmation] = useState(false);
   const [showEarlyCloseConfirmation, setShowEarlyCloseConfirmation] = useState(false);
   const [userAccounts, setUserAccounts] = useState<Account[]>([]);
@@ -179,6 +179,10 @@ export const GroupBuyView: React.FC<{
     }
     if (showLeaveConfirmation) {
       setShowLeaveConfirmation(false);
+      return true;
+    }
+    if (showEarlyCloseConfirmation) {
+      setShowEarlyCloseConfirmation(false);
       return true;
     }
     if (showConfirmation) {
@@ -718,7 +722,6 @@ export const GroupBuyView: React.FC<{
     } catch (e) {
       console.error("Failed to fetch accounts", e);
     }
-    setConfirmError(null);
     setShowConfirmation(true);
   };
 
@@ -728,10 +731,9 @@ export const GroupBuyView: React.FC<{
 
     try {
       if (!selectedAccountId) {
-        setConfirmError('결제 계좌를 선택해주세요.');
+        alert('결제 계좌를 선택해주세요.');
         return;
       }
-      setConfirmError(null);
       const res = await fetchWithAuth(`/api/v1/group-purchases/${selectedItem.id}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -755,7 +757,8 @@ export const GroupBuyView: React.FC<{
       }
     } catch (err: any) {
       console.error("Failed to join group purchase:", err);
-      setConfirmError(err.message || '공동구매 신청에 실패했습니다.');
+      alert(err.message || '공동구매 신청에 실패했습니다.');
+      setShowConfirmation(false);
     }
   };
 
@@ -794,22 +797,26 @@ export const GroupBuyView: React.FC<{
 
   const handleConfirmEarlyClose = async () => {
     if (!selectedItem) return;
-    
+
     try {
       const res = await fetchWithAuth(`/api/v1/group-purchases/${selectedItem.id}/early-close`, {
         method: 'POST'
       });
       if (res.success) {
         triggerToast('조기 마감이 완료되어 공동구매가 성공 처리되었습니다!');
-        fetchBudget(); // If creator was also participating, budget changes
+        fetchBudget();
         fetchGroupPurchases();
         
-        // Update selected item in modal
         if (res.data) {
           const updated = mapBackendItemToFrontend(res.data, categories);
           setSelectedItem(updated);
         }
         setShowEarlyCloseConfirmation(false);
+      }
+    } catch (err: any) {
+      console.error("Failed to early close group purchase:", err);
+      alert(err.message || '조기 마감 처리에 실패했습니다.');
+      setShowEarlyCloseConfirmation(false);
     }
   };
 
@@ -849,22 +856,21 @@ export const GroupBuyView: React.FC<{
       if (activeCategoryName && item.category !== activeCategoryName) return false;
       if (showBookmarksOnly && !userBookmarks.includes(item.id)) return false;
       if (showMyPostsOnly && item.creatorId !== currentUserId) return false;
-      
-      if (sortBy === 'closed') {
-        const isClosed = ['모집 성공', '무산됨', '거래 종료', '기한 만료'].includes(item.status);
-        if (!isClosed) return false;
-      }
-
       return true;
     })
     .sort((a, b) => {
-      if (sortBy === 'latest' || sortBy === 'closed') return b.id - a.id;
+      if (sortBy === 'latest') return b.id - a.id;
       if (sortBy === 'deadline') {
         if (a.statusType === 'red') return -1;
         if (b.statusType === 'red') return 1;
         return a.id - b.id;
       }
       if (sortBy === 'progress') return b.progress - a.progress;
+      if (sortBy === 'closed') {
+        if (a.statusType === 'grey' && b.statusType !== 'grey') return -1;
+        if (b.statusType === 'grey' && a.statusType !== 'grey') return 1;
+        return a.id - b.id;
+      }
       return 0;
     });
 
@@ -903,221 +909,16 @@ export const GroupBuyView: React.FC<{
   );
 
   return (
-    <div className="groupbuy-container fade-in">
-      
-      {/* 1. Address Link & Budget Link bar */}
-      <div className="groupbuy-budget-link-card">
-        <div className="groupbuy-budget-left">
-          <div className="groupbuy-budget-title">
-            <Wallet size={16} />
-            <span>내 가계부 예산 연동 활성화됨</span>
-          </div>
-          <div className="groupbuy-budget-val">
-            예산 잔액: {formatKRW(userBudget)}<span>원</span>
-          </div>
-        </div>
-        <div className="groupbuy-budget-right">
-          <div className="groupbuy-location-badge">
-            <MapPin size={14} />
-            <span>{userLocationText} (인증 {distanceLimit} 반경)</span>
-          </div>
-          <span style={{ fontSize: '11px', opacity: 0.6 }}>최종 결제 시 가계부 지출 자동 기입</span>
-        </div>
-      </div>
-
-      {/* 2. Filter & Sort Row */}
-      <div className="groupbuy-filter-row">
-        <div className="groupbuy-category-row">
-          <div className="dashboard-view-tabs groupbuy-category-tabs" style={{ margin: 0 }}>
-            <button
-              onClick={() => setActiveCategoryId(null)}
-              className={`dashboard-tab-btn ${activeCategoryId === null ? 'active' : ''}`}
-            >
-              전체
-            </button>
-            {categories.map((cat) => {
-              const isActive = activeCategoryId === cat.id;
-              const isSubscribed = interestCategories.some((ic) => ic.categoryId === cat.id);
-
-              return (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => setActiveCategoryId(cat.id)}
-                  className={`dashboard-tab-btn ${isActive ? 'active' : ''} ${isSubscribed ? 'subscribed' : ''}`}
-                >
-                  {cat.name}
-                  {isSubscribed && <span className="groupbuy-category-tab-dot" title="알림 등록됨" />}
-                </button>
-              );
-            })}
-          </div>
-
-          {activeCategoryId !== null && activeCategoryName && (
-            <button
-              type="button"
-              onClick={handleToggleCategoryNotification}
-              disabled={subscribingCategory}
-              className={`groupbuy-category-bell-btn${subscribedInterest ? ' subscribed' : ''}`}
-              title={
-                subscribedInterest
-                  ? `"${activeCategoryName}" 카테고리 알림 취소`
-                  : `"${activeCategoryName}" 새 공구 알림 받기`
-              }
-            >
-              {subscribingCategory ? (
-                <Loader2 size={14} className="spin-animation" />
-              ) : subscribedInterest ? (
-                <BellOff size={14} />
-              ) : (
-                <Bell size={14} />
-              )}
-              <span>
-                {activeCategoryName} · {subscribedInterest ? '알림 취소' : '새 공구 알림'}
-              </span>
-            </button>
-          )}
-        </div>
-
-        <div className="groupbuy-right-filters">
-          {/* Sorting */}
-          <select 
-            className="groupbuy-select"
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-          >
-            <option value="latest">최신순</option>
-            <option value="deadline">마감임박순</option>
-            <option value="progress">달성률순</option>
-            <option value="closed">마감순</option>
-          </select>
-
-          {/* certified radius */}
-          <select
-            className="groupbuy-select"
-            value={distanceLimit}
-            onChange={(e) => setDistanceLimit(e.target.value)}
-          >
-            <option value="1.5km">반경 1.5km 내</option>
-            <option value="3.0km">반경 3.0km 내</option>
-            <option value="5.0km">반경 5.0km 내</option>
-            <option value="전체">전체 보기</option>
-          </select>
-
-          {/* bookmark toggle */}
-          <button
-            onClick={() => setShowBookmarksOnly(!showBookmarksOnly)}
-            className={`groupbuy-toggle-btn ${showBookmarksOnly ? 'active' : ''}`}
-          >
-            찜 목록
-          </button>
-
-                    {/* my posts toggle */}
-          <button
-            onClick={() => setShowMyPostsOnly(!showMyPostsOnly)}
-            className={`groupbuy-toggle-btn ${showMyPostsOnly ? 'active' : ''}`}
-            style={{ marginRight: '8px' }}
-          >
-            내가 쓴 글
-          </button>
-
-          {/* create groupbuy btn */}
-          <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="groupbuy-action-btn"
-            style={{ backgroundColor: '#ff7e36', color: 'white', border: 'none', display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}
-          >
-            <Plus size={16} />
-            <span>공동구매 글쓰기</span>
-          </button>
-
-
-        </div>
-      </div>
-
-      {/* 3. Group Buy listing grid */}
-      <div className="group-buy-grid" style={{ marginTop: 0 }}>
-        {filteredItems.map((item) => {
-          const isBookmarked = userBookmarks.includes(item.id);
-          const isParticipated = participatedItems.includes(item.id);
-
-          return (
-            <div 
-              key={item.id} 
-              className="group-buy-card"
-              onClick={() => handleItemClick(item)}
-              style={{ cursor: 'pointer', position: 'relative' }}
-            >
-              {isParticipated && (
-                <div style={{
-                  position: 'absolute',
-                  top: -8,
-                  left: -8,
-                  background: 'var(--green)',
-                  color: 'white',
-                  padding: '4px 10px',
-                  borderRadius: '12px',
-                  fontSize: '11px',
-                  fontWeight: '700',
-                  boxShadow: 'var(--shadow-sm)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  zIndex: 2
-                }}>
-                  <CheckCircle2 size={12} />
-                  신청완료
-                </div>
-              )}
-
-              <div className="group-buy-header">
-                <span className="group-buy-category">{item.category}</span>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <span className={`group-buy-status-badge ${item.statusType}`}>
-                    {item.status}
-                  </span>
-                  <button 
-                    onClick={(e) => toggleBookmark(item.id, e)}
-                    style={{ color: isBookmarked ? 'var(--red)' : 'var(--text-muted)' }}
-                  >
-                    <Heart size={16} fill={isBookmarked ? 'var(--red)' : 'transparent'} />
-                  </button>
-                </div>
-              </div>
-
-              <div className="group-buy-title" style={{ fontSize: '16px' }}>{item.title}</div>
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <MapPin size={12} />
-                  {item.creator} • {item.distance}
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '2px' }}><Eye size={12} /> {item.views}</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '2px' }}><Heart size={12} /> {item.bookmarks}</span>
-                </span>
-              </div>
-
-              <div>
-                <div className="group-buy-progress-row">
-                  <span>참여 인원 ({item.currentParticipants}/{item.targetParticipants}명)</span>
-                  <span className="percent">{item.progress}%</span>
-                </div>
-                <div className="progress-bar-container">
-                  <div 
-                    className="progress-bar-fill" 
-                    style={{ 
-                      width: `${Math.min(100, item.progress)}%`, 
-                      backgroundColor: getProgressBarColor(item.statusType) 
-                    }}
-                  ></div>
-                </div>
-              </div>
-
-              <div className="group-buy-price-row">
-                <span className="group-buy-price-lbl">공구 가격</span>
-                <div className="group-buy-price-val">
-                  {formatKRW(item.price)}
+    <div className={`groupbuy-container fade-in${isNative ? ' groupbuy-page' : ''}`}>
+      {isNative ? (
+        <>
+          <div className="groupbuy-budget-link-card groupbuy-budget-link-card--app">
+            <div className="groupbuy-budget-main">
+              <Wallet size={15} />
+              <div className="groupbuy-budget-copy">
+                <span className="groupbuy-budget-label">예산 잔액</span>
+                <span className="groupbuy-budget-amount">
+                  {formatKRW(userBudget)}
                   <span>원</span>
                 </span>
               </div>
@@ -1846,16 +1647,10 @@ export const GroupBuyView: React.FC<{
                 </div>
               </div>
 
-              <p style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.4', marginBottom: '16px' }}>
+              <p style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
                 신청 시에는 예약만 되며, <b>공동구매 확정(성공) 시</b> 지정된 계좌에서 즉시 차감(지출 기입)됩니다.<br/>
                 확정 전 신청 취소 시에는 결제되지 않으며, 무산 시에도 자동으로 취소됩니다.
               </p>
-
-              {confirmError && (
-                <div style={{ color: '#ef4444', fontSize: '13px', fontWeight: 'bold', marginBottom: '16px', background: '#fef2f2', padding: '8px', borderRadius: '8px' }}>
-                  {confirmError}
-                </div>
-              )}
 
               <div className="form-actions" style={{ justifyContent: 'center' }}>
                 <button 
@@ -1967,8 +1762,8 @@ export const GroupBuyView: React.FC<{
           <div className="modal-content small">
             <div className="modal-header">
               <span className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <AlertCircle size={18} />
-                <span>조기 마감 안내</span>
+                <CheckCircle2 size={18} />
+                <span>공동구매 조기 마감</span>
               </span>
               <X size={18} className="modal-close-btn" onClick={() => setShowEarlyCloseConfirmation(false)} />
             </div>
@@ -1977,7 +1772,7 @@ export const GroupBuyView: React.FC<{
                 width: '48px',
                 height: '48px',
                 borderRadius: '50%',
-                background: '#eff6ff',
+                background: '#e0e7ff',
                 color: 'var(--blue)',
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -1986,24 +1781,24 @@ export const GroupBuyView: React.FC<{
               }}>
                 <CheckCircle2 size={24} />
               </div>
-              <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '8px' }}>정말 이 공동구매를 조기 마감하시겠습니까?</h3>
+              <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '8px' }}>정말 조기 마감하시겠습니까?</h3>
               
               <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', textAlign: 'left', fontSize: '13px', margin: '16px 0', border: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>현재 참여 인원:</span>
-                  <span style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{selectedItem.currentParticipants}명</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>현재 달성률:</span>
+                  <span style={{ fontWeight: '700', color: 'var(--blue)' }}>{selectedItem.progress}%</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>상품 가격:</span>
-                  <span style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{formatKRW(selectedItem.price)}원</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>모인 인원:</span>
+                  <span style={{ fontWeight: '700' }}>{selectedItem.currentParticipants}명</span>
                 </div>
               </div>
 
-              <p style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-                즉시 성공 처리되며 참여자들의 결제가 진행됩니다.
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                조기 마감 시 즉시 성공 처리되며,<br/>현재 참여자들의 결제가 진행됩니다.
               </p>
 
-              <div className="form-actions" style={{ justifyContent: 'center' }}>
+              <div className="form-actions" style={{ justifyContent: 'center', marginTop: '24px' }}>
                 <button 
                   onClick={() => setShowEarlyCloseConfirmation(false)}
                   style={{
@@ -2015,7 +1810,7 @@ export const GroupBuyView: React.FC<{
                     fontWeight: '700'
                   }}
                 >
-                  돌아가기
+                  취소
                 </button>
                 <button 
                   onClick={handleConfirmEarlyClose}
@@ -2028,7 +1823,7 @@ export const GroupBuyView: React.FC<{
                     fontWeight: '700'
                   }}
                 >
-                  조기 마감하기
+                  조기 마감 확정
                 </button>
               </div>
             </div>
