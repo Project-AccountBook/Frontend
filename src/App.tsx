@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar';
-import { Header } from './components/Header';
+import { Header, resolveAppHeaderTitle } from './components/Header';
+import { BottomTabBar, COMMUNITY_TAB_IDS } from './components/BottomTabBar';
+import { CommunityHubView } from './components/CommunityHubView';
 import { DashboardView } from './components/DashboardView';
 import { ComparisonView } from './components/ComparisonView';
 import { GroupBuyView } from './components/GroupBuyView';
@@ -21,6 +23,7 @@ import { authApi, notificationApi, setAuthExpiredHandler, tokenStorage, userApi 
 import { useNotificationSync } from './hooks/useNotificationSync';
 import { clearMyUserIdCache } from './lib/boardApi';
 import { NATIVE_OAUTH_SCHEME } from './lib/oauth';
+import { useBackHandler } from './lib/nativeBack';
 import { Construction } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
@@ -33,6 +36,7 @@ const APP_TABS = new Set([
   'history',
   'budget',
   'analysis',
+  'community',
   'comparison',
   'locationComparison',
   'groupbuy',
@@ -212,6 +216,28 @@ function App() {
     setDrawerOpen(false);
   };
 
+  useBackHandler(isLoggedIn && !needsSocialProfileSetup, () => {
+    if (knowhowMode !== 'list' || knowhowPostId !== null) {
+      setKnowhowMode('list');
+      setKnowhowPostId(null);
+      return true;
+    }
+    if (qnaMode !== 'list' || qnaPostId !== null) {
+      setQnaMode('list');
+      setQnaPostId(null);
+      return true;
+    }
+    if (COMMUNITY_TAB_IDS.has(activeTab) && activeTab !== 'community') {
+      handleTabChange('community');
+      return true;
+    }
+    if (activeTab === 'notifications') {
+      handleTabChange('dashboard');
+      return true;
+    }
+    return false;
+  });
+
   const goToCategorySettings = () => {
     setKnowhowMode('list');
     setKnowhowPostId(null);
@@ -334,6 +360,8 @@ function App() {
         return <AssetView initialSection={assetInitialSection} />;
       case 'budget':
         return <BudgetView onGoToCategorySettings={goToCategorySettings} />;
+      case 'community':
+        return <CommunityHubView onSelect={handleTabChange} />;
 
       case 'comparison':
         return <ComparisonView />;
@@ -360,6 +388,7 @@ function App() {
       case 'settings':
         return (
           <MyPageView
+            onLogout={handleLogout}
             onOpenBoard={(type, id) => {
               if (type === 'QNA') {
                 setQnaPostId(id);
@@ -455,30 +484,49 @@ function App() {
     );
   }
 
+  const isNative = Capacitor.isNativePlatform();
+  const appHeader = isNative ? resolveAppHeaderTitle(activeTab) : null;
+
+  const handleBottomTabChange = (tab: string) => {
+    if (tab === 'community' && COMMUNITY_TAB_IDS.has(activeTab) && activeTab !== 'community') {
+      handleTabChange('community');
+      return;
+    }
+    handleTabChange(tab);
+  };
+
   return (
     <div className="app-layout">
-      {/* Sidebar Navigation */}
-      <Sidebar
-        activeTab={activeTab}
-        setActiveTab={handleTabChange}
-        onLogout={handleLogout}
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-      />
+      {!isNative && (
+        <Sidebar
+          activeTab={activeTab}
+          setActiveTab={handleTabChange}
+          onLogout={handleLogout}
+          open={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+        />
+      )}
 
-      {/* Main Container */}
       <div className="main-container">
-        {/* Top Header */}
         <Header
           unreadCount={unreadNotificationCount}
           onOpenNotifications={() => handleTabChange('notifications')}
-          onOpenDrawer={() => setDrawerOpen(true)}
+          onOpenDrawer={isNative ? undefined : () => setDrawerOpen(true)}
+          title={appHeader?.label ?? null}
+          TitleIcon={appHeader?.icon}
+          iconBg={appHeader?.iconBg}
+          iconColor={appHeader?.iconColor}
+          hideNotificationButton={isNative && activeTab === 'notifications'}
+          onLogout={isNative && activeTab === 'settings' ? handleLogout : undefined}
         />
 
-        {/* Dashboard Content */}
         <main className="dashboard-content">
           {renderContent()}
         </main>
+
+        {isNative && (
+          <BottomTabBar activeTab={activeTab} onChange={handleBottomTabChange} />
+        )}
       </div>
     </div>
   );

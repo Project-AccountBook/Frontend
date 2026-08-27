@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Capacitor } from '@capacitor/core';
 import {
   User,
   Lock,
@@ -24,6 +25,7 @@ import {
   MessageSquare,
   HelpCircle,
   Lightbulb,
+  LogOut,
 } from 'lucide-react';
 import {
   authApi,
@@ -70,9 +72,10 @@ type MyPageTab =
 
 interface MyPageViewProps {
   onOpenBoard?: (type: 'QNA' | 'KNOWHOW', id: number) => void;
+  onLogout?: () => void;
 }
 
-export const MyPageView: React.FC<MyPageViewProps> = ({ onOpenBoard }) => {
+export const MyPageView: React.FC<MyPageViewProps> = ({ onOpenBoard, onLogout }) => {
   const [activeTab, setActiveTab] = useState<MyPageTab>('profile');
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -658,15 +661,17 @@ export const MyPageView: React.FC<MyPageViewProps> = ({ onOpenBoard }) => {
   const needsPasswordSetup = profile?.hasPassword === false;
   const passwordTabLabel = needsPasswordSetup ? '비밀번호 설정' : '비밀번호 변경';
 
-  const tabs: { id: MyPageTab; label: string; icon: React.ElementType }[] = [
-    { id: 'profile', label: '프로필 정보', icon: User },
-    { id: 'password', label: passwordTabLabel, icon: Lock },
-    { id: 'notifications', label: '알림 설정', icon: Bell },
-    { id: 'interestCategories', label: '관심 카테고리', icon: Tags },
-    { id: 'follow', label: '팔로우 목록', icon: Users },
-    { id: 'bookmarks', label: '저장한 글', icon: Bookmark },
-    { id: 'withdraw', label: '회원 탈퇴', icon: Trash2 },
+  const tabs: { id: MyPageTab; label: string; shortLabel: string; icon: React.ElementType }[] = [
+    { id: 'profile', label: '프로필 정보', shortLabel: '프로필', icon: User },
+    { id: 'password', label: passwordTabLabel, shortLabel: '비밀번호', icon: Lock },
+    { id: 'notifications', label: '알림 설정', shortLabel: '알림', icon: Bell },
+    { id: 'interestCategories', label: '관심 카테고리', shortLabel: '관심', icon: Tags },
+    { id: 'follow', label: '팔로우 목록', shortLabel: '팔로우', icon: Users },
+    { id: 'bookmarks', label: '저장한 글', shortLabel: '저장', icon: Bookmark },
+    { id: 'withdraw', label: '회원 탈퇴', shortLabel: '탈퇴', icon: Trash2 },
   ];
+
+  const isNative = Capacitor.isNativePlatform();
 
   const Feedback = ({ msg, type }: { msg: string; type: 'success' | 'error' }) => (
     <div className={type === 'success' ? 'mypage-success-alert' : 'mypage-error-alert'}>
@@ -706,46 +711,8 @@ export const MyPageView: React.FC<MyPageViewProps> = ({ onOpenBoard }) => {
     </div>
   );
 
-  return (
-    <div className="mypage-wrapper fade-in">
-      {/* Page header */}
-      <div className="mypage-header">
-        <h1 className="mypage-page-title">설정 및 프로필</h1>
-        <p className="mypage-page-subtitle">계정 정보와 알림 설정을 관리합니다</p>
-      </div>
-
-      <div className="mypage-layout">
-        <nav className="mypage-mobile-nav" aria-label="설정 메뉴">
-          {tabs.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setActiveTab(id)}
-              className={`mypage-mobile-tab ${activeTab === id ? 'active' : ''} ${id === 'withdraw' ? 'danger' : ''}`}
-            >
-              <Icon size={15} />
-              <span>{label}</span>
-            </button>
-          ))}
-        </nav>
-
-        {/* Sidebar tabs (desktop) */}
-        <aside className="mypage-sidenav">
-          {tabs.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => setActiveTab(id)}
-              className={`mypage-sidenav-item ${activeTab === id ? 'active' : ''} ${id === 'withdraw' ? 'danger' : ''}`}
-            >
-              <Icon size={17} />
-              <span>{label}</span>
-              <ChevronRight size={14} className="mypage-sidenav-arrow" />
-            </button>
-          ))}
-        </aside>
-
-        {/* Main panel */}
-        <div className="mypage-panel">
+  const renderActiveTabPanel = () => (
+    <>
           {/* ── Profile Tab ─────────────────── */}
           {activeTab === 'profile' && (
             <div>
@@ -940,7 +907,7 @@ export const MyPageView: React.FC<MyPageViewProps> = ({ onOpenBoard }) => {
                     </div>
                   </div>
 
-                  <div className="mypage-action-row" style={{ marginTop: '32px' }}>
+                  <div className="mypage-action-row mypage-action-row--tight">
                     <button type="submit" className="mypage-btn-save" disabled={pwLoading}>
                       {pwLoading ? <Loader2 size={15} className="spin-animation" /> : <Save size={15} />}
                       비밀번호 설정
@@ -951,24 +918,24 @@ export const MyPageView: React.FC<MyPageViewProps> = ({ onOpenBoard }) => {
                 <form onSubmit={handleVerifyCurrentPassword} className="mypage-form mypage-form-password">
                   <div className="mypage-field span-full">
                     <label className="mypage-field-label">현재 비밀번호</label>
-                    <div className="mypage-pw-verify-row">
-                      <div className="mypage-pw-wrapper">
-                        <input
-                          type={showCurrentPw ? 'text' : 'password'}
-                          className="mypage-input"
-                          placeholder="현재 비밀번호를 입력하세요"
-                          value={currentPassword}
-                          onChange={(e) => setCurrentPassword(e.target.value)}
-                        />
-                        <button type="button" className="mypage-pw-toggle" onClick={() => setShowCurrentPw(!showCurrentPw)}>
-                          {showCurrentPw ? <EyeOff size={16} /> : <Eye size={16} />}
-                        </button>
-                      </div>
-                      <button type="submit" className="mypage-btn-verify-pw" disabled={pwLoading}>
-                        {pwLoading ? <Loader2 size={15} className="spin-animation" /> : <Lock size={15} />}
-                        현재 비밀번호 확인
+                    <div className="mypage-pw-wrapper">
+                      <input
+                        type={showCurrentPw ? 'text' : 'password'}
+                        className="mypage-input"
+                        placeholder="현재 비밀번호를 입력하세요"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                      />
+                      <button type="button" className="mypage-pw-toggle" onClick={() => setShowCurrentPw(!showCurrentPw)}>
+                        {showCurrentPw ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>
+                  </div>
+                  <div className="mypage-action-row mypage-action-row--tight">
+                    <button type="submit" className="mypage-btn-save" disabled={pwLoading}>
+                      {pwLoading ? <Loader2 size={15} className="spin-animation" /> : <Lock size={15} />}
+                      확인
+                    </button>
                   </div>
                 </form>
               ) : (
@@ -1005,7 +972,7 @@ export const MyPageView: React.FC<MyPageViewProps> = ({ onOpenBoard }) => {
                     </div>
                   </div>
 
-                  <div className="mypage-action-row" style={{ marginTop: '32px' }}>
+                  <div className="mypage-action-row mypage-action-row--tight">
                     <button type="button" className="mypage-btn-cancel" onClick={resetPasswordFlow}>
                       <X size={15} /> 취소
                     </button>
@@ -1524,7 +1491,58 @@ export const MyPageView: React.FC<MyPageViewProps> = ({ onOpenBoard }) => {
               </div>
             </div>
           )}
+    </>
+  );
+
+  return (
+    <div className={`mypage-wrapper fade-in${isNative ? ' mypage-page' : ''}`}>
+      {!isNative && (
+        <div className="mypage-header">
+          <div className="mypage-header-copy">
+            <h1 className="mypage-page-title">마이페이지</h1>
+            <p className="mypage-page-subtitle">계정 정보와 알림 설정을 관리합니다</p>
+          </div>
+          {onLogout && (
+            <button type="button" className="mypage-header-logout" onClick={onLogout}>
+              <LogOut size={15} />
+              로그아웃
+            </button>
+          )}
         </div>
+      )}
+
+      <div className="mypage-layout">
+        <nav className="mypage-mobile-nav" aria-label="설정 메뉴">
+          {tabs.map(({ id, label, shortLabel, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveTab(id)}
+              className={`mypage-mobile-tab ${activeTab === id ? 'active' : ''} ${id === 'withdraw' ? 'danger' : ''}`}
+            >
+              <Icon size={15} />
+              <span>{isNative ? shortLabel : label}</span>
+            </button>
+          ))}
+        </nav>
+
+        {!isNative && (
+          <aside className="mypage-sidenav">
+            {tabs.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => setActiveTab(id)}
+                className={`mypage-sidenav-item ${activeTab === id ? 'active' : ''} ${id === 'withdraw' ? 'danger' : ''}`}
+              >
+                <Icon size={17} />
+                <span>{label}</span>
+                <ChevronRight size={14} className="mypage-sidenav-arrow" />
+              </button>
+            ))}
+          </aside>
+        )}
+
+        <div className="mypage-panel">{renderActiveTabPanel()}</div>
       </div>
     </div>
   );

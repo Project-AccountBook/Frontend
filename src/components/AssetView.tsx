@@ -25,6 +25,7 @@ import {
   Play,
   SkipForward
 } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import {
   getAccounts,
   createAccount,
@@ -55,6 +56,7 @@ import {
   normalizeAccountRole,
   type AccountRole
 } from '../lib/accountGoalStorage';
+import { useBackHandler } from '../lib/nativeBack';
 import {
   getFixedTransactions,
   createFixedTransaction,
@@ -74,6 +76,14 @@ import { GoalSettingsSection } from './GoalSettingsSection';
 // ──────────────────────────────────────────────
 export type AssetActiveSection = 'transactions' | 'fixed' | 'accounts' | 'goals' | 'categories';
 type ActiveSection = AssetActiveSection;
+
+const ASSET_SECTION_TABS: { id: ActiveSection; label: string; shortLabel: string; icon: typeof ReceiptText }[] = [
+  { id: 'transactions', label: '거래 내역', shortLabel: '거래', icon: ReceiptText },
+  { id: 'fixed', label: '고정 거래', shortLabel: '고정', icon: CalendarIcon },
+  { id: 'accounts', label: '자산 관리', shortLabel: '자산', icon: Wallet },
+  { id: 'goals', label: '목표 관리', shortLabel: '목표', icon: Target },
+  { id: 'categories', label: '카테고리 관리', shortLabel: '카테고리', icon: Tag },
+];
 type ViewMode = 'calendar' | 'list';
 
 type Account = AccountResponse;
@@ -139,6 +149,7 @@ interface AssetViewProps {
 
 
 export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
+  const isNative = Capacitor.isNativePlatform();
   const [activeSection, setActiveSection] = useState<ActiveSection>(initialSection ?? 'transactions');
   const [viewMode, setViewMode] = useState<ViewMode>('calendar');
   const today = new Date();
@@ -497,6 +508,11 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
     resetFormFields();
   };
 
+  useBackHandler(showModal, () => {
+    handleCloseModal();
+    return true;
+  });
+
   const handleToggleFixedActive = async (id: number) => {
     try {
       await toggleFixedTransactionActive(id);
@@ -809,6 +825,66 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
   const getAccountShortName = (name: string, maxLen = 4) =>
     name.length <= maxLen ? name : `${name.slice(0, maxLen)}…`;
 
+  const formatNativeDateLabel = (dateStr: string) => {
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    return `${Number(parts[1])}.${Number(parts[2])}`;
+  };
+
+  const renderNativeTxItem = (tx: Transaction) => {
+    const transferRoute = tx.type === 'TRANSFER' ? formatTransferRoute(tx) : null;
+    const accountLabel = transferRoute
+      ?? formatAccountDisplayName(tx.accountName, tx.accountArchived);
+    const categoryLabel = formatCategoryDisplayName(tx.categoryName, tx.categoryArchived);
+
+    return (
+      <div
+        key={tx.id}
+        className="tx-app-row"
+        onClick={() => handleOpenEditModal(tx.id)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleOpenEditModal(tx.id);
+          }
+        }}
+      >
+        <div className="tx-app-row-top">
+          <span className="tx-app-row-date">{formatNativeDateLabel(tx.transactionDate)}</span>
+          <span className="tx-app-row-desc">{tx.description || '—'}</span>
+          <span
+            className={`tx-app-row-amt ${
+              tx.type === 'INCOME' ? 'color-income' : tx.type === 'EXPENSE' ? 'color-expense' : 'color-transfer'
+            }`}
+          >
+            {tx.type === 'INCOME' ? '+' : tx.type === 'EXPENSE' ? '-' : '↔'}
+            {formatCurrency(tx.amount)}
+          </span>
+          <button
+            type="button"
+            className="btn-action-icon delete"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDeleteItem(tx.id);
+            }}
+            title="삭제"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
+        <div className="tx-app-row-bottom">
+          <span className={`type-badge ${getTxTypeBadgeClass(tx.type)}`}>
+            {getTxTypeLabel(tx.type, tx.fixedTransactionGenerated)}
+          </span>
+          <span className="tx-app-chip">{accountLabel}</span>
+          <span className="tx-app-chip">{categoryLabel}</span>
+        </div>
+      </div>
+    );
+  };
+
   const getTransferTargetName = (tx: Transaction) =>
     tx.targetAccountName
     ?? (tx.targetAccountId != null
@@ -889,6 +965,111 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
       default:
         return `${fx.repeatDay}일`;
     }
+  };
+
+  const renderNativeFixedItem = (fx: FixedTransaction) => {
+    const failureLabel = getFixedFailureLabel(fx.failureReason);
+    const accountColor = getAccountColor(fx.accountId);
+    const accountLabel = fx.type === 'TRANSFER' && fx.targetAccountName
+      ? `${fx.accountName} → ${fx.targetAccountName}`
+      : fx.accountName;
+    const schedule = fx.frequency === 'WEEKLY'
+      ? `매주 ${formatRepeatSchedule(fx)}`
+      : formatRepeatSchedule(fx);
+
+    return (
+      <div
+        key={fx.id}
+        className={`tx-app-row${!fx.isActive ? ' is-inactive' : ''}`}
+        onClick={() => handleOpenEditModal(fx.id)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleOpenEditModal(fx.id);
+          }
+        }}
+      >
+        <div className="tx-app-row-top">
+          <button
+            type="button"
+            className={`toggle-status-btn ${fx.isActive ? 'active' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggleFixedActive(fx.id);
+            }}
+            title={fx.isActive ? '비활성화' : '활성화'}
+          >
+            <span className="toggle-slider"></span>
+            <span className="toggle-label-text">{fx.isActive ? '활성' : '비활성'}</span>
+          </button>
+          <span className="tx-app-row-desc">{fx.description || '—'}</span>
+          <span
+            className={`tx-app-row-amt ${
+              fx.type === 'INCOME' ? 'color-income' : fx.type === 'EXPENSE' ? 'color-expense' : 'color-transfer'
+            }`}
+          >
+            {fx.type === 'INCOME' ? '+' : fx.type === 'EXPENSE' ? '-' : '↔'}
+            {formatCurrency(fx.amount)}
+          </span>
+          <button
+            type="button"
+            className="btn-action-icon delete"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDeleteItem(fx.id);
+            }}
+            title="삭제"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
+        <div className="tx-app-row-bottom tx-app-row-chips">
+          <span className={`type-badge ${getTxTypeBadgeClass(fx.type)}`}>
+            {getTxTypeLabel(fx.type)}
+          </span>
+          <span className="tx-app-meta">
+            <CalendarIcon size={12} strokeWidth={2.2} />
+            {schedule}
+          </span>
+          <span className="tx-app-meta">
+            <span className="cal-account-dot" style={{ background: accountColor.dot }} />
+            {accountLabel}
+          </span>
+          {fx.categoryName ? (
+            <span className="tx-app-meta">
+              <Tag size={12} strokeWidth={2.2} />
+              {fx.categoryName}
+            </span>
+          ) : null}
+        </div>
+        {failureLabel && (
+          <div className="tx-app-row-fail" onClick={(e) => e.stopPropagation()}>
+            <span className="tx-app-fail-text">
+              실행 실패 · {failureLabel}
+              {fx.failedExecutionDate ? ` (${fx.failedExecutionDate})` : ''}
+            </span>
+            <button
+              type="button"
+              className="btn-action-icon"
+              onClick={() => handleRetryFixedTransaction(fx.id)}
+              title="지금 실행"
+            >
+              <Play size={14} />
+            </button>
+            <button
+              type="button"
+              className="btn-action-icon"
+              onClick={() => handleSkipFixedTransaction(fx.id)}
+              title="이번 회차 건너뛰기"
+            >
+              <SkipForward size={14} />
+            </button>
+          </div>
+        )}
+      </div>
+    );
   };
 
   const prevCalendarMonth = () => {
@@ -1030,41 +1211,19 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
 
       {/* Tabs */}
       <div className="asset-tabs-container">
-        <button
-          className={`asset-tab-btn ${activeSection === 'transactions' ? 'active' : ''}`}
-          onClick={() => setActiveSection('transactions')}
-        >
-          <ReceiptText size={16} />
-          <span>거래 내역</span>
-        </button>
-        <button
-          className={`asset-tab-btn ${activeSection === 'fixed' ? 'active' : ''}`}
-          onClick={() => setActiveSection('fixed')}
-        >
-          <CalendarIcon size={16} />
-          <span>고정 거래</span>
-        </button>
-        <button
-          className={`asset-tab-btn ${activeSection === 'accounts' ? 'active' : ''}`}
-          onClick={() => setActiveSection('accounts')}
-        >
-          <Wallet size={16} />
-          <span>자산 관리</span>
-        </button>
-        <button
-          className={`asset-tab-btn ${activeSection === 'goals' ? 'active' : ''}`}
-          onClick={() => setActiveSection('goals')}
-        >
-          <Target size={16} />
-          <span>목표 관리</span>
-        </button>
-        <button
-          className={`asset-tab-btn ${activeSection === 'categories' ? 'active' : ''}`}
-          onClick={() => setActiveSection('categories')}
-        >
-          <Tag size={16} />
-          <span>카테고리 관리</span>
-        </button>
+        {ASSET_SECTION_TABS.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              className={`asset-tab-btn ${activeSection === tab.id ? 'active' : ''}`}
+              onClick={() => setActiveSection(tab.id)}
+            >
+              <Icon size={isNative ? 18 : 16} />
+              <span>{isNative ? tab.shortLabel : tab.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Main Panel */}
@@ -1429,7 +1588,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                       </div>
                     ) : (
                       <div className="cal-detail-list">
-                        {selectedDayTxs.map(tx => {
+                        {selectedDayTxs.map((tx) => {
                           const accountColor = getAccountColor(tx.accountId);
                           return (
                           <div
@@ -1499,7 +1658,17 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
 
             {/* ── LIST VIEW ── */}
             {viewMode === 'list' && (
-              <div className="table-responsive fade-in">
+              <div className={`${isNative ? 'tx-card-list' : 'table-responsive'} fade-in`}>
+                {isNative ? (
+                  filteredTransactions.length === 0 ? (
+                    <div className="table-empty-row">
+                      <Info size={20} />
+                      <p>검색 조건에 맞는 거래 내역이 존재하지 않습니다.</p>
+                    </div>
+                  ) : (
+                    paginatedTransactions.map((tx) => renderNativeTxItem(tx))
+                  )
+                ) : (
                 <table className="asset-table">
                   <thead>
                     <tr>
@@ -1567,6 +1736,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
                     )}
                   </tbody>
                 </table>
+                )}
 
                 {listTotalPages > 1 && (
                   <div className="tx-list-pagination">
@@ -1630,6 +1800,35 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
               </button>
             </div>
 
+            {isNative ? (
+              <div className="tx-card-list">
+                {fixedLoading && (
+                  <div className="table-empty-row" style={{ padding: '40px 0' }}>
+                    <Loader2 size={24} className="spin-animation" />
+                    <p>고정 거래 목록을 불러오는 중...</p>
+                  </div>
+                )}
+                {!fixedLoading && fixedError && (
+                  <div className="table-empty-row" style={{ padding: '40px 0' }}>
+                    <AlertCircle size={24} />
+                    <p>{fixedError}</p>
+                    <button className="btn-section-add" onClick={fetchFixedTransactions} style={{ marginTop: '12px' }}>
+                      다시 시도
+                    </button>
+                  </div>
+                )}
+                {!fixedLoading && !fixedError && (
+                  fixedTransactions.length === 0 ? (
+                    <div className="table-empty-row">
+                      <Info size={20} />
+                      <p>등록된 고정 예약 내역이 없습니다.</p>
+                    </div>
+                  ) : (
+                    fixedTransactions.map((fx) => renderNativeFixedItem(fx))
+                  )
+                )}
+              </div>
+            ) : (
             <div className="table-responsive" style={{ marginTop: '20px' }}>
               {fixedLoading && (
                 <div className="table-empty-row" style={{ padding: '40px 0' }}>
@@ -1754,6 +1953,7 @@ export const AssetView: React.FC<AssetViewProps> = ({ initialSection }) => {
               </table>
               )}
             </div>
+            )}
           </div>
         )}
 

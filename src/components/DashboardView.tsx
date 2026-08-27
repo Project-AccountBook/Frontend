@@ -24,6 +24,7 @@ import type {
   MyPortfolioResponse
 } from '../api';
 import { mapToDashboardGroupBuyItem, type DashboardGroupBuyItem } from '../lib/groupPurchaseDisplay';
+import { Capacitor } from '@capacitor/core';
 import { MonthYearNavigator } from './MonthYearNavigator';
 
 interface CategoryData {
@@ -341,6 +342,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onGoToGoalSettings,
   onGoToBudget
 }) => {
+  const isNative = Capacitor.isNativePlatform();
   const [activeCategoryTab, setActiveCategoryTab] = useState('지출');
   const [hoveredDonutSlice, setHoveredDonutSlice] = useState<number | null>(null);
   const [mobileSection, setMobileSection] = useState<'analysis' | 'goals' | 'groupbuy'>('analysis');
@@ -668,7 +670,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   return (
     <div className="fade-in dashboard-page">
       <div className="dashboard-view-header">
-        <MonthYearNavigator date={selectedDate} onDateChange={setSelectedDate} />
+        <MonthYearNavigator date={selectedDate} onDateChange={setSelectedDate} compact={isNative} />
       </div>
 
       {loadWarning && (
