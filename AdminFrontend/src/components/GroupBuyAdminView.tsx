@@ -100,6 +100,12 @@ export const GroupBuyAdminView: React.FC = () => {
   const [reports, setReports] = useState<Report[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
 
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    message: string;
+    onConfirm: () => void;
+  }>({ isOpen: false, message: '', onConfirm: () => {} });
+
   const [dashboardStats, setDashboardStats] = useState({
     openedToday: 0,
     totalParticipants: 0,
@@ -316,20 +322,25 @@ export const GroupBuyAdminView: React.FC = () => {
     }
   };
 
-  const handleDeletePost = async (postId: number) => {
-    if (window.confirm('이 공동구매 글을 삭제하시겠습니까? 삭제 시 다시 복구할 수 없습니다.')) {
-      try {
-        const res = await fetchWithAuth(`/api/v1/admin/group-purchases/${postId}`, {
-          method: 'DELETE'
-        });
-        if (res.success) {
-          loadPosts();
-          loadDashboardStats();
+  const handleDeletePost = (postId: number) => {
+    setConfirmModal({
+      isOpen: true,
+      message: '이 공동구매 글을 삭제하시겠습니까? 삭제 시 다시 복구할 수 없습니다.',
+      onConfirm: async () => {
+        try {
+          const res = await fetchWithAuth(`/api/v1/admin/group-purchases/${postId}`, {
+            method: 'DELETE'
+          });
+          if (res.success) {
+            loadPosts();
+            loadDashboardStats();
+          }
+        } catch (err) {
+          alert('삭제에 실패했습니다: ' + (err instanceof Error ? err.message : err));
         }
-      } catch (err) {
-        alert('삭제에 실패했습니다: ' + (err instanceof Error ? err.message : err));
+        setConfirmModal({ isOpen: false, message: '', onConfirm: () => {} });
       }
-    }
+    });
   };
 
   // --- Handlers for Category Management ---
@@ -381,19 +392,24 @@ export const GroupBuyAdminView: React.FC = () => {
     }
   };
 
-  const handleDeleteCategory = async (catId: number, catName: string) => {
-    if (window.confirm(`'${catName}' 카테고리를 삭제하시겠습니까?`)) {
-      try {
-        const res = await fetchWithAuth(`/api/v1/group-purchase-categories/${catId}`, {
-          method: 'DELETE'
-        });
-        if (res.success) {
-          loadCategories();
+  const handleDeleteCategory = (catId: number, catName: string) => {
+    setConfirmModal({
+      isOpen: true,
+      message: `'${catName}' 카테고리를 삭제하시겠습니까?`,
+      onConfirm: async () => {
+        try {
+          const res = await fetchWithAuth(`/api/v1/group-purchase-categories/${catId}`, {
+            method: 'DELETE'
+          });
+          if (res.success) {
+            loadCategories();
+          }
+        } catch (err) {
+          alert('카테고리 삭제에 실패했습니다: ' + (err instanceof Error ? err.message : err));
         }
-      } catch (err) {
-        alert('카테고리 삭제에 실패했습니다: ' + (err instanceof Error ? err.message : err));
+        setConfirmModal({ isOpen: false, message: '', onConfirm: () => {} });
       }
-    }
+    });
   };
 
   // --- Handlers for Report Management ---
@@ -486,19 +502,24 @@ export const GroupBuyAdminView: React.FC = () => {
     }
   };
 
-  const handleDeleteProduct = async (prodId: number, prodName: string) => {
-    if (window.confirm(`'${prodName}' 상품을 카탈로그에서 삭제하시겠습니까?`)) {
-      try {
-        const res = await fetchWithAuth(`/api/v1/products/${prodId}`, {
-          method: 'DELETE'
-        });
-        if (res.success) {
-          loadProducts();
+  const handleDeleteProduct = (prodId: number, prodName: string) => {
+    setConfirmModal({
+      isOpen: true,
+      message: `'${prodName}' 상품을 카탈로그에서 삭제하시겠습니까?`,
+      onConfirm: async () => {
+        try {
+          const res = await fetchWithAuth(`/api/v1/products/${prodId}`, {
+            method: 'DELETE'
+          });
+          if (res.success) {
+            loadProducts();
+          }
+        } catch (err) {
+          alert('상품 삭제에 실패했습니다: ' + (err instanceof Error ? err.message : err));
         }
-      } catch (err) {
-        alert('상품 삭제에 실패했습니다: ' + (err instanceof Error ? err.message : err));
+        setConfirmModal({ isOpen: false, message: '', onConfirm: () => {} });
       }
-    }
+    });
   };
 
   // --- Filtered lists for rendering ---
@@ -521,20 +542,26 @@ export const GroupBuyAdminView: React.FC = () => {
 
   const allPostsSelected = filteredPosts.length > 0 && selectedPostIds.size === filteredPosts.length;
   
-  const handleBulkDeletePosts = async () => {
+  const handleBulkDeletePosts = () => {
     if (selectedPostIds.size === 0) return;
-    if (!window.confirm(`선택한 ${selectedPostIds.size}개의 공동구매를 일괄 삭제하시겠습니까?`)) return;
-    try {
-      const idsArray = Array.from(selectedPostIds);
-      await fetchWithAuth(`/api/v1/admin/group-purchases/bulk`, { 
-        method: 'DELETE',
-        body: JSON.stringify(idsArray)
-      });
-      setSelectedPostIds(new Set());
-      loadPosts();
-    } catch (e) {
-      console.error(e);
-    }
+    setConfirmModal({
+      isOpen: true,
+      message: `선택한 ${selectedPostIds.size}개의 공동구매를 일괄 삭제하시겠습니까?`,
+      onConfirm: async () => {
+        try {
+          const idsArray = Array.from(selectedPostIds);
+          await fetchWithAuth(`/api/v1/admin/group-purchases/bulk`, { 
+            method: 'DELETE',
+            body: JSON.stringify(idsArray)
+          });
+          setSelectedPostIds(new Set());
+          loadPosts();
+        } catch (e) {
+          console.error(e);
+        }
+        setConfirmModal({ isOpen: false, message: '', onConfirm: () => {} });
+      }
+    });
   };
   
   const togglePostSort = (col: 'price'|'createdAt') => {
@@ -2046,6 +2073,64 @@ export const GroupBuyAdminView: React.FC = () => {
             </div>
           )}
 
+        </div>
+      )}
+
+      {/* CONFIRMATION MODAL */}
+      {confirmModal.isOpen && (
+        <div className="modal-overlay" style={{ zIndex: 1200 }}>
+          <div className="modal-content small" style={{ textAlign: 'center', maxWidth: '360px' }}>
+            <div style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '50%',
+              background: '#fee2e2',
+              color: 'var(--red)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '16px',
+              marginTop: '16px'
+            }}>
+              <AlertTriangle size={24} />
+            </div>
+            <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '8px', color: 'var(--text-primary)' }}>확인이 필요합니다</h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.4', marginBottom: '24px' }}>
+              {confirmModal.message}
+            </p>
+            <div className="form-actions" style={{ justifyContent: 'center', marginTop: '0' }}>
+              <button 
+                onClick={() => setConfirmModal({ isOpen: false, message: '', onConfirm: () => {} })}
+                style={{
+                  background: '#f1f5f9',
+                  color: 'var(--text-primary)',
+                  padding: '10px 24px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                취소
+              </button>
+              <button 
+                onClick={confirmModal.onConfirm}
+                style={{
+                  background: 'var(--red)',
+                  color: 'white',
+                  padding: '10px 24px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                확인
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
