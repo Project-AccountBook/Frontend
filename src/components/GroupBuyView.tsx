@@ -42,6 +42,7 @@ const SORT_TABS = [
   { id: 'latest', label: '최신순', icon: Clock },
   { id: 'deadline', label: '마감임박', icon: AlertCircle },
   { id: 'progress', label: '달성률', icon: TrendingUp },
+  { id: 'closed', label: '마감순', icon: CheckCircle2 },
 ];
 
 const DISTANCE_TABS = [
@@ -135,6 +136,7 @@ export const GroupBuyView: React.FC<{
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [showLeaveConfirmation, setShowLeaveConfirmation] = useState(false);
+  const [showEarlyCloseConfirmation, setShowEarlyCloseConfirmation] = useState(false);
   const [userAccounts, setUserAccounts] = useState<Account[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -177,6 +179,10 @@ export const GroupBuyView: React.FC<{
     }
     if (showLeaveConfirmation) {
       setShowLeaveConfirmation(false);
+      return true;
+    }
+    if (showEarlyCloseConfirmation) {
+      setShowEarlyCloseConfirmation(false);
       return true;
     }
     if (showConfirmation) {
@@ -784,10 +790,13 @@ export const GroupBuyView: React.FC<{
   };
 
   // Early Close Group Purchase
-  const handleEarlyCloseClick = async () => {
+  const handleEarlyCloseClick = () => {
     if (!selectedItem) return;
-    const confirmClose = window.confirm("정말 이 공동구매를 조기 마감하시겠습니까?\\n즉시 성공 처리되며 참여자들의 결제가 진행됩니다.");
-    if (!confirmClose) return;
+    setShowEarlyCloseConfirmation(true);
+  };
+
+  const handleConfirmEarlyClose = async () => {
+    if (!selectedItem) return;
 
     try {
       const res = await fetchWithAuth(`/api/v1/group-purchases/${selectedItem.id}/early-close`, {
@@ -795,18 +804,19 @@ export const GroupBuyView: React.FC<{
       });
       if (res.success) {
         triggerToast('조기 마감이 완료되어 공동구매가 성공 처리되었습니다!');
-        fetchBudget(); // If creator was also participating, budget changes
+        fetchBudget();
         fetchGroupPurchases();
         
-        // Update selected item in modal
         if (res.data) {
           const updated = mapBackendItemToFrontend(res.data, categories);
           setSelectedItem(updated);
         }
+        setShowEarlyCloseConfirmation(false);
       }
     } catch (err: any) {
       console.error("Failed to early close group purchase:", err);
       alert(err.message || '조기 마감 처리에 실패했습니다.');
+      setShowEarlyCloseConfirmation(false);
     }
   };
 
@@ -856,6 +866,11 @@ export const GroupBuyView: React.FC<{
         return a.id - b.id;
       }
       if (sortBy === 'progress') return b.progress - a.progress;
+      if (sortBy === 'closed') {
+        if (a.statusType === 'grey' && b.statusType !== 'grey') return -1;
+        if (b.statusType === 'grey' && a.statusType !== 'grey') return 1;
+        return a.id - b.id;
+      }
       return 0;
     });
 
@@ -1734,6 +1749,81 @@ export const GroupBuyView: React.FC<{
                   }}
                 >
                   신청 취소하기
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5-3. EARLY CLOSE CONFIRMATION POPUP */}
+      {showEarlyCloseConfirmation && selectedItem && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="modal-content small">
+            <div className="modal-header">
+              <span className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CheckCircle2 size={18} />
+                <span>공동구매 조기 마감</span>
+              </span>
+              <X size={18} className="modal-close-btn" onClick={() => setShowEarlyCloseConfirmation(false)} />
+            </div>
+            <div className="modal-body" style={{ textAlign: 'center' }}>
+              <div style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: '50%',
+                background: '#e0e7ff',
+                color: 'var(--blue)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '16px'
+              }}>
+                <CheckCircle2 size={24} />
+              </div>
+              <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '8px' }}>정말 조기 마감하시겠습니까?</h3>
+              
+              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', textAlign: 'left', fontSize: '13px', margin: '16px 0', border: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>현재 달성률:</span>
+                  <span style={{ fontWeight: '700', color: 'var(--blue)' }}>{selectedItem.progress}%</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>모인 인원:</span>
+                  <span style={{ fontWeight: '700' }}>{selectedItem.currentParticipants}명</span>
+                </div>
+              </div>
+
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                조기 마감 시 즉시 성공 처리되며,<br/>현재 참여자들의 결제가 진행됩니다.
+              </p>
+
+              <div className="form-actions" style={{ justifyContent: 'center', marginTop: '24px' }}>
+                <button 
+                  onClick={() => setShowEarlyCloseConfirmation(false)}
+                  style={{
+                    background: '#f1f5f9',
+                    color: 'var(--text-primary)',
+                    padding: '10px 24px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: '700'
+                  }}
+                >
+                  취소
+                </button>
+                <button 
+                  onClick={handleConfirmEarlyClose}
+                  style={{
+                    background: 'var(--blue)',
+                    color: 'white',
+                    padding: '10px 24px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: '700'
+                  }}
+                >
+                  조기 마감 확정
                 </button>
               </div>
             </div>
