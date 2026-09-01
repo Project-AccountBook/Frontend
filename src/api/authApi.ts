@@ -15,6 +15,12 @@ export const authApi = {
       body: JSON.stringify(body),
     }),
 
+  exchangeOAuthCode: (code: string) =>
+    publicRequest<TokenResponse>('/api/v1/auth/oauth2/token', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    }),
+
   reissue: (refreshToken: string) =>
     publicRequest<TokenResponse>('/api/v1/auth/reissue', {
       method: 'POST',

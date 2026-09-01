@@ -124,15 +124,17 @@ function App() {
   }, []);
 
   const handleOAuthCallback = useCallback(
-    (params: URLSearchParams) => {
-      const accessToken = params.get('accessToken');
+    async (params: URLSearchParams) => {
+      const code = params.get('code');
+      if (!code) return false;
 
-      if (!accessToken) return false;
+      const result = await authApi.exchangeOAuthCode(code);
+      if (!result.ok || !result.data?.accessToken) return false;
 
       const rememberMe = tokenStorage.consumePendingRememberMe() ?? true;
-      tokenStorage.setTokens(accessToken, 'social-login', rememberMe);
+      tokenStorage.setTokens(result.data.accessToken, 'social-login', rememberMe);
       setIsLoggedIn(true);
-      if (params.get('isNewUser') === 'true') {
+      if (result.data.isNewUser) {
         setNeedsSocialProfileSetup(true);
       }
       refreshUnreadCount();
@@ -142,10 +144,11 @@ function App() {
   );
 
   useEffect(() => {
-    if (window.location.pathname === '/oauth2/redirect') {
-      handleOAuthCallback(new URLSearchParams(window.location.search));
-      window.history.replaceState({}, document.title, '/');
-    }
+    if (window.location.pathname !== '/oauth2/redirect') return;
+
+    const params = new URLSearchParams(window.location.search);
+    window.history.replaceState({}, document.title, '/');
+    void handleOAuthCallback(params);
   }, [handleOAuthCallback]);
 
   useEffect(() => {
@@ -158,10 +161,11 @@ function App() {
       const queryIndex = url.indexOf('?');
       const params = new URLSearchParams(queryIndex >= 0 ? url.slice(queryIndex + 1) : '');
 
-      const consumed = handleOAuthCallback(params);
-      if (consumed) {
-        void Browser.close();
-      }
+      void handleOAuthCallback(params).then((consumed) => {
+        if (consumed) {
+          void Browser.close();
+        }
+      });
     });
 
     return () => {
