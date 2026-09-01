@@ -15,6 +15,7 @@ export type RequestResult<T> = {
 export interface TokenResponse {
   accessToken: string;
   refreshToken: string;
+  isNewUser?: boolean;
 }
 
 export interface LoginRequest {
