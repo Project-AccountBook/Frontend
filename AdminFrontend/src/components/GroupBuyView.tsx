@@ -985,7 +985,6 @@ export const GroupBuyView: React.FC<{
           <button
             onClick={() => setIsCreateModalOpen(true)}
             className="groupbuy-action-btn"
-            style={{ backgroundColor: '#ff7e36', color: 'white', border: 'none', display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}
           >
             <Plus size={16} />
             <span>공동구매 글쓰기</span>
@@ -1605,7 +1604,7 @@ export const GroupBuyView: React.FC<{
 
               <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px', borderTop: '1px solid #f1f5f9', paddingTop: '16px' }}>
                 <button type="button" onClick={() => setIsCreateModalOpen(false)} style={{ background: '#f1f5f9', color: '#475569', padding: '10px 20px', borderRadius: '8px', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}>취소</button>
-                <button type="submit" style={{ background: '#ff7e36', color: 'white', padding: '10px 20px', borderRadius: '8px', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}>등록하기</button>
+                <button type="submit" className="header-btn-primary">등록하기</button>
               </div>
             </form>
           </div>

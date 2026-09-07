@@ -4990,7 +4990,7 @@ a {
 }
 
 .groupbuy-action-btn {
-  background-color: var(--primary);
+  background-color: var(--navy);
   color: white;
   padding: 8px 16px;
   border-radius: 8px;
@@ -4999,11 +4999,13 @@ a {
   display: flex;
   align-items: center;
   gap: 8px;
+  border: none;
+  cursor: pointer;
   transition: all var(--transition-fast);
 }
 
 .groupbuy-action-btn:hover {
-  background-color: var(--primary-dark);
+  background-color: var(--navy-light);
 }
 
 .mypage-interest-list {

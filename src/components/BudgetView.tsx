@@ -1146,7 +1146,7 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
               {formatKRW(fixedExpenseNum)}원
             </div>
             <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px', lineHeight: 1.5 }}>
-              고정 수입/지출에서 등록한 금액이 예산에 자동으로 포함됩니다.
+              등록된 고정 지출이 이번 달 계획에 미리 포함됩니다. 실제 출금 전에는 월 총 지출에는 잡히지 않습니다.
             </p>
           </div>
         )}
@@ -2112,67 +2112,32 @@ export const BudgetView: React.FC<{ onGoToCategorySettings?: () => void }> = ({
         </div>
 
         {budgets.length > 0 && (
-          <div className="budget-filter-toolbar" style={{ marginBottom: '16px' }}>
-            <div
-              className="budget-filter-types-scroll"
-              style={{
-                display: 'flex',
-                gap: '6px',
-                flexWrap: 'wrap'
-              }}
-            >
+          <div className="budget-filter-toolbar">
+            <div className="budget-filter-main-row">
+              <div className="budget-filter-types-scroll">
                 {filterTabs.map((cat) => (
                   <button
                     key={cat}
+                    type="button"
                     onClick={() => setActiveCategory(cat)}
-                    className={`dashboard-tab-btn ${activeCategory === cat ? 'active' : ''}`}
-                    style={{ padding: '6px 12px', fontSize: '12px' }}
+                    className={`dashboard-tab-btn budget-filter-type-btn ${activeCategory === cat ? 'active' : ''}`}
                   >
                     {cat}
                   </button>
                 ))}
-            </div>
-              <div
-                className="budget-filter-search"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  background: '#f8fafc',
-                  border: '1px solid var(--border)',
-                  padding: '6px 12px',
-                  borderRadius: '8px',
-                  minWidth: '200px',
-                  flexShrink: 0
-                }}
-              >
+              </div>
+              <label className="budget-filter-search">
                 <Search size={14} color="var(--text-secondary)" />
                 <input
-                  type="text"
+                  type="search"
                   placeholder="카테고리 검색"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  style={{
-                    border: 'none',
-                    background: 'transparent',
-                    outline: 'none',
-                    fontSize: '12px',
-                    width: '100%',
-                    fontFamily: 'inherit',
-                    color: 'var(--text-primary)'
-                  }}
+                  className="budget-filter-search-input"
                 />
-              </div>
-            <div
-              className="budget-filter-status-row"
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                paddingTop: '12px',
-                borderTop: '1px solid var(--border)'
-              }}
-            >
+              </label>
+            </div>
+            <div className="budget-filter-status-row">
               <div className="sub-tabs-container budget-filter-status-tabs" style={{ marginBottom: 0 }}>
                 {STATUS_TABS.map((tab) => (
                   <button

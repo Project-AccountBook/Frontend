@@ -34,7 +34,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'comparison', label: '자산 비교', icon: TrendingUp },
     { id: 'qa', label: 'Q&A 게시판', icon: MessageSquare },
     { id: 'knowhow', label: '노하우 공유', icon: Lightbulb },
-    { id: 'groupbuy', label: '동네 공동구매', icon: ShoppingBag, isHot: true },
+    { id: 'groupbuy', label: '동네 공동구매', icon: ShoppingBag },
   ];
 
   const handleSelect = (id: string) => {
@@ -67,7 +67,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <IconComponent size={18} />
                 <span>{item.label}</span>
-                {item.isHot && <span className="sidebar-item-hot">HOT</span>}
               </button>
             );
           })}

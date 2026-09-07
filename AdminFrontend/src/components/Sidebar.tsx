@@ -29,7 +29,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLog
     { id: 'locationComparison', label: '위치 기반 비교', icon: MapPin },
     { id: 'qa', label: 'Q&A 게시판', icon: MessageSquare },
     { id: 'knowhow', label: '노하우 공유', icon: Lightbulb },
-    { id: 'groupbuy', label: '동네 공동구매', icon: ShoppingBag, isHot: true },
+    { id: 'groupbuy', label: '동네 공동구매', icon: ShoppingBag },
     { id: 'groupbuyAdmin', label: '공동구매 어드민', icon: Shield },
     ...(isAdmin ? [{ id: 'admin', label: '게시판 어드민', icon: Shield }] : []),
   ];
@@ -53,7 +53,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLog
             >
               <IconComponent size={18} />
               <span>{item.label}</span>
-              {item.isHot && <span className="sidebar-item-hot">HOT</span>}
             </button>
           );
         })}
