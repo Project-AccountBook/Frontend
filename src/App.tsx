@@ -57,6 +57,8 @@ function writeTabToUrl(tab: string) {
   window.history.replaceState({}, document.title, url);
 }
 
+type BoardMode = 'list' | 'detail' | 'write';
+
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => tokenStorage.hasToken());
   const [needsSocialProfileSetup, setNeedsSocialProfileSetup] = useState(false);
