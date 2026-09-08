@@ -5,14 +5,13 @@
 
 <img width="200" alt="modi_logo" src="https://github.com/user-attachments/assets/bf91b909-b35b-4b80-a44a-d865cf580afd" />
 
-
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)](https://vite.dev)
 [![Capacitor](https://img.shields.io/badge/Capacitor-8-119EFF?logo=capacitor&logoColor=white)](https://capacitorjs.com)
 [![Vercel](https://img.shields.io/badge/Deploy-Vercel-000000?logo=vercel)](https://vercel.com)
 
-Live Demo: `https://moneydiary.cloud`  
+Live Demo: [https://moneydiary.cloud](https://moneydiary.cloud)
 
 ---
 
@@ -21,6 +20,11 @@ Live Demo: `https://moneydiary.cloud`
 MODI는 개인 가계 관리만 하는 앱이 아니라, **내 지출을 다른 사용자와 비교하고, 같은 동네에서 공동구매까지 이어지게** 만든 서비스입니다.
 
 웹은 React + Vite SPA로 배포하고, 같은 빌드 산출물을 Capacitor로 iOS/Android 앱에 올립니다. 데스크톱은 사이드바, 모바일/앱은 드로어 + 하단 탭으로 레이아웃을 나눕니다.
+
+<p align="center">
+  <img width="800" alt="image" src="https://github.com/user-attachments/assets/13cd4386-b709-4367-8fa9-10826eb4357d" />
+  <img width="170" alt="Screenshot_20260907_152924" src="https://github.com/user-attachments/assets/9a5c93f8-2697-4859-9ca6-8c27d01683d7" />
+</p>
 
 ---
 
