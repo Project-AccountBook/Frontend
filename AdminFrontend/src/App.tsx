@@ -100,19 +100,22 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (window.location.pathname === '/oauth2/redirect') {
-      const params = new URLSearchParams(window.location.search);
-      const accessToken = params.get('accessToken');
-      const refreshToken = params.get('refreshToken');
-      if (accessToken && refreshToken) {
-        const rememberMe = tokenStorage.consumePendingRememberMe() ?? true;
-        tokenStorage.setTokens(accessToken, refreshToken, 'social-login', rememberMe);
-        setIsLoggedIn(true);
-        refreshUnreadCount();
-      }
-      window.history.replaceState({}, document.title, '/');
-    }
-  }, []);
+    if (window.location.pathname !== '/oauth2/redirect') return;
+
+    const params = new URLSearchParams(window.location.search);
+    window.history.replaceState({}, document.title, '/');
+
+    const code = params.get('code');
+    if (!code) return;
+
+    void authApi.exchangeOAuthCode(code).then((result) => {
+      if (!result.ok || !result.data?.accessToken) return;
+      const rememberMe = tokenStorage.consumePendingRememberMe() ?? true;
+      tokenStorage.setTokens(result.data.accessToken, '', 'social-login', rememberMe);
+      setIsLoggedIn(true);
+      refreshUnreadCount();
+    });
+  }, [refreshUnreadCount]);
 
   useEffect(() => {
     if (isLoggedIn) {

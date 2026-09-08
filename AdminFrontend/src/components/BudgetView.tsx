@@ -1127,7 +1127,7 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
               {formatKRW(fixedExpenseNum)}원
             </div>
             <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px', lineHeight: 1.5 }}>
-              고정 수입/지출에서 등록한 금액이 예산에 자동으로 포함됩니다.
+              등록된 고정 지출이 이번 달 계획에 미리 포함됩니다. 실제 출금 전에는 월 총 지출에는 잡히지 않습니다.
             </p>
           </div>
         )}

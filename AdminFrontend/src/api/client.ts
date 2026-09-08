@@ -82,21 +82,19 @@ async function tryReissue(): Promise<boolean> {
   if (reissuePromise) return reissuePromise;
 
   reissuePromise = (async () => {
-    const refreshToken = tokenStorage.getRefreshToken();
-    if (!refreshToken) return false;
-
     try {
       const res = await fetch(resolveApiUrl('/api/v1/auth/reissue'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
+        credentials: 'include',
         ...FETCH_NO_REDIRECT,
       });
       const text = await res.text();
       if (!text) return false;
       const body = JSON.parse(text) as ApiResponse<TokenResponse>;
-      if (res.ok && body.success && body.data?.accessToken && body.data?.refreshToken) {
-        tokenStorage.setTokens(body.data.accessToken, body.data.refreshToken);
+      if (res.ok && body.success && body.data?.accessToken) {
+        const email = tokenStorage.getUserEmail() ?? undefined;
+        tokenStorage.setTokens(body.data.accessToken, body.data.refreshToken ?? '', email);
         return true;
       }
     } catch {
@@ -118,15 +116,15 @@ async function handleAuthFailure(
   init: RequestInit,
   headers: Headers,
 ): Promise<Response> {
-  if (!tokenStorage.getRefreshToken()) {
-    handleAuthExpired();
-    return initialRes;
-  }
-
   const renewed = await tryReissue();
   if (renewed) {
     headers.set('Authorization', `Bearer ${tokenStorage.getAccessToken()}`);
-    const retryRes = await fetch(requestUrl, { ...init, headers, ...FETCH_NO_REDIRECT });
+    const retryRes = await fetch(requestUrl, {
+      credentials: 'include',
+      ...init,
+      headers,
+      ...FETCH_NO_REDIRECT,
+    });
     if (isAuthFailureResponse(retryRes)) {
       handleAuthExpired();
     }
@@ -146,7 +144,11 @@ export async function publicRequest<T>(
     headers.set('Content-Type', 'application/json');
   }
 
-  const res = await fetch(resolveApiUrl(url), { ...init, headers });
+  const res = await fetch(resolveApiUrl(url), {
+    credentials: 'include',
+    ...init,
+    headers,
+  });
   return parseResponse<T>(res);
 }
 
@@ -155,7 +157,12 @@ async function executeWithReissue(
   init: RequestInit,
   headers: Headers,
 ): Promise<Response> {
-  let res = await fetch(requestUrl, { ...init, headers, ...FETCH_NO_REDIRECT });
+  let res = await fetch(requestUrl, {
+    credentials: 'include',
+    ...init,
+    headers,
+    ...FETCH_NO_REDIRECT,
+  });
 
   if (isAuthFailureResponse(res) && tokenStorage.hasToken()) {
     res = await handleAuthFailure(res, requestUrl, init, headers);
