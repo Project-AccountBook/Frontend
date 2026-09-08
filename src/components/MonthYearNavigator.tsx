@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Capacitor } from '@capacitor/core';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 const MONTHS = [
@@ -26,6 +28,7 @@ export const MonthYearNavigator: React.FC<MonthYearNavigatorProps> = ({
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(date.getFullYear());
   const monthPickerRef = useRef<HTMLDivElement>(null);
+  const isNative = Capacitor.isNativePlatform();
 
   const year = date.getFullYear();
   const month = date.getMonth();
@@ -41,6 +44,7 @@ export const MonthYearNavigator: React.FC<MonthYearNavigatorProps> = ({
     if (!showMonthPicker) return;
 
     const handleClickOutside = (e: MouseEvent) => {
+      if (isNative) return;
       if (monthPickerRef.current && !monthPickerRef.current.contains(e.target as Node)) {
         setShowMonthPicker(false);
       }
@@ -48,7 +52,16 @@ export const MonthYearNavigator: React.FC<MonthYearNavigatorProps> = ({
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showMonthPicker]);
+  }, [showMonthPicker, isNative]);
+
+  useEffect(() => {
+    if (!isNative || !showMonthPicker) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isNative, showMonthPicker]);
 
   const shiftMonth = (delta: number) => {
     if (disabled) return;
@@ -65,6 +78,77 @@ export const MonthYearNavigator: React.FC<MonthYearNavigatorProps> = ({
     onDateChange(new Date(pickerYear, m, 1));
     setShowMonthPicker(false);
   };
+
+  const monthPickerPanel = (
+    <>
+      <div className="cal-picker-year-row">
+        <button
+          type="button"
+          className="cal-picker-year-btn"
+          aria-label="이전 연도"
+          onClick={() => setPickerYear((y) => y - 1)}
+        >
+          <ChevronLeft size={15} />
+        </button>
+        <span className="cal-picker-year-label">{pickerYear}년</span>
+        <button
+          type="button"
+          className="cal-picker-year-btn"
+          aria-label="다음 연도"
+          onClick={() => setPickerYear((y) => y + 1)}
+        >
+          <ChevronRight size={15} />
+        </button>
+        <button
+          type="button"
+          className="cal-picker-close"
+          aria-label="닫기"
+          onClick={() => setShowMonthPicker(false)}
+        >
+          <X size={14} />
+        </button>
+      </div>
+      <div className="cal-picker-months">
+        {MONTHS.map((monthLabel, i) => (
+          <button
+            key={monthLabel}
+            type="button"
+            className={`cal-picker-month-btn${pickerYear === year && i === month ? ' active' : ''}`}
+            onClick={() => selectPickerMonth(i)}
+          >
+            {monthLabel}
+          </button>
+        ))}
+      </div>
+    </>
+  );
+
+  const monthPickerOverlay =
+    showMonthPicker && !disabled
+      ? isNative
+        ? createPortal(
+            <>
+              <button
+                type="button"
+                className="cal-month-picker-backdrop"
+                aria-label="년월 선택 닫기"
+                onClick={() => setShowMonthPicker(false)}
+              />
+              <div
+                className="cal-month-picker cal-month-picker--native"
+                role="dialog"
+                aria-modal="true"
+                aria-label="년월 선택"
+              >
+                {monthPickerPanel}
+              </div>
+            </>,
+            document.body
+          )
+        : (
+            <div className="cal-month-picker">{monthPickerPanel}</div>
+          )
+      : null;
 
   return (
     <div
@@ -92,49 +176,7 @@ export const MonthYearNavigator: React.FC<MonthYearNavigatorProps> = ({
           {label}
         </button>
 
-        {showMonthPicker && !disabled && (
-          <div className="cal-month-picker">
-            <div className="cal-picker-year-row">
-              <button
-                type="button"
-                className="cal-picker-year-btn"
-                aria-label="이전 연도"
-                onClick={() => setPickerYear((y) => y - 1)}
-              >
-                <ChevronLeft size={15} />
-              </button>
-              <span className="cal-picker-year-label">{pickerYear}년</span>
-              <button
-                type="button"
-                className="cal-picker-year-btn"
-                aria-label="다음 연도"
-                onClick={() => setPickerYear((y) => y + 1)}
-              >
-                <ChevronRight size={15} />
-              </button>
-              <button
-                type="button"
-                className="cal-picker-close"
-                aria-label="닫기"
-                onClick={() => setShowMonthPicker(false)}
-              >
-                <X size={14} />
-              </button>
-            </div>
-            <div className="cal-picker-months">
-              {MONTHS.map((monthLabel, i) => (
-                <button
-                  key={monthLabel}
-                  type="button"
-                  className={`cal-picker-month-btn${pickerYear === year && i === month ? ' active' : ''}`}
-                  onClick={() => selectPickerMonth(i)}
-                >
-                  {monthLabel}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        {!isNative && monthPickerOverlay}
       </div>
 
       <button
@@ -146,6 +188,7 @@ export const MonthYearNavigator: React.FC<MonthYearNavigatorProps> = ({
       >
         <ChevronRight size={16} />
       </button>
+      {isNative && monthPickerOverlay}
     </div>
   );
 };

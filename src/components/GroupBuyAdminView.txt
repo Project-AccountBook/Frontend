@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { tokenStorage } from '../api';
 import { 
   TrendingUp, 
   Plus, 
@@ -83,97 +84,244 @@ export const GroupBuyAdminView: React.FC = () => {
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
   const [productForm, setProductForm] = useState({
     name: '',
-    category: '식품',
-    price: 0,
-    stock: 0,
-    description: ''
+    category: '�  // --- Loading / Error / API States ---
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [posts, setPosts] = useState<GroupBuyPost[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+
+  const [dashboardStats, setDashboardStats] = useState({
+    openedToday: 0,
+    totalParticipants: 0,
+    recruiting: 0,
+    success: 0,
+    failed: 0,
+    reported: 0,
+    recruitingRate: 0,
+    successRate: 0,
+    failedRate: 0,
+    reportedRate: 0,
+    total: 0
   });
 
-  // --- MOCK DATABASE ---
-  
-  // 1. Group Buying Posts Mock Data
-  const [posts, setPosts] = useState<GroupBuyPost[]>([
-    { id: 1, category: '생활용품', title: '친환경 세탁세제 대용량 공구', owner: '이웃지기', price: 15000, currentCount: 15, targetCount: 12, createdAt: '2026-06-24 10:30', status: '성공' },
-    { id: 2, category: '식품', title: '제주 유기농 흑돼지 삼겹살 1kg', owner: '푸드마스터', price: 23000, currentCount: 8, targetCount: 10, createdAt: '2026-06-24 11:15', status: '모집중' },
-    { id: 3, category: '육아용품', title: '친환경 대나무 유아 식기 세트', owner: '튼튼엄마', price: 19800, currentCount: 3, targetCount: 15, createdAt: '2026-06-23 15:40', status: '모집중' },
-    { id: 4, category: '패션/잡화', title: '여름 린넨 반팔 티셔츠 (5개 묶음)', owner: '스타일리스트', price: 29900, currentCount: 2, targetCount: 10, createdAt: '2026-06-22 09:00', status: '무산' },
-    { id: 5, category: '식품', title: '[산지직송] 성주 꿀참외 5kg 내외', owner: '참외농장', price: 18500, currentCount: 25, targetCount: 20, createdAt: '2026-06-24 08:20', status: '성공' },
-    { id: 6, category: '반려동물', title: '프리미엄 고양이 모래 6kg x 3개', owner: '야옹이아빠', price: 24000, currentCount: 11, targetCount: 10, createdAt: '2026-06-24 12:00', status: '신고됨' },
-    { id: 7, category: '생활용품', title: '미세먼지 차단 황사마스크 100매', owner: '클린라이프', price: 17500, currentCount: 5, targetCount: 30, createdAt: '2026-06-23 14:10', status: '모집중' },
-    { id: 8, category: '가전/디지털', title: '휴대용 미니 손풍기 1+1 기획', owner: '테크홀릭', price: 12900, currentCount: 4, targetCount: 10, createdAt: '2026-06-24 07:45', status: '모집중' }
-  ]);
+  const stats = dashboardStats;
 
-  // 2. Categories Mock Data
-  const [categories, setCategories] = useState<Category[]>([
-    { id: 1, name: '식품', description: '과일, 채소, 육류, 가공식품 등 신선한 먹거리 공구', createdAt: '2026-05-01' },
-    { id: 2, name: '생활용품', description: '세제, 화장지, 청소용품 등 일상생활 필수품', createdAt: '2026-05-01' },
-    { id: 3, name: '육아용품', description: '기저귀, 물티슈, 장난감, 아동의류 등 육아 관련 제품', createdAt: '2026-05-05' },
-    { id: 4, name: '반려동물', description: '사료, 간식, 모래, 장난감 등 반려동물용품', createdAt: '2026-05-10' },
-    { id: 5, name: '가전/디지털', description: '소형 가전, 디지털 악세사리, 스마트폰 주변기기', createdAt: '2026-05-15' },
-    { id: 6, name: '패션/잡화', description: '남녀 의류, 신발, 양말, 패션 소품 공구', createdAt: '2026-05-20' }
-  ]);
-
-  // 3. Reports Mock Data
-  const [reports, setReports] = useState<Report[]>([
-    { id: 1, type: '글', targetId: 6, content: '프리미엄 고양이 모래 6kg x 3개', reporter: '러블리냥', reason: '실제 인터넷 최저가보다 2배 이상 비싸게 공동구매 진행하여 기만 행위 의심', status: '대기중', createdAt: '2026-06-24 14:05' },
-    { id: 2, type: '댓글', targetId: 2, content: '이거 유통기한 거의 임박한 제품 덤핑해서 파는 거 같은데요? 절대 사지 마세요.', reporter: '푸드마스터', reason: '사실무근인 내용으로 공구 진행 방해 및 영업 방해 악성 루머 유포', status: '대기중', createdAt: '2026-06-24 15:30' },
-    { id: 3, type: '글', targetId: 4, content: '여름 린넨 반팔 티셔츠 (5개 묶음)', reporter: '클린패션', reason: '의류 카탈로그 도용 및 짝퉁 제품 판매 혐의', status: '반려됨', createdAt: '2026-06-23 11:20' },
-    { id: 4, type: '댓글', targetId: 3, content: '판매자 진짜 사기꾼임 연락도 안됨 조심하셈', reporter: '이웃사랑', reason: '욕설 및 비방글', status: '경고처리', createdAt: '2026-06-22 18:10' }
-  ]);
-
-  // 4. Products Mock Data
-  const [products, setProducts] = useState<Product[]>([
-    { id: 1, name: '영양만점 해남 꿀고구마 5kg', category: '식품', price: 14500, stock: 120, description: '제보 접수: 당도가 높고 가성비 최고인 해남 고구마 산지 직송 공구 상품', createdAt: '2026-06-20' },
-    { id: 2, name: '저자극 엠보싱 물티슈 70매 x 10팩', category: '생활용품', price: 11900, stock: 350, description: '요청 반영: 성분이 안전하고 가성비가 높은 생활 필수품 대량 패키지', createdAt: '2026-06-21' },
-    { id: 3, name: '유기농 무설탕 아기 퓨레 세트', category: '육아용품', price: 21000, stock: 80, description: '제보 접수: 인공 첨가물이 없는 아기 이유식 보조용 퓨레 제품', createdAt: '2026-06-22' },
-    { id: 4, name: '가정용 미니 제습기 1.2L', category: '가전/디지털', price: 49000, stock: 45, description: '요청 반영: 원룸 및 소형 평수 맞춤형 초소형 가성비 제습기', createdAt: '2026-06-23' }
-  ]);
-
-  // --- Real-time statistics (calculated dynamically based on state) ---
-  const stats = useMemo(() => {
-    // Total posts opened today (mock: let's filter created date on 2026-06-24)
-    const openedToday = posts.filter(p => p.createdAt.startsWith('2026-06-24')).length;
-    
-    // Real-time total participants (sum of currentCount)
-    const totalParticipants = posts.reduce((sum, p) => sum + p.currentCount, 0);
-
-    // Ratios
-    const total = posts.length;
-    const recruiting = posts.filter(p => p.status === '모집중').length;
-    const success = posts.filter(p => p.status === '성공').length;
-    const failed = posts.filter(p => p.status === '무산').length;
-    const reported = posts.filter(p => p.status === '신고됨').length;
-
-    const recruitingRate = total > 0 ? Math.round((recruiting / total) * 100) : 0;
-    const successRate = total > 0 ? Math.round((success / total) * 100) : 0;
-    const failedRate = total > 0 ? Math.round((failed / total) * 100) : 0;
-    const reportedRate = total > 0 ? Math.round((reported / total) * 100) : 0;
-
-    return {
-      openedToday,
-      totalParticipants,
-      recruiting,
-      success,
-      failed,
-      reported,
-      recruitingRate,
-      successRate,
-      failedRate,
-      reportedRate,
-      total
+  // --- API Call Helper ---
+  const fetchWithAuth = useCallback(async (url: string, options: RequestInit = {}) => {
+    const token = tokenStorage.getAccessToken();
+    const headers = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
     };
-  }, [posts]);
+    const response = await fetch(url, { ...options, headers });
+    if (!response.ok) {
+      const errText = await response.text();
+      let errMsg = `HTTP error! status: ${response.status}`;
+      try {
+        const errJson = JSON.parse(errText);
+        errMsg = errJson.message || errJson.error || errMsg;
+      } catch (e) {}
+      throw new Error(errMsg);
+    }
+    return response.json();
+  }, []);
 
-  // --- Handlers for Post Management ---
-  const handleUpdatePostStatus = (postId: number, newStatus: '모집중' | '성공' | '무산' | '신고됨') => {
-    setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: newStatus } : p));
+  const mapBackendStatus = (status: string): '모집중' | '성공' | '무산' | '신고됨' => {
+    if (status === 'RECRUITING') return '모집중';
+    if (status === 'SUCCESS' || status === 'CLOSED') return '성공';
+    if (status === 'FAILED') return '무산';
+    return '신고됨';
   };
 
-  const handleDeletePost = (postId: number) => {
+  const mapFrontendStatusToBackend = (status: '모집중' | '성공' | '무산' | '신고됨'): string => {
+    if (status === '모집중') return 'RECRUITING';
+    if (status === '성공') return 'SUCCESS';
+    if (status === '무산') return 'FAILED';
+    return 'BLIND';
+  };
+
+  // --- API Loaders ---
+  const loadDashboardStats = useCallback(async () => {
+    try {
+      const res = await fetchWithAuth('/api/v1/admin/group-purchases/summary');
+      if (res.success && res.data) {
+        const d = res.data;
+        setDashboardStats({
+          openedToday: d.todayCreatedCount,
+          totalParticipants: d.activeParticipantsCount,
+          recruiting: d.recruitingCount,
+          success: d.successCount,
+          failed: d.failedCount,
+          reported: 0,
+          recruitingRate: Math.round(d.recruitingRatio),
+          successRate: Math.round(d.successRatio),
+          failedRate: Math.round(d.failedRatio),
+          reportedRate: 0,
+          total: d.recruitingCount + d.successCount + d.failedCount
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load dashboard stats:', err);
+    }
+  }, [fetchWithAuth]);
+
+  const loadPosts = useCallback(async () => {
+    try {
+      const res = await fetchWithAuth('/api/v1/admin/group-purchases?size=100');
+      if (res.success && res.data && res.data.content) {
+        const mapped = res.data.content.map((gp: any) => ({
+          id: gp.id,
+          category: gp.categoryName || '미지정',
+          title: gp.title,
+          owner: gp.creatorUsername || '탈퇴한 사용자',
+          price: gp.price,
+          currentCount: gp.currentParticipants,
+          targetCount: gp.maxParticipants,
+          createdAt: gp.createdAt ? gp.createdAt.replace('T', ' ').substring(0, 16) : '',
+          status: mapBackendStatus(gp.status)
+        }));
+        setPosts(mapped);
+      }
+    } catch (err) {
+      console.error('Failed to load admin posts:', err);
+    }
+  }, [fetchWithAuth]);
+
+  const loadCategories = useCallback(async () => {
+    try {
+      const res = await fetchWithAuth('/api/v1/group-purchase-categories');
+      if (res.success && res.data) {
+        const mapped = res.data.map((cat: any) => ({
+          id: cat.id,
+          name: cat.name,
+          description: `정렬 순서: ${cat.sortOrder}`,
+          createdAt: cat.createdAt ? cat.createdAt.split('T')[0] : ''
+        }));
+        setCategories(mapped);
+      }
+    } catch (err) {
+      console.error('Failed to load categories:', err);
+    }
+  }, [fetchWithAuth]);
+
+  const loadReports = useCallback(async () => {
+    try {
+      const res = await fetchWithAuth('/api/v1/admin/reports?size=100');
+      if (res.success && res.data && res.data.content) {
+        const mapped = res.data.content.map((rep: any) => {
+          let statusText: '대기중' | '경고처리' | '삭제처리' | '반려됨' = '대기중';
+          if (rep.isProcessed) {
+            if (rep.processResult === 'WARNED') statusText = '경고처리';
+            else if (rep.processResult === 'DELETED') statusText = '삭제처리';
+            else statusText = '반려됨';
+          }
+          return {
+            id: rep.id,
+            type: rep.targetType === 'GROUP_PURCHASE' ? '글' : '댓글',
+            targetId: rep.targetId,
+            content: `${rep.targetType === 'GROUP_PURCHASE' ? '공동구매 글' : '댓글'} #${rep.targetId}`,
+            reporter: `사용자 #${rep.reporterId}`,
+            reason: rep.reason,
+            status: statusText,
+            createdAt: rep.createdAt ? rep.createdAt.replace('T', ' ').substring(0, 16) : ''
+          };
+        });
+        setReports(mapped);
+      }
+    } catch (err) {
+      console.error('Failed to load reports:', err);
+    }
+  }, [fetchWithAuth]);
+
+  const loadProducts = useCallback(async () => {
+    try {
+      let catList = categories;
+      if (categories.length === 0) {
+        const catRes = await fetchWithAuth('/api/v1/group-purchase-categories');
+        if (catRes.success && catRes.data) {
+          catList = catRes.data.map((cat: any) => ({
+            id: cat.id,
+            name: cat.name,
+            description: `정렬 순서: ${cat.sortOrder}`,
+            createdAt: cat.createdAt ? cat.createdAt.split('T')[0] : ''
+          }));
+          setCategories(catList);
+        }
+      }
+
+      const res = await fetchWithAuth('/api/v1/products');
+      if (res.success && res.data) {
+        const mapped = res.data.map((prod: any) => ({
+          id: prod.id,
+          name: prod.name,
+          category: catList.find(c => c.id === prod.categoryId)?.name || '기타',
+          price: prod.price,
+          stock: 100,
+          description: prod.description || '상품 설명이 없습니다.',
+          createdAt: prod.createdAt ? prod.createdAt.split('T')[0] : ''
+        }));
+        setProducts(mapped);
+      }
+    } catch (err) {
+      console.error('Failed to load products:', err);
+    }
+  }, [fetchWithAuth, categories]);
+
+  // --- Initial Data Load ---
+  useEffect(() => {
+    const loadAll = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        await Promise.all([
+          loadDashboardStats(),
+          loadPosts(),
+          loadCategories(),
+          loadReports(),
+          loadProducts()
+        ]);
+      } catch (err) {
+        setError('데이터를 가져오는 중 실패했습니다. 권한을 확인해 주세요.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadAll();
+  }, [activeAdminSubTab, loadDashboardStats, loadPosts, loadCategories, loadReports, loadProducts]);
+
+  // --- Handlers for Post Management ---
+  const handleUpdatePostStatus = async (postId: number, newStatus: '모집중' | '성공' | '무산' | '신고됨') => {
+    try {
+      const backendStatus = mapFrontendStatusToBackend(newStatus);
+      const res = await fetchWithAuth(`/api/v1/admin/group-purchases/${postId}/status?status=${backendStatus}`, {
+        method: 'PUT'
+      });
+      if (res.success) {
+        loadPosts();
+        loadDashboardStats();
+      }
+    } catch (err) {
+      alert('상태 조정에 실패했습니다: ' + (err instanceof Error ? err.message : err));
+    }
+  };
+
+  const handleDeletePost = async (postId: number) => {
     if (window.confirm('이 공동구매 글을 삭제하시겠습니까? 삭제 시 다시 복구할 수 없습니다.')) {
-      setPosts(prev => prev.filter(p => p.id !== postId));
-      // Also update any reports related to this post
-      setReports(prev => prev.map(r => r.type === '글' && r.targetId === postId ? { ...r, status: '삭제처리' } : r));
+      try {
+        const res = await fetchWithAuth(`/api/v1/admin/group-purchases/${postId}`, {
+          method: 'DELETE'
+        });
+        if (res.success) {
+          loadPosts();
+          loadDashboardStats();
+        }
+      } catch (err) {
+        alert('삭제에 실패했습니다: ' + (err instanceof Error ? err.message : err));
+      }
     }
   };
 
@@ -190,54 +338,75 @@ export const GroupBuyAdminView: React.FC = () => {
     setIsCategoryModalOpen(true);
   };
 
-  const handleSaveCategory = (e: React.FormEvent) => {
+  const handleSaveCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!categoryForm.name.trim()) return;
 
-    if (categoryModalMode === 'add') {
-      const newCat: Category = {
-        id: Date.now(),
-        name: categoryForm.name,
-        description: categoryForm.description,
-        createdAt: new Date().toISOString().split('T')[0]
-      };
-      setCategories(prev => [...prev, newCat]);
-    } else if (categoryModalMode === 'edit' && selectedCategoryId !== null) {
-      setCategories(prev => prev.map(cat => 
-        cat.id === selectedCategoryId 
-          ? { ...cat, name: categoryForm.name, description: categoryForm.description } 
-          : cat
-      ));
+    try {
+      if (categoryModalMode === 'add') {
+        const res = await fetchWithAuth('/api/v1/group-purchase-categories', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: categoryForm.name,
+            sortOrder: categories.length + 1
+          })
+        });
+        if (res.success) {
+          loadCategories();
+        }
+      } else if (categoryModalMode === 'edit' && selectedCategoryId !== null) {
+        const res = await fetchWithAuth(`/api/v1/group-purchase-categories/${selectedCategoryId}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            name: categoryForm.name,
+            sortOrder: 1
+          })
+        });
+        if (res.success) {
+          loadCategories();
+        }
+      }
+      setIsCategoryModalOpen(false);
+    } catch (err) {
+      alert('카테고리 저장에 실패했습니다: ' + (err instanceof Error ? err.message : err));
     }
-    setIsCategoryModalOpen(false);
   };
 
-  const handleDeleteCategory = (catId: number, catName: string) => {
+  const handleDeleteCategory = async (catId: number, catName: string) => {
     if (window.confirm(`'${catName}' 카테고리를 삭제하시겠습니까?`)) {
-      setCategories(prev => prev.filter(cat => cat.id !== catId));
+      try {
+        const res = await fetchWithAuth(`/api/v1/group-purchase-categories/${catId}`, {
+          method: 'DELETE'
+        });
+        if (res.success) {
+          loadCategories();
+        }
+      } catch (err) {
+        alert('카테고리 삭제에 실패했습니다: ' + (err instanceof Error ? err.message : err));
+      }
     }
   };
 
   // --- Handlers for Report Management ---
-  const handleResolveReport = (reportId: number, targetId: number, type: '글' | '댓글', action: '경고' | '삭제' | '반려') => {
-    setReports(prev => prev.map(r => {
-      if (r.id === reportId) {
-        if (action === '경고') return { ...r, status: '경고처리' };
-        if (action === '삭제') return { ...r, status: '삭제처리' };
-        return { ...r, status: '반려됨' };
-      }
-      return r;
-    }));
+  const handleResolveReport = async (reportId: number, targetId: number, type: '글' | '댓글', action: '경고' | '삭제' | '반려') => {
+    try {
+      let backendAction = 'DISMISSED';
+      if (action === '경고') backendAction = 'WARNED';
+      else if (action === '삭제') backendAction = 'DELETED';
 
-    if (action === '삭제') {
-      if (type === '글') {
-        // Change associated post status or remove it
-        setPosts(prev => prev.filter(p => p.id !== targetId));
-      } else {
-        alert('신고된 댓글이 삭제처리 되었습니다. (모의 DB 적용)');
+      const res = await fetchWithAuth(`/api/v1/admin/reports/${reportId}/process`, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: backendAction,
+          reason: `${action} 처리를 수행했습니다.`
+        })
+      });
+      if (res.success) {
+        loadReports();
+        loadPosts();
       }
-    } else if (action === '경고') {
-      alert(`해당 ${type} 작성자에게 경고 조치가 알림으로 발송되었습니다.`);
+    } catch (err) {
+      alert('신고 처리에 실패했습니다: ' + (err instanceof Error ? err.message : err));
     }
   };
 
@@ -266,24 +435,82 @@ export const GroupBuyAdminView: React.FC = () => {
     setIsProductModalOpen(true);
   };
 
-  const handleSaveProduct = (e: React.FormEvent) => {
+  const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!productForm.name.trim()) return;
 
-    if (productModalMode === 'add') {
-      const newProd: Product = {
-        id: Date.now(),
+    try {
+      const matchedCatId = categories.find(c => c.name === productForm.category)?.id;
+      if (!matchedCatId) {
+        alert('선택한 카테고리가 존재하지 않습니다.');
+        return;
+      }
+
+      const payload = {
         name: productForm.name,
-        category: productForm.category,
         price: Number(productForm.price),
-        stock: Number(productForm.stock),
         description: productForm.description,
-        createdAt: new Date().toISOString().split('T')[0]
+        imageUrl: '',
+        categoryId: matchedCatId
       };
-      setProducts(prev => [newProd, ...prev]);
-    } else if (productModalMode === 'edit' && selectedProductId !== null) {
-      setProducts(prev => prev.map(prod => 
-        prod.id === selectedProductId 
+
+      if (productModalMode === 'add') {
+        const res = await fetchWithAuth('/api/v1/products', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        if (res.success) {
+          loadProducts();
+        }
+      } else if (productModalMode === 'edit' && selectedProductId !== null) {
+        const res = await fetchWithAuth(`/api/v1/products/${selectedProductId}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload)
+        });
+        if (res.success) {
+          loadProducts();
+        }
+      }
+      setIsProductModalOpen(false);
+    } catch (err) {
+      alert('상품 저장에 실패했습니다: ' + (err instanceof Error ? err.message : err));
+    }
+  };
+
+  const handleDeleteProduct = async (prodId: number, prodName: string) => {
+    if (window.confirm(`'${prodName}' 상품을 카탈로그에서 삭제하시겠습니까?`)) {
+      try {
+        const res = await fetchWithAuth(`/api/v1/products/${prodId}`, {
+          method: 'DELETE'
+        });
+        if (res.success) {
+          loadProducts();
+        }
+      } catch (err) {
+        alert('상품 삭제에 실패했습니다: ' + (err instanceof Error ? err.message : err));
+      }
+    }
+  };
+
+  // --- Filtered lists for rendering ---
+  const filteredPosts = useMemo(() => {
+    return posts.filter(p => {
+      const matchesStatus = postFilterStatus === '전체' || p.status === postFilterStatus;
+      const matchesSearch = p.title.toLowerCase().includes(postSearchQuery.toLowerCase()) ||
+                            p.owner.toLowerCase().includes(postSearchQuery.toLowerCase()) ||
+                            p.category.toLowerCase().includes(postSearchQuery.toLowerCase());
+      return matchesStatus && matchesSearch;
+    });
+  }, [posts, postFilterStatus, postSearchQuery]);
+
+  const filteredProducts = useMemo(() => {
+    return products.filter(p => {
+      const matchesSearch = p.name.toLowerCase().includes(productSearchQuery.toLowerCase()) ||
+                            p.category.toLowerCase().includes(productSearchQuery.toLowerCase()) ||
+                            p.description.toLowerCase().includes(productSearchQuery.toLowerCase());
+      return matchesSearch;
+    });
+  }, [products, productSearchQuery]); prod.id === selectedProductId 
           ? { 
               ...prod, 
               name: productForm.name, 

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bell,
   BellOff,
@@ -8,145 +8,17 @@ import {
   ExternalLink,
   PiggyBank,
   ShoppingBag,
+  Target,
   Trash2,
   Info
 } from 'lucide-react';
+import { notificationApi } from '../api';
+import { Capacitor } from '@capacitor/core';
+import type { NotificationResponse, NotificationType } from '../api/types';
+import type { AssetActiveSection } from './AssetView';
 
-export type NotificationType = 'BUDGET' | 'INTEREST_CATEGORY' | 'SYSTEM';
-
-export interface NotificationItem {
-  id: number;
-  title: string;
-  message: string;
-  redirectUrl: string | null;
-  referenceId: number | null;
-  type: NotificationType;
-  isRead: boolean;
-  createdAt: string;
-}
-
-export const MOCK_NOTIFICATIONS: NotificationItem[] = [
-  {
-    id: 1,
-    title: '식비 예산 80% 초과',
-    message: '이번 달 식비 예산 40만원 중 32만원을 사용했어요. 남은 기간 동안 지출을 조절해 보세요.',
-    redirectUrl: '/analysis',
-    referenceId: 101,
-    type: 'BUDGET',
-    isRead: false,
-    createdAt: '2026-06-24T09:15:00'
-  },
-  {
-    id: 2,
-    title: '관심 카테고리 공동구매 오픈',
-    message: '관심 등록하신 "생활용품" 카테고리에 새 공동구매가 등록됐어요. 마감 전에 참여해 보세요!',
-    redirectUrl: '/groupbuy/42',
-    referenceId: 42,
-    type: 'INTEREST_CATEGORY',
-    isRead: false,
-    createdAt: '2026-06-24T08:40:00'
-  },
-  {
-    id: 3,
-    title: 'Q&A 질문에 답변이 달렸어요',
-    message: '"가계부 앱 추천해주세요" 질문에 새로운 답변이 2개 등록됐습니다.',
-    redirectUrl: '/qa/2',
-    referenceId: 2,
-    type: 'SYSTEM',
-    isRead: false,
-    createdAt: '2026-06-23T21:30:00'
-  },
-  {
-    id: 4,
-    title: '육아비 예산 한도 도달',
-    message: '육아비 카테고리 예산 한도에 도달했습니다. 추가 지출 시 알림을 보내드릴게요.',
-    redirectUrl: '/analysis',
-    referenceId: 102,
-    type: 'BUDGET',
-    isRead: true,
-    createdAt: '2026-06-23T14:20:00'
-  },
-  {
-    id: 5,
-    title: '공동구매 참여 확정',
-    message: '참여하신 "친환경 세제 3종 세트" 공동구매가 최소 인원을 달성해 진행이 확정됐어요.',
-    redirectUrl: '/groupbuy/38',
-    referenceId: 38,
-    type: 'INTEREST_CATEGORY',
-    isRead: true,
-    createdAt: '2026-06-22T18:05:00'
-  },
-  {
-    id: 6,
-    title: '서비스 점검 안내',
-    message: '6월 25일(수) 새벽 2시~4시 시스템 점검이 예정되어 있습니다. 이용에 참고해 주세요.',
-    redirectUrl: null,
-    referenceId: null,
-    type: 'SYSTEM',
-    isRead: true,
-    createdAt: '2026-06-22T10:00:00'
-  },
-  {
-    id: 7,
-    title: '교통비 예산 50% 사용',
-    message: '교통비 예산의 절반을 사용했어요. 이번 달 교통 지출 추이를 확인해 보세요.',
-    redirectUrl: '/analysis',
-    referenceId: 103,
-    type: 'BUDGET',
-    isRead: true,
-    createdAt: '2026-06-21T16:45:00'
-  },
-  {
-    id: 8,
-    title: '노하우 게시글 좋아요 알림',
-    message: '작성하신 "4인 가족 한 달 식비 50만원 관리법" 게시글에 좋아요 10개가 달렸어요.',
-    redirectUrl: '/knowhow/5',
-    referenceId: 5,
-    type: 'SYSTEM',
-    isRead: true,
-    createdAt: '2026-06-20T11:30:00'
-  },
-  {
-    id: 9,
-    title: '관심 카테고리 공동구매 마감 임박',
-    message: '"유아용품" 공동구매가 24시간 후 마감됩니다. 아직 참여하지 않으셨다면 확인해 보세요.',
-    redirectUrl: '/groupbuy/35',
-    referenceId: 35,
-    type: 'INTEREST_CATEGORY',
-    isRead: true,
-    createdAt: '2026-06-19T09:00:00'
-  },
-  {
-    id: 10,
-    title: '월간 소비 리포트 준비 완료',
-    message: '5월 소비 분석 리포트가 준비됐어요. 지난달과 비교한 절약 포인트를 확인해 보세요.',
-    redirectUrl: '/analysis',
-    referenceId: null,
-    type: 'SYSTEM',
-    isRead: true,
-    createdAt: '2026-06-01T08:00:00'
-  },
-  {
-    id: 11,
-    title: '문화생활비 예산 90% 초과',
-    message: '문화생활비 예산이 거의 소진됐어요. 남은 10%로 이번 달을 마무리해 보세요.',
-    redirectUrl: '/analysis',
-    referenceId: 104,
-    type: 'BUDGET',
-    isRead: true,
-    createdAt: '2026-05-28T19:20:00'
-  },
-  {
-    id: 12,
-    title: '신규 기능: 이웃 자산 비교',
-    message: '비슷한 가구와 자산·소비 패턴을 비교할 수 있는 "이웃 자산 비교" 기능이 추가됐어요.',
-    redirectUrl: '/comparison',
-    referenceId: null,
-    type: 'SYSTEM',
-    isRead: true,
-    createdAt: '2026-05-25T12:00:00'
-  }
-];
+export type { NotificationType };
+export type NotificationItem = NotificationResponse;
 
 const PAGE_SIZE = 10;
 
@@ -161,6 +33,7 @@ type FilterTab = (typeof FILTER_TABS)[number]['id'];
 const CATEGORY_TABS: { id: 'all' | NotificationType; label: string }[] = [
   { id: 'all', label: '전체' },
   { id: 'BUDGET', label: '예산' },
+  { id: 'GOAL', label: '목표' },
   { id: 'INTEREST_CATEGORY', label: '공동구매' },
   { id: 'SYSTEM', label: '시스템' }
 ];
@@ -170,6 +43,7 @@ const TYPE_CONFIG: Record<
   { label: string; icon: React.ElementType; color: string; bg: string }
 > = {
   BUDGET: { label: '예산', icon: PiggyBank, color: 'var(--red)', bg: 'var(--red-bg)' },
+  GOAL: { label: '목표', icon: Target, color: 'var(--green)', bg: 'var(--green-bg)' },
   INTEREST_CATEGORY: {
     label: '공동구매',
     icon: ShoppingBag,
@@ -179,9 +53,82 @@ const TYPE_CONFIG: Record<
   SYSTEM: { label: '시스템', icon: Info, color: 'var(--blue)', bg: 'var(--blue-bg)' }
 };
 
+const KNOWN_APP_TABS = new Set([
+  'dashboard',
+  'history',
+  'budget',
+  'analysis',
+  'comparison',
+  'locationComparison',
+  'groupbuy',
+  'knowhow',
+  'qa',
+  'groupbuyAdmin',
+  'notifications',
+  'settings',
+  'community',
+  'admin'
+]);
+
+function resolveNotificationTab(
+  redirectUrl: string | null,
+  type: NotificationType
+): string | null {
+  if (redirectUrl) {
+    const url = redirectUrl.trim();
+    const bareTab = url.replace(/^#\/?/, '').replace(/^\//, '');
+
+    if (bareTab === 'goals' || bareTab === 'history/goals') return 'history';
+    if (bareTab === 'fixed' || bareTab === 'history/fixed') return 'history';
+    if (KNOWN_APP_TABS.has(bareTab)) return bareTab;
+    if (bareTab === 'budget-page') return 'budget';
+    if (url.includes('budget-page') || /\/budget\/?$/.test(url)) return 'budget';
+    if (url.includes('group-purchase')) return 'groupbuy';
+  }
+
+  if (type === 'BUDGET') return 'budget';
+  if (type === 'GOAL') return 'history';
+  if (type === 'INTEREST_CATEGORY') return 'groupbuy';
+  return null;
+}
+
+function resolveAssetSection(
+  redirectUrl: string | null,
+  type: NotificationType
+): AssetActiveSection | undefined {
+  if (redirectUrl) {
+    const url = redirectUrl.trim().replace(/^#\/?/, '').replace(/^\//, '');
+    if (url === 'goals' || url === 'history/goals' || url.endsWith('/goals')) {
+      return 'goals';
+    }
+    if (url === 'fixed' || url === 'history/fixed' || url.endsWith('/fixed')) {
+      return 'fixed';
+    }
+  }
+
+  if (type === 'GOAL') return 'goals';
+  return undefined;
+}
+
+function resolveGroupPurchaseId(
+  redirectUrl: string | null,
+  referenceId: number | null,
+  type: NotificationType
+): number | undefined {
+  if (type !== 'INTEREST_CATEGORY') return undefined;
+  if (referenceId !== null) return referenceId;
+
+  if (redirectUrl) {
+    const match = redirectUrl.match(/group-purchase\/(\d+)/);
+    if (match) return Number(match[1]);
+  }
+
+  return undefined;
+}
+
 function formatRelativeTime(isoString: string): string {
   const date = new Date(isoString);
-  const now = new Date('2026-06-24T12:00:00');
+  const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMin = Math.floor(diffMs / 60000);
   const diffHour = Math.floor(diffMs / 3600000);
@@ -196,23 +143,85 @@ function formatRelativeTime(isoString: string): string {
 }
 
 interface NotificationViewProps {
-  notifications: NotificationItem[];
-  setNotifications: React.Dispatch<React.SetStateAction<NotificationItem[]>>;
+  onUnreadCountChange?: (count: number) => void;
+  onNavigate?: (
+    tab: string,
+    options?: { groupPurchaseId?: number; assetSection?: AssetActiveSection }
+  ) => void;
 }
 
 export const NotificationView: React.FC<NotificationViewProps> = ({
-  notifications,
-  setNotifications
+  onUnreadCountChange,
+  onNavigate
 }) => {
+  const [notifications, setNotifications] = useState<NotificationResponse[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   const [activeCategory, setActiveCategory] = useState<'all' | NotificationType>('all');
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [page, setPage] = useState(1);
+  const [actionLoading, setActionLoading] = useState(false);
+  const onUnreadCountChangeRef = useRef(onUnreadCountChange);
 
-  const unreadCount = useMemo(
-    () => notifications.filter((n) => !n.isRead).length,
-    [notifications]
-  );
+  useEffect(() => {
+    onUnreadCountChangeRef.current = onUnreadCountChange;
+  }, [onUnreadCountChange]);
+
+  const updateUnreadCount = async (items?: NotificationResponse[]) => {
+    const result = await notificationApi.getUnreadCount();
+    if (result.ok && result.data !== null) {
+      setUnreadCount(result.data);
+      onUnreadCountChangeRef.current?.(result.data);
+      return;
+    }
+
+    if (items) {
+      const count = items.filter((n) => !n.isRead).length;
+      setUnreadCount(count);
+      onUnreadCountChangeRef.current?.(count);
+    }
+  };
+
+  const reloadNotifications = useCallback(async () => {
+    const { items, error: fetchError } = await notificationApi.fetchAll();
+    if (fetchError && items.length === 0) {
+      setError(fetchError);
+      setNotifications([]);
+      return;
+    }
+
+    setNotifications(items);
+    await updateUnreadCount(items);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      setIsLoading(true);
+      setError(null);
+
+      const { items, error: fetchError } = await notificationApi.fetchAll();
+      if (cancelled) return;
+
+      if (fetchError && items.length === 0) {
+        setError(fetchError);
+        setNotifications([]);
+        setIsLoading(false);
+        return;
+      }
+
+      setNotifications(items);
+      await updateUnreadCount(items);
+      setIsLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const filtered = useMemo(() => {
     const sorted = [...notifications].sort(
@@ -233,23 +242,49 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
   const currentPage = Math.min(page, totalPages);
   const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  const handleMarkAsRead = (id: number) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
-    );
+  const readCount = notifications.length - unreadCount;
+
+  const handleMarkAsRead = async (id: number) => {
+    setActionLoading(true);
+    const result = await notificationApi.markAsRead(id);
+    if (result.ok && result.data) {
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
+      );
+      await updateUnreadCount();
+    } else {
+      setError(result.error ?? '읽음 처리에 실패했습니다.');
+    }
+    setActionLoading(false);
   };
 
-  const handleMarkAllAsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+  const handleMarkAllAsRead = async () => {
+    setActionLoading(true);
+    const result = await notificationApi.markAllAsRead();
+    if (result.ok) {
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      await updateUnreadCount();
+    } else {
+      setError(result.error ?? '전체 읽음 처리에 실패했습니다.');
+    }
+    setActionLoading(false);
   };
 
-  const handleDelete = (id: number) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
+  const handleDelete = async (id: number) => {
+    setActionLoading(true);
+    const result = await notificationApi.deleteNotification(id);
+    if (result.ok) {
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      await updateUnreadCount();
+    } else {
+      setError(result.error ?? '알림 삭제에 실패했습니다.');
+    }
+    setActionLoading(false);
   };
 
   const handleFilterChange = (filter: FilterTab) => {
@@ -288,16 +323,85 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
     });
   };
 
-  const handleBulkMarkAsRead = () => {
-    setNotifications((prev) =>
-      prev.map((n) => (selectedIds.has(n.id) ? { ...n, isRead: true } : n))
-    );
+  const handleBulkMarkAsRead = async () => {
+    const ids = [...selectedIds].filter((id) => {
+      const item = notifications.find((n) => n.id === id);
+      return item && !item.isRead;
+    });
+    if (ids.length === 0) {
+      setSelectedIds(new Set());
+      return;
+    }
+
+    setActionLoading(true);
+    const results = await Promise.all(ids.map((id) => notificationApi.markAsRead(id)));
+    const failed = results.some((r) => !r.ok);
+
+    if (failed) {
+      setError('일부 알림 읽음 처리에 실패했습니다.');
+      await reloadNotifications();
+    } else {
+      setNotifications((prev) =>
+        prev.map((n) => (selectedIds.has(n.id) ? { ...n, isRead: true } : n))
+      );
+      await updateUnreadCount();
+    }
     setSelectedIds(new Set());
+    setActionLoading(false);
   };
 
-  const handleBulkDelete = () => {
-    setNotifications((prev) => prev.filter((n) => !selectedIds.has(n.id)));
+  const handleGoToTarget = async (notification: NotificationResponse) => {
+    const tab = resolveNotificationTab(notification.redirectUrl, notification.type);
+    if (!tab || !onNavigate) return;
+
+    if (!notification.isRead) {
+      await handleMarkAsRead(notification.id);
+    }
+
+    const groupPurchaseId = resolveGroupPurchaseId(
+      notification.redirectUrl,
+      notification.referenceId,
+      notification.type
+    );
+    const assetSection = resolveAssetSection(notification.redirectUrl, notification.type);
+
+    onNavigate(
+      tab,
+      {
+        ...(groupPurchaseId !== undefined ? { groupPurchaseId } : {}),
+        ...(assetSection ? { assetSection } : {})
+      }
+    );
+  };
+
+  const handleOpenNotification = (notification: NotificationResponse) => {
+    const tab = resolveNotificationTab(notification.redirectUrl, notification.type);
+    if (tab && onNavigate) {
+      void handleGoToTarget(notification);
+      return;
+    }
+    if (!notification.isRead) {
+      void handleMarkAsRead(notification.id);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+
+    setActionLoading(true);
+    const results = await Promise.all(ids.map((id) => notificationApi.deleteNotification(id)));
+    const failed = results.some((r) => !r.ok);
+
+    if (failed) {
+      setError('일부 알림 삭제에 실패했습니다.');
+      await reloadNotifications();
+    } else {
+      setNotifications((prev) => prev.filter((n) => !selectedIds.has(n.id)));
+      await updateUnreadCount();
+    }
     setSelectedIds(new Set());
+    setActionLoading(false);
   };
 
   const selectedCount = selectedIds.size;
@@ -306,9 +410,148 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
     paginated.length > 0 && pageIds.every((id) => selectedIds.has(id));
   const isSomePageSelected =
     paginated.some((n) => selectedIds.has(n.id)) && !isAllPageSelected;
+  const isNative = Capacitor.isNativePlatform();
+
+  if (isNative) {
+    return (
+      <div className="notif-app">
+        <div className="notif-app-head">
+          <div className="notif-app-head-left">
+            <h1>알림</h1>
+            {unreadCount > 0 && (
+              <span className="notif-app-badge">{unreadCount}</span>
+            )}
+          </div>
+          <button
+            type="button"
+            className="notif-app-mark"
+            onClick={() => void handleMarkAllAsRead()}
+            disabled={actionLoading || isLoading || unreadCount === 0}
+          >
+            전체 읽음
+          </button>
+        </div>
+
+        {error && <div className="notif-app-error">{error}</div>}
+
+        <p className="notif-app-meta">
+          전체 {notifications.length} · 안 읽음 {unreadCount} · 읽음 {readCount}
+        </p>
+
+        <div className="notif-app-seg" role="tablist" aria-label="읽음 상태">
+          {FILTER_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={activeFilter === tab.id}
+              className={activeFilter === tab.id ? 'active' : ''}
+              onClick={() => handleFilterChange(tab.id)}
+            >
+              {tab.label}
+              {tab.id === 'unread' && unreadCount > 0 ? ` ${unreadCount}` : ''}
+            </button>
+          ))}
+        </div>
+
+        <div className="notif-app-chips" role="tablist" aria-label="카테고리">
+          {CATEGORY_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={activeCategory === tab.id ? 'active' : ''}
+              onClick={() => handleCategoryChange(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {isLoading ? (
+          <p className="notif-app-status">불러오는 중...</p>
+        ) : filtered.length === 0 ? (
+          <div className="notif-app-empty">
+            <BellOff size={28} strokeWidth={1.6} />
+            <strong>
+              {activeFilter === 'unread'
+                ? '안 읽은 알림이 없어요'
+                : activeCategory !== 'all'
+                  ? `${CATEGORY_TABS.find((t) => t.id === activeCategory)?.label} 알림이 없어요`
+                  : '알림이 없어요'}
+            </strong>
+            <span>새 소식이 오면 여기에 표시돼요</span>
+          </div>
+        ) : (
+          <div className="notif-app-list">
+            {filtered.map((notification) => {
+              const typeConfig = TYPE_CONFIG[notification.type];
+              return (
+                <div
+                  key={notification.id}
+                  className={`notif-app-row ${notification.isRead ? '' : 'unread'}`}
+                >
+                  <button
+                    type="button"
+                    className="notif-app-main"
+                    disabled={actionLoading}
+                    onClick={() => handleOpenNotification(notification)}
+                  >
+                    <span className="notif-app-dot" aria-hidden="true" />
+                    <span className="notif-app-copy">
+                      <span className="notif-app-top">
+                        <span className="notif-app-title">{notification.title}</span>
+                        <span className="notif-app-time">{formatRelativeTime(notification.createdAt)}</span>
+                      </span>
+                      <span className="notif-app-msg">{notification.message}</span>
+                      <span className="notif-app-type">{typeConfig.label}</span>
+                    </span>
+                    <ChevronRight size={18} className="notif-app-chevron" />
+                  </button>
+                  <button
+                    type="button"
+                    className="notif-app-delete"
+                    disabled={actionLoading}
+                    aria-label="알림 삭제"
+                    onClick={() => void handleDelete(notification.id)}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="fade-in card" style={{ padding: '64px 24px', textAlign: 'center' }}>
+        <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>알림을 불러오는 중...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="fade-in">
+      {error && (
+        <div
+          className="card"
+          style={{
+            marginBottom: '16px',
+            padding: '12px 16px',
+            background: 'var(--red-bg)',
+            border: '1px solid var(--red-border)',
+            color: 'var(--red)',
+            fontSize: '13px',
+            fontWeight: '600'
+          }}
+        >
+          {error}
+        </div>
+      )}
+
       <div className="dashboard-view-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div
@@ -369,6 +612,7 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
         {unreadCount > 0 && (
           <button
             onClick={handleMarkAllAsRead}
+            disabled={actionLoading}
             className="header-btn-primary"
             style={{ background: 'var(--blue)' }}
           >
@@ -379,9 +623,9 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
       </div>
 
       <div
+        className="notif-summary-grid"
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
           gap: '16px',
           marginBottom: '24px'
         }}
@@ -450,7 +694,7 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
               marginTop: '6px'
             }}
           >
-            {notifications.length - unreadCount}
+            {readCount}
             <span
               style={{
                 fontSize: '13px',
@@ -539,7 +783,7 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
 
       {selectedCount > 0 && (
         <div
-          className="card"
+          className="card native-hide"
           style={{
             marginBottom: '16px',
             padding: '14px 20px',
@@ -558,6 +802,7 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <button
               onClick={handleBulkMarkAsRead}
+              disabled={actionLoading}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -576,6 +821,7 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
             </button>
             <button
               onClick={handleBulkDelete}
+              disabled={actionLoading}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -662,9 +908,9 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
           </div>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div className="notif-list" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <div
-            className="card"
+            className="card native-hide"
             style={{
               padding: '12px 24px',
               display: 'flex',
@@ -710,7 +956,8 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
             return (
               <div
                 key={notification.id}
-                className="card"
+                className={`card notif-item ${notification.isRead ? '' : 'unread'}`}
+                onClick={isNative ? () => handleOpenNotification(notification) : undefined}
                 style={{
                   padding: '18px 24px',
                   background: isSelected
@@ -730,6 +977,7 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
               >
                 <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
                   <label
+                    className="native-hide"
                     style={{
                       display: 'flex',
                       alignItems: 'flex-start',
@@ -753,6 +1001,7 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
                   </label>
 
                   <div
+                    className="notif-type-icon"
                     style={{
                       width: '44px',
                       height: '44px',
@@ -779,6 +1028,7 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
                       }}
                     >
                       <span
+                        className="native-hide"
                         style={{
                           fontSize: '11px',
                           fontWeight: '700',
@@ -792,6 +1042,7 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
                       </span>
                       {!notification.isRead && (
                         <span
+                          className="native-hide"
                           style={{
                             fontSize: '11px',
                             fontWeight: '800',
@@ -840,6 +1091,7 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
                     </p>
 
                     <div
+                      className="notif-item-actions"
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -848,10 +1100,11 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
                         flexWrap: 'wrap'
                       }}
                     >
-                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <div className="native-hide" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                         {!notification.isRead && (
                           <button
                             onClick={() => handleMarkAsRead(notification.id)}
+                            disabled={actionLoading}
                             style={{
                               display: 'flex',
                               alignItems: 'center',
@@ -868,8 +1121,11 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
                             읽음 처리
                           </button>
                         )}
-                        {notification.redirectUrl && (
+                        {resolveNotificationTab(notification.redirectUrl, notification.type) && (
                           <button
+                            type="button"
+                            onClick={() => void handleGoToTarget(notification)}
+                            disabled={actionLoading}
                             style={{
                               display: 'flex',
                               alignItems: 'center',
@@ -880,7 +1136,8 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
                               background: '#f8fafc',
                               border: '1px solid var(--border)',
                               padding: '6px 12px',
-                              borderRadius: '8px'
+                              borderRadius: '8px',
+                              cursor: actionLoading ? 'not-allowed' : 'pointer'
                             }}
                           >
                             <ExternalLink size={13} />
@@ -890,7 +1147,11 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
                       </div>
 
                       <button
-                        onClick={() => handleDelete(notification.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleDelete(notification.id);
+                        }}
+                        disabled={actionLoading}
                         aria-label="알림 삭제"
                         style={{
                           display: 'flex',
@@ -904,7 +1165,7 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
                         }}
                       >
                         <Trash2 size={13} />
-                        삭제
+                        <span className="native-hide">삭제</span>
                       </button>
                     </div>
                   </div>

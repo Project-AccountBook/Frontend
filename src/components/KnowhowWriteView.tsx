@@ -1,18 +1,15 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   PenSquare,
-  ImagePlus,
-  X,
-  Hash,
-  Eye,
   Type,
   AlignLeft,
   Lightbulb,
-  Save
+  AlertCircle,
+  Image as ImageIcon
 } from 'lucide-react';
-
-const CATEGORIES = ['절약 노하우', '재테크', '가계부', '육아 꿀팁', '공동구매', '살림 팁'];
+import type { BoardCategory } from '../lib/boardApi';
+import { createBoard, listBoardCategories, uploadFile } from '../lib/boardApi';
 
 const TITLE_MAX = 60;
 const CONTENT_MAX = 3000;
@@ -23,26 +20,46 @@ interface KnowhowWriteViewProps {
 }
 
 export const KnowhowWriteView: React.FC<KnowhowWriteViewProps> = ({ onCancel, onSubmit }) => {
-  const [category, setCategory] = useState<string>('');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [thumbnail, setThumbnail] = useState<string | null>(null);
+  const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [categories, setCategories] = useState<BoardCategory[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
-  const canSubmit = category && title.trim().length > 0 && content.trim().length > 0;
+  const insertAtCursor = (snippet: string) => {
+    const el = textareaRef.current;
+    if (!el) {
+      setContent((prev) => (prev + snippet).slice(0, CONTENT_MAX));
+      return;
+    }
+    const start = el.selectionStart ?? content.length;
+    const end = el.selectionEnd ?? content.length;
+    const next = (content.slice(0, start) + snippet + content.slice(end)).slice(0, CONTENT_MAX);
+    setContent(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = Math.min(start + snippet.length, CONTENT_MAX);
+      el.setSelectionRange(pos, pos);
+    });
+  };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      if (typeof ev.target?.result === 'string') {
-        setThumbnail(ev.target.result);
-      }
-    };
-    reader.readAsDataURL(file);
+  const handleUpload = async (file: File) => {
+    setUploading(true);
+    setError(null);
+    try {
+      const url = await uploadFile(file);
+      insertAtCursor(`\n<img src="${url}" alt="" style="max-width:100%;" />\n`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleAddTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -57,11 +74,47 @@ export const KnowhowWriteView: React.FC<KnowhowWriteViewProps> = ({ onCancel, on
     setTagInput('');
   };
 
-  const handleRemoveTag = (t: string) => setTags(tags.filter((x) => x !== t));
+  useEffect(() => {
+    let cancelled = false;
+    listBoardCategories('KNOWHOW')
+      .then((data) => {
+        if (cancelled) return;
+        setCategories(data);
+        if (data.length > 0) setCategoryId(data[0].id);
+      })
+      .catch((e) => {
+        if (!cancelled) setError((e as Error).message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const canSubmit =
+    !!categoryId && title.trim().length > 0 && content.trim().length > 0 && !submitting;
+
+  const handleSubmit = async () => {
+    if (!canSubmit || !categoryId) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await createBoard({
+        categoryId,
+        title: title.trim(),
+        content: content.trim(),
+        type: 'KNOWHOW',
+        tags,
+      });
+      onSubmit();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="fade-in">
-      {/* Header */}
       <div className="dashboard-view-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button
@@ -118,24 +171,7 @@ export const KnowhowWriteView: React.FC<KnowhowWriteViewProps> = ({ onCancel, on
             취소
           </button>
           <button
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '10px 18px',
-              borderRadius: '10px',
-              background: 'white',
-              border: '1px solid var(--border)',
-              color: 'var(--text-secondary)',
-              fontSize: '13px',
-              fontWeight: '700'
-            }}
-          >
-            <Save size={14} />
-            임시저장
-          </button>
-          <button
-            onClick={onSubmit}
+            onClick={handleSubmit}
             disabled={!canSubmit}
             className="header-btn-primary"
             style={{
@@ -144,10 +180,27 @@ export const KnowhowWriteView: React.FC<KnowhowWriteViewProps> = ({ onCancel, on
             }}
           >
             <PenSquare size={14} />
-            <span>등록하기</span>
+            <span>{submitting ? '등록 중...' : '등록하기'}</span>
           </button>
         </div>
       </div>
+
+      {error && (
+        <div
+          className="card"
+          style={{
+            padding: '12px 16px',
+            marginBottom: '16px',
+            border: '1px solid var(--red-border)',
+            background: 'var(--red-bg)',
+            color: 'var(--red)',
+            fontSize: '13px'
+          }}
+        >
+          <AlertCircle size={14} style={{ verticalAlign: 'middle', marginRight: 8 }} />
+          {error}
+        </div>
+      )}
 
       <div
         style={{
@@ -156,40 +209,39 @@ export const KnowhowWriteView: React.FC<KnowhowWriteViewProps> = ({ onCancel, on
           gap: '24px'
         }}
       >
-        {/* Editor Column */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', minWidth: 0 }}>
-          {/* Category & Title */}
           <div className="card" style={{ padding: '28px' }}>
-            {/* Category */}
-            <div style={{ marginBottom: '24px' }}>
-              <label
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  fontSize: '13px',
-                  fontWeight: '700',
-                  color: 'var(--text-primary)',
-                  marginBottom: '10px'
-                }}
-              >
-                <Lightbulb size={14} color="var(--blue)" />
-                카테고리 <span style={{ color: 'var(--red)' }}>*</span>
-              </label>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {CATEGORIES.map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => setCategory(cat)}
-                    className={`dashboard-tab-btn ${category === cat ? 'active' : ''}`}
-                  >
-                    {cat}
-                  </button>
-                ))}
+            {categories.length > 0 && (
+              <div style={{ marginBottom: '20px' }}>
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '13px',
+                    fontWeight: '700',
+                    color: 'var(--text-primary)',
+                    marginBottom: '10px'
+                  }}
+                >
+                  <Lightbulb size={14} color="var(--blue)" />
+                  카테고리 <span style={{ color: 'var(--red)' }}>*</span>
+                </label>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  {categories.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setCategoryId(c.id)}
+                      className={`dashboard-tab-btn ${categoryId === c.id ? 'active' : ''}`}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Title */}
             <div>
               <label
                 style={{
@@ -231,22 +283,12 @@ export const KnowhowWriteView: React.FC<KnowhowWriteViewProps> = ({ onCancel, on
                   fontWeight: '600',
                   fontFamily: 'inherit',
                   color: 'var(--text-primary)',
-                  outline: 'none',
-                  transition: 'all 0.15s'
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.background = '#fff';
-                  e.currentTarget.style.borderColor = 'var(--blue)';
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.background = '#f8fafc';
-                  e.currentTarget.style.borderColor = 'var(--border)';
+                  outline: 'none'
                 }}
               />
             </div>
           </div>
 
-          {/* Thumbnail */}
           <div className="card" style={{ padding: '28px' }}>
             <label
               style={{
@@ -259,102 +301,66 @@ export const KnowhowWriteView: React.FC<KnowhowWriteViewProps> = ({ onCancel, on
                 marginBottom: '10px'
               }}
             >
-              <ImagePlus size={14} color="var(--blue)" />
-              대표 이미지
-              <span
-                style={{
-                  fontSize: '11px',
-                  color: 'var(--text-muted)',
-                  fontWeight: '500',
-                  marginLeft: '4px'
-                }}
-              >
-                (선택 · 1장)
-              </span>
+              태그 <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 500 }}>(최대 5개)</span>
             </label>
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleImageUpload}
-              style={{ display: 'none' }}
-            />
-
-            {thumbnail ? (
-              <div
-                style={{
-                  position: 'relative',
-                  width: '100%',
-                  height: '280px',
-                  borderRadius: '12px',
-                  overflow: 'hidden',
-                  backgroundImage: `url(${thumbnail})`,
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center'
-                }}
-              >
-                <button
-                  onClick={() => setThumbnail(null)}
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '8px',
+                padding: '10px 12px',
+                background: '#f8fafc',
+                border: '1px solid var(--border)',
+                borderRadius: '10px',
+                minHeight: '44px',
+                marginBottom: '16px',
+                alignItems: 'center'
+              }}
+            >
+              {tags.map((t) => (
+                <span
+                  key={t}
                   style={{
-                    position: 'absolute',
-                    top: '12px',
-                    right: '12px',
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '8px',
-                    background: 'rgba(15, 23, 42, 0.7)',
-                    color: 'white',
-                    display: 'flex',
+                    display: 'inline-flex',
                     alignItems: 'center',
-                    justifyContent: 'center'
+                    gap: '4px',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    color: 'var(--blue)',
+                    background: 'var(--blue-bg)',
+                    padding: '3px 10px',
+                    borderRadius: '14px'
                   }}
-                  aria-label="이미지 제거"
                 >
-                  <X size={16} />
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => fileInputRef.current?.click()}
+                  #{t}
+                  <button
+                    type="button"
+                    onClick={() => setTags(tags.filter((x) => x !== t))}
+                    style={{ marginLeft: '4px', color: 'var(--blue)' }}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              <input
+                type="text"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={handleAddTag}
+                placeholder={tags.length === 0 ? '태그 입력 후 Enter' : ''}
+                disabled={tags.length >= 5}
                 style={{
-                  width: '100%',
-                  height: '180px',
-                  border: '2px dashed var(--border-hover)',
-                  borderRadius: '12px',
-                  background: '#f8fafc',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  color: 'var(--text-secondary)',
-                  transition: 'all 0.15s'
+                  flex: 1,
+                  minWidth: '120px',
+                  border: 'none',
+                  background: 'transparent',
+                  outline: 'none',
+                  fontSize: '13px',
+                  fontFamily: 'inherit'
                 }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--blue)';
-                  e.currentTarget.style.background = 'var(--blue-bg)';
-                  e.currentTarget.style.color = 'var(--blue)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--border-hover)';
-                  e.currentTarget.style.background = '#f8fafc';
-                  e.currentTarget.style.color = 'var(--text-secondary)';
-                }}
-              >
-                <ImagePlus size={28} />
-                <span style={{ fontSize: '13px', fontWeight: '600' }}>
-                  이미지를 업로드하세요
-                </span>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                  JPG, PNG · 최대 5MB
-                </span>
-              </button>
-            )}
-          </div>
+              />
+            </div>
 
-          {/* Content */}
-          <div className="card" style={{ padding: '28px' }}>
             <label
               style={{
                 display: 'flex',
@@ -380,7 +386,48 @@ export const KnowhowWriteView: React.FC<KnowhowWriteViewProps> = ({ onCancel, on
                 {content.length.toLocaleString()} / {CONTENT_MAX.toLocaleString()}
               </span>
             </label>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+              <button
+                type="button"
+                onClick={() => imageInputRef.current?.click()}
+                disabled={uploading}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border)',
+                  background: 'white',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: 'var(--blue)',
+                  cursor: uploading ? 'not-allowed' : 'pointer',
+                  opacity: uploading ? 0.6 : 1
+                }}
+              >
+                <ImageIcon size={14} />
+                사진
+              </button>
+              {uploading && (
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', alignSelf: 'center' }}>
+                  업로드 중...
+                </span>
+              )}
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void handleUpload(f);
+                  e.target.value = '';
+                }}
+              />
+            </div>
             <textarea
+              ref={textareaRef}
               value={content}
               onChange={(e) => setContent(e.target.value.slice(0, CONTENT_MAX))}
               placeholder={`실제로 도움이 된 경험을 구체적으로 적어주세요.\n\n예시)\n· 어떤 상황이었는지\n· 어떻게 해결/실천했는지\n· 결과는 어땠는지`}
@@ -396,195 +443,13 @@ export const KnowhowWriteView: React.FC<KnowhowWriteViewProps> = ({ onCancel, on
                 color: 'var(--text-primary)',
                 outline: 'none',
                 resize: 'vertical',
-                lineHeight: '1.7',
-                transition: 'all 0.15s'
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.background = '#fff';
-                e.currentTarget.style.borderColor = 'var(--blue)';
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.background = '#f8fafc';
-                e.currentTarget.style.borderColor = 'var(--border)';
+                lineHeight: '1.7'
               }}
             />
           </div>
-
-          {/* Tags */}
-          <div className="card" style={{ padding: '28px' }}>
-            <label
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                fontSize: '13px',
-                fontWeight: '700',
-                color: 'var(--text-primary)',
-                marginBottom: '10px'
-              }}
-            >
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Hash size={14} color="var(--blue)" />
-                태그
-                <span
-                  style={{
-                    fontSize: '11px',
-                    color: 'var(--text-muted)',
-                    fontWeight: '500',
-                    marginLeft: '4px'
-                  }}
-                >
-                  (최대 5개)
-                </span>
-              </span>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '500' }}>
-                {tags.length} / 5
-              </span>
-            </label>
-
-            <div
-              style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: '8px',
-                padding: '12px 14px',
-                background: '#f8fafc',
-                border: '1px solid var(--border)',
-                borderRadius: '10px',
-                minHeight: '50px',
-                alignItems: 'center'
-              }}
-            >
-              {tags.map((t) => (
-                <span
-                  key={t}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    color: 'var(--blue)',
-                    background: 'var(--blue-bg)',
-                    border: '1px solid var(--blue-border)',
-                    padding: '4px 4px 4px 10px',
-                    borderRadius: '20px'
-                  }}
-                >
-                  #{t}
-                  <button
-                    onClick={() => handleRemoveTag(t)}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: '16px',
-                      height: '16px',
-                      borderRadius: '50%',
-                      color: 'var(--blue)'
-                    }}
-                    aria-label={`${t} 태그 제거`}
-                  >
-                    <X size={11} />
-                  </button>
-                </span>
-              ))}
-              <input
-                type="text"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={handleAddTag}
-                placeholder={tags.length === 0 ? '태그 입력 후 Enter (예: 식비절약)' : ''}
-                disabled={tags.length >= 5}
-                style={{
-                  flex: 1,
-                  minWidth: '160px',
-                  border: 'none',
-                  background: 'transparent',
-                  outline: 'none',
-                  fontSize: '13px',
-                  fontFamily: 'inherit',
-                  color: 'var(--text-primary)'
-                }}
-              />
-            </div>
-          </div>
         </div>
 
-        {/* Side Column */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {/* Preview Card */}
-          <div className="card" style={{ padding: '24px' }}>
-            <div className="card-header-row" style={{ marginBottom: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Eye size={16} color="var(--text-primary)" />
-                <span className="card-title" style={{ fontSize: '14px' }}>
-                  미리보기
-                </span>
-              </div>
-            </div>
-
-            <div
-              style={{
-                border: '1px solid var(--border)',
-                borderRadius: '12px',
-                overflow: 'hidden',
-                background: '#fafbfc'
-              }}
-            >
-              {thumbnail && (
-                <div
-                  style={{
-                    width: '100%',
-                    height: '120px',
-                    backgroundImage: `url(${thumbnail})`,
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center'
-                  }}
-                />
-              )}
-              <div style={{ padding: '14px' }}>
-                {category && (
-                  <span
-                    className="group-buy-category"
-                    style={{ display: 'inline-block', marginBottom: '8px' }}
-                  >
-                    {category}
-                  </span>
-                )}
-                <div
-                  style={{
-                    fontSize: '14px',
-                    fontWeight: '700',
-                    color: title ? 'var(--text-primary)' : 'var(--text-muted)',
-                    lineHeight: '1.4',
-                    marginBottom: '6px',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden'
-                  }}
-                >
-                  {title || '제목이 여기에 표시됩니다'}
-                </div>
-                <div
-                  style={{
-                    fontSize: '12px',
-                    color: content ? 'var(--text-secondary)' : 'var(--text-muted)',
-                    lineHeight: '1.5',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 3,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden'
-                  }}
-                >
-                  {content || '내용 미리보기가 여기에 표시됩니다'}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Tips */}
           <div className="card" style={{ padding: '24px' }}>
             <div className="card-header-row" style={{ marginBottom: '12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -606,8 +471,7 @@ export const KnowhowWriteView: React.FC<KnowhowWriteViewProps> = ({ onCancel, on
               {[
                 '구체적인 숫자·경험을 함께 적어주세요',
                 '단계별로 정리하면 가독성이 좋아져요',
-                '관련 이미지가 있으면 신뢰도가 올라가요',
-                '적절한 태그는 글 노출에 도움이 돼요'
+                '결과까지 함께 공유하면 좋아요'
               ].map((tip, i) => (
                 <li
                   key={i}
@@ -641,38 +505,6 @@ export const KnowhowWriteView: React.FC<KnowhowWriteViewProps> = ({ onCancel, on
                 </li>
               ))}
             </ul>
-          </div>
-
-          {/* Guidelines */}
-          <div
-            className="card"
-            style={{
-              padding: '20px',
-              background: '#fff7ed',
-              borderColor: '#fed7aa'
-            }}
-          >
-            <div
-              style={{
-                fontSize: '12px',
-                fontWeight: '700',
-                color: '#c2410c',
-                marginBottom: '8px'
-              }}
-            >
-              ⚠ 게시 전 확인해주세요
-            </div>
-            <p
-              style={{
-                fontSize: '11px',
-                color: '#9a3412',
-                lineHeight: '1.6',
-                fontWeight: '500'
-              }}
-            >
-              개인정보, 상업적 광고, 욕설/비방이 포함된 글은 사전 동의 없이 삭제될 수 있어요.
-              따뜻한 노하우 공간을 함께 만들어주세요.
-            </p>
           </div>
         </div>
       </div>

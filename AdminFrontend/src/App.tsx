@@ -1,0 +1,385 @@
+import { useState, useEffect, useCallback } from 'react';
+import { Sidebar } from './components/Sidebar';
+import { Header } from './components/Header';
+import { DashboardView } from './components/DashboardView';
+import { ComparisonView } from './components/ComparisonView';
+import { LocationComparisonView } from './components/LocationComparisonView';
+import { GroupBuyView } from './components/GroupBuyView';
+import { KnowhowListView } from './components/KnowhowListView';
+import { KnowhowDetailView } from './components/KnowhowDetailView';
+import { KnowhowWriteView } from './components/KnowhowWriteView';
+import { QnaListView } from './components/QnaListView';
+import { QnaDetailView } from './components/QnaDetailView';
+import { QnaWriteView } from './components/QnaWriteView';
+import { GroupBuyAdminView } from './components/GroupBuyAdminView';
+import { NotificationView } from './components/NotificationView';
+import { BudgetView } from './components/BudgetView';
+import { AssetView, type AssetActiveSection } from './components/AssetView';
+import { LoginView } from './components/LoginView';
+import { MyPageView } from './components/MyPageView';
+import { AdminView } from './components/AdminView';
+import { authApi, notificationApi, setAuthExpiredHandler, tokenStorage, userApi } from './api';
+import { clearMyUserIdCache } from './lib/boardApi';
+import { Construction } from 'lucide-react';
+
+type BoardMode = 'list' | 'detail' | 'write';
+
+const APP_TABS = new Set([
+  'dashboard',
+  'history',
+  'budget',
+  'analysis',
+  'comparison',
+  'locationComparison',
+  'groupbuy',
+  'knowhow',
+  'qa',
+  'groupbuyAdmin',
+  'notifications',
+  'settings',
+]);
+
+function readTabFromUrl(): string {
+  const hash = window.location.hash.replace(/^#\/?/, '');
+  return APP_TABS.has(hash) ? hash : 'dashboard';
+}
+
+function writeTabToUrl(tab: string) {
+  const base = `${window.location.pathname}${window.location.search}`;
+  const url = tab === 'dashboard' ? base : `${base}#${tab}`;
+  window.history.replaceState({}, document.title, url);
+}
+
+function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => tokenStorage.hasToken());
+  const [activeTab, setActiveTab] = useState<string>(readTabFromUrl);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [knowhowMode, setKnowhowMode] = useState<BoardMode>('list');
+  const [knowhowPostId, setKnowhowPostId] = useState<number | null>(null);
+  const [qnaMode, setQnaMode] = useState<BoardMode>('list');
+  const [qnaPostId, setQnaPostId] = useState<number | null>(null);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [assetInitialSection, setAssetInitialSection] = useState<AssetActiveSection | undefined>();
+  const [groupBuyFocusId, setGroupBuyFocusId] = useState<number | null>(null);
+
+  const refreshUnreadCount = useCallback(async () => {
+    if (!tokenStorage.hasToken()) {
+      setUnreadNotificationCount(0);
+      return;
+    }
+    const result = await notificationApi.getUnreadCount();
+    if (result.ok && result.data !== null) {
+      setUnreadNotificationCount(result.data);
+    }
+  }, []);
+
+  useEffect(() => {
+    setAuthExpiredHandler(() => {
+      setIsLoggedIn(false);
+      setActiveTab('dashboard');
+      writeTabToUrl('dashboard');
+    });
+    return () => setAuthExpiredHandler(null);
+  }, []);
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    userApi.getMyProfile().then((result) => {
+      if (result.ok && result.data?.role === 'ROLE_ADMIN') {
+        setIsAdmin(true);
+      }
+    }).catch(() => setIsAdmin(false));
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    const syncTabFromUrl = () => {
+      setActiveTab(readTabFromUrl());
+    };
+    window.addEventListener('hashchange', syncTabFromUrl);
+    return () => window.removeEventListener('hashchange', syncTabFromUrl);
+  }, []);
+
+  useEffect(() => {
+    if (window.location.pathname !== '/oauth2/redirect') return;
+
+    const params = new URLSearchParams(window.location.search);
+    window.history.replaceState({}, document.title, '/');
+
+    const code = params.get('code');
+    if (!code) return;
+
+    void authApi.exchangeOAuthCode(code).then((result) => {
+      if (!result.ok || !result.data?.accessToken) return;
+      const rememberMe = tokenStorage.consumePendingRememberMe() ?? true;
+      tokenStorage.setTokens(result.data.accessToken, '', 'social-login', rememberMe);
+      setIsLoggedIn(true);
+      refreshUnreadCount();
+    });
+  }, [refreshUnreadCount]);
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      refreshUnreadCount();
+    } else {
+      setUnreadNotificationCount(0);
+    }
+  }, [isLoggedIn, refreshUnreadCount]);
+
+  const handleLogout = async () => {
+    if (tokenStorage.hasToken()) {
+      try {
+        await authApi.logout();
+      } catch (err) {
+        console.error('Logout API error:', err);
+      }
+    }
+    tokenStorage.clear();
+    clearMyUserIdCache();
+    setIsAdmin(false);
+    setIsLoggedIn(false);
+    setActiveTab('dashboard');
+    writeTabToUrl('dashboard');
+  };
+
+  const clearGroupBuyFocus = useCallback(() => {
+    setGroupBuyFocusId(null);
+  }, []);
+
+  const handleTabChange = (
+    tab: string,
+    options?: { groupPurchaseId?: number; assetSection?: AssetActiveSection }
+  ) => {
+    setActiveTab(tab);
+    writeTabToUrl(tab);
+    if (tab === 'notifications') {
+      refreshUnreadCount();
+    }
+    setAssetInitialSection(options?.assetSection);
+    setKnowhowMode('list');
+    setKnowhowPostId(null);
+    setQnaMode('list');
+    setQnaPostId(null);
+    setGroupBuyFocusId(options?.groupPurchaseId ?? null);
+  };
+
+  const goToCategorySettings = () => {
+    setKnowhowMode('list');
+    setKnowhowPostId(null);
+    setQnaMode('list');
+    setQnaPostId(null);
+    setAssetInitialSection('categories');
+    setActiveTab('history');
+    writeTabToUrl('history');
+  };
+
+  const goToGoalSettings = () => {
+    setKnowhowMode('list');
+    setKnowhowPostId(null);
+    setQnaMode('list');
+    setQnaPostId(null);
+    setAssetInitialSection('goals');
+    setActiveTab('history');
+    writeTabToUrl('history');
+  };
+
+  const renderKnowhow = () => {
+    if (knowhowMode === 'write') {
+      return (
+        <KnowhowWriteView
+          onCancel={() => setKnowhowMode('list')}
+          onSubmit={() => setKnowhowMode('list')}
+        />
+      );
+    }
+    if (knowhowMode === 'detail' && knowhowPostId !== null) {
+      return (
+        <KnowhowDetailView
+          postId={knowhowPostId}
+          onBack={() => {
+            setKnowhowMode('list');
+            setKnowhowPostId(null);
+          }}
+        />
+      );
+    }
+    return (
+      <KnowhowListView
+        onSelectPost={(id) => {
+          setKnowhowPostId(id);
+          setKnowhowMode('detail');
+        }}
+        onWrite={() => setKnowhowMode('write')}
+      />
+    );
+  };
+
+  const renderQna = () => {
+    if (qnaMode === 'write') {
+      return (
+        <QnaWriteView
+          onCancel={() => setQnaMode('list')}
+          onSubmit={() => setQnaMode('list')}
+        />
+      );
+    }
+    if (qnaMode === 'detail' && qnaPostId !== null) {
+      return (
+        <QnaDetailView
+          postId={qnaPostId}
+          onBack={() => {
+            setQnaMode('list');
+            setQnaPostId(null);
+          }}
+        />
+      );
+    }
+    return (
+      <QnaListView
+        onSelectPost={(id) => {
+          setQnaPostId(id);
+          setQnaMode('detail');
+        }}
+        onWrite={() => setQnaMode('write')}
+      />
+    );
+  };
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'dashboard':
+        return (
+          <DashboardView
+            onViewAllGroupBuys={() => handleTabChange('groupbuy')}
+            onGoToGoalSettings={goToGoalSettings}
+          />
+        );
+      case 'history':
+        return <AssetView initialSection={assetInitialSection} />;
+      case 'budget':
+        return <BudgetView onGoToCategorySettings={goToCategorySettings} />;
+
+      case 'comparison':
+        return <ComparisonView />;
+      case 'locationComparison':
+        return <LocationComparisonView />;
+      case 'groupbuy':
+        return (
+          <GroupBuyView
+            initialGroupPurchaseId={groupBuyFocusId}
+            onInitialGroupPurchaseHandled={clearGroupBuyFocus}
+          />
+        );
+      case 'knowhow':
+        return renderKnowhow();
+      case 'qa':
+        return renderQna();
+      case 'groupbuyAdmin':
+        return <GroupBuyAdminView />;
+      case 'notifications':
+        return (
+          <NotificationView
+            onUnreadCountChange={setUnreadNotificationCount}
+            onNavigate={handleTabChange}
+          />
+        );
+      case 'settings':
+        return <MyPageView />;
+      case 'admin':
+        return <AdminView />;
+      default:
+        return (
+          <div
+            className="card fade-in"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '80px 24px',
+              textAlign: 'center',
+              gap: '20px'
+            }}
+          >
+            <div
+              style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '50%',
+                background: 'var(--blue-bg)',
+                color: 'var(--blue)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <Construction size={32} />
+            </div>
+            <div>
+              <h2
+                style={{
+                  fontSize: '20px',
+                  fontWeight: '700',
+                  color: 'var(--text-primary)',
+                  marginBottom: '8px'
+                }}
+              >
+                준비 중인 페이지입니다
+              </h2>
+              <p
+                style={{
+                  color: 'var(--text-secondary)',
+                  fontSize: '14px',
+                  maxWidth: '320px',
+                  margin: '0 auto'
+                }}
+              >
+                선택하신 서비스는 현재 준비 중입니다. 더 나은 서비스를 제공하기 위해 개발 작업을
+                진행하고 있습니다.
+              </p>
+            </div>
+            <button
+              onClick={() => handleTabChange('dashboard')}
+              style={{
+                background: 'var(--navy)',
+                color: 'white',
+                padding: '10px 24px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: '700',
+                marginTop: '12px'
+              }}
+            >
+              대시보드로 돌아가기
+            </button>
+          </div>
+        );
+    }
+  };
+
+  if (!isLoggedIn) {
+    return <LoginView onLoginSuccess={() => setIsLoggedIn(true)} />;
+  }
+
+  return (
+    <div className="app-layout">
+      {/* Sidebar Navigation */}
+      <Sidebar activeTab={activeTab} setActiveTab={handleTabChange} onLogout={handleLogout} isAdmin={isAdmin} />
+
+      {/* Main Container */}
+      <div className="main-container">
+        {/* Top Header */}
+        <Header
+          unreadCount={unreadNotificationCount}
+          onOpenNotifications={() => handleTabChange('notifications')}
+        />
+
+        {/* Dashboard Content */}
+        <main className="dashboard-content">
+          {renderContent()}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+export default App;
